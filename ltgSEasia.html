@@ -727,14 +727,20 @@ function _renderChart(labels,temp,rh,ws,precip,cloud){
   if(!ctx)return;
   if(ctx._chartInst){ctx._chartInst.destroy();}
 
+  window._wxKnots=window._wxKnots||false;
   const legend=document.getElementById('wx-legend');
   if(legend) legend.innerHTML=`
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#ff6b35;display:inline-block;"></span>Temp (°C)</span>
-    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#00ccff;display:inline-block;border-top:2px dashed #00ccff;border-bottom:none;height:0;"></span>RH (%)</span>
-    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#44aaff;display:inline-block;border-top:2px dotted #44aaff;border-bottom:none;height:0;"></span>Wind (km/h)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#00ccff;display:inline-block;"></span>RH (%)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#44aaff;display:inline-block;"></span>Wind</span>
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(0,150,255,0.45);display:inline-block;border-radius:2px;"></span>Precip 3h (mm)</span>
-    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(180,180,200,0.35);display:inline-block;border-radius:2px;"></span>Cloud (%)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(180,180,200,0.25);display:inline-block;border-radius:2px;"></span>Cloud (%)</span>
+    <button id="wx-wind-unit-btn" style="margin-left:6px;background:transparent;border:0.5px solid rgba(100,180,255,0.4);color:#88ccff;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;">${window._wxKnots?'kt → km/h':'km/h → kt'}</button>
   `;
+  document.getElementById('wx-wind-unit-btn').addEventListener('click',()=>{
+    window._wxKnots=!window._wxKnots;
+    _renderChart(labels,temp,rh,ws,precip,cloud);
+  });
 
   ctx._chartInst=new Chart(ctx,{
     data:{
@@ -742,7 +748,7 @@ function _renderChart(labels,temp,rh,ws,precip,cloud){
       datasets:[
         {type:'line',label:'Temp (°C)',data:temp,yAxisID:'yT',borderColor:'#ff6b35',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:0.3,order:1},
         {type:'line',label:'RH (%)',data:rh,yAxisID:'yRH',borderColor:'#00ccff',backgroundColor:'transparent',borderWidth:1.5,borderDash:[6,3],pointRadius:0,tension:0.3,order:2},
-        {type:'line',label:'Wind (km/h)',data:ws,yAxisID:'yW',borderColor:'#44aaff',backgroundColor:'transparent',borderWidth:1.5,borderDash:[2,2],pointRadius:0,tension:0.3,order:3},
+{type:'line',label:'Wind',data:window._wxKnots?ws.map(v=>parseFloat((v*0.539957).toFixed(1))):ws,yAxisID:'yW',borderColor:'#44aaff',backgroundColor:'transparent',borderWidth:1.5,borderDash:[2,2],pointRadius:0,tension:0.3,order:3},
         {type:'bar',label:'Precip 3h (mm)',data:precip,yAxisID:'yP',backgroundColor:'rgba(0,150,255,0.45)',order:4},
         {type:'bar',label:'Cloud (%)',data:cloud,yAxisID:'yC',backgroundColor:'rgba(180,180,200,0.25)',order:5},
       ]
@@ -756,11 +762,44 @@ function _renderChart(labels,temp,rh,ws,precip,cloud){
         callbacks:{title:items=>'🕐 '+items[0].label+'HKT'}
       }},
       scales:{
-        x:{ticks:{color:'#556',font:{size:9},maxRotation:45,autoSkip:true,maxTicksLimit:20},grid:{color:'rgba(255,255,255,0.04)'}},
-        yT:{position:'left',title:{display:true,text:'°C',color:'#ff6b35',font:{size:10}},ticks:{color:'#ff6b35',font:{size:9}},grid:{color:'rgba(255,255,255,0.06)'}},
-        yRH:{position:'right',min:0,max:100,title:{display:true,text:'RH%',color:'#00ccff',font:{size:10}},ticks:{color:'#00ccff',font:{size:9}},grid:{display:false}},
-        yW:{position:'right',title:{display:true,text:'km/h',color:'#44aaff',font:{size:10}},ticks:{color:'#44aaff',font:{size:9}},grid:{display:false},offset:true},
-        yP:{position:'left',title:{display:true,text:'mm',color:'rgba(0,150,255,0.8)',font:{size:10}},ticks:{color:'rgba(0,150,255,0.8)',font:{size:9}},grid:{display:false},offset:true},
+        x:{
+          ticks:{
+            color:(ctx)=>{
+              const lbl=labels[ctx.index]||'';
+              return lbl.endsWith('/00')?'#ffffff':'#556';
+            },
+            font:(ctx)=>{
+              const lbl=labels[ctx.index]||'';
+              return{size:9,weight:lbl.endsWith('/00')?'bold':'normal'};
+            },
+            maxRotation:45,autoSkip:false,
+            callback:(val,idx)=>{
+              const lbl=labels[idx]||'';
+              const hh=lbl.slice(-2);
+              if(!['00','06','12','18'].includes(hh))return null;
+              if(hh==='00'){
+                const d=new Date(times[idx]);
+                const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                return days[d.getDay()];
+              }
+              return hh+'h';
+            }
+          },
+          grid:{
+            color:(ctx)=>{
+              const lbl=labels[ctx.index]||'';
+              return lbl.endsWith('/00')?'rgba(255,255,255,0.25)':'rgba(255,255,255,0.04)';
+            },
+            lineWidth:(ctx)=>{
+              const lbl=labels[ctx.index]||'';
+              return lbl.endsWith('/00')?1.5:0.5;
+            }
+          }
+        },
+        yT:{position:'left',min:0,max:40,title:{display:true,text:'°C',color:'#ff6b35',font:{size:10}},ticks:{color:'#ff6b35',font:{size:9}},grid:{color:'rgba(255,255,255,0.06)'}},
+        yRH:{position:'right',min:0,max:100,title:{display:true,text:'RH%',color:'#00ccff',font:{size:10}},ticks:{color:'#00ccff',font:{size:9},stepSize:20},grid:{display:false}},
+        yW:{position:'right',min:0,max:window._wxKnots?40:74,title:{display:true,text:window._wxKnots?'kt':'km/h',color:'#44aaff',font:{size:10}},ticks:{color:'#44aaff',font:{size:9}},grid:{display:false},offset:true},
+        yP:{position:'left',min:0,max:50,title:{display:true,text:'mm',color:'rgba(0,150,255,0.8)',font:{size:10}},ticks:{color:'rgba(0,150,255,0.8)',font:{size:9}},grid:{display:false},offset:true},
         yC:{display:false,min:0,max:100},
       }
     }
