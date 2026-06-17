@@ -54,6 +54,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 }
 .tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 .tb-btn:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
+.tb-btn.active { background: rgba(180,100,255,0.15); border-color: #b864ff; color: #b864ff; }
 .sep { width: 1px; height: 16px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
 #gps-btn { background: transparent; border: 0.5px solid rgba(0,255,150,0.4); color: #00ff96; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 #gps-btn.active { background: rgba(0,255,150,0.15); border-color: #00ff96; }
@@ -132,6 +133,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <!-- Toolbar -->
   <div id="toolbar">
     <button id="gps-btn">⊕ GPS</button>
+    <div class="sep"></div>
+    <button id="hko-toggle" class="tb-btn">🛰 HKO</button>
   </div>
 
   <!-- Map -->
@@ -152,6 +155,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <!-- Radar loading bar -->
   <div id="radar-load-bar" style="display:none;position:absolute;bottom:28px;left:0;right:0;z-index:1200;height:4px;background:rgba(100,180,255,0.15);">
     <div id="radar-load-fill" style="height:100%;width:0%;background:#88ccff;transition:width 0.2s ease;"></div>
+  </div>
+
+  <!-- Buy me a coffee -->
+  <div id="bmac-bar" style="position:absolute;bottom:24px;left:0;right:0;z-index:999;display:flex;justify-content:center;pointer-events:none;">
+    <a href="https://buymeacoffee.com/dispatcher" target="_blank" rel="noopener" style="pointer-events:auto;display:inline-flex;align-items:center;gap:5px;background:#FFDD00;color:#000;font-family:'Courier New',monospace;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 12px;border-radius:14px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,0.4);">&#9749; BUY ME A COFFEE</a>
   </div>
 
   <!-- Status bar -->
@@ -185,8 +193,10 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
 map.createPane('rvRadar'); map.getPane('rvRadar').style.zIndex = 350;
 map.createPane('gps');     map.getPane('gps').style.zIndex     = 600;
 map.createPane('strikes'); map.getPane('strikes').style.zIndex = 650;
+map.createPane('hko');     map.getPane('hko').style.zIndex     = 640;
 
 const canvasRenderer = L.canvas({ pane:'strikes' });
+const hkoRenderer = L.canvas({ pane:'hko' });
 
 // ── Lightning core ─────────────────────────────────────────────
 let windowSec = 86400, t = 0, ws = null;
@@ -622,6 +632,136 @@ ctxCoords.addEventListener('click',()=>{
   ctxMenu.style.display='none';
   if(window._ctxLL) openWeatherPopup(window._ctxLL.lat, window._ctxLL.lng);
 });
+
+// ── HKO Lightning (Hong Kong Observatory, past bins) ───────────
+const HKO_URL = 'https://maps.weather.gov.hk/llis/input_files/gislatest_c2g.txt';
+const HKO_REFRESH_MS = 5 * 60 * 1000;
+const HKO_BIN_COLORS = [
+  {max:300,    color:'#ff3300'},
+  {max:900,    color:'#ff8800'},
+  {max:1800,   color:'#66ccff'},
+  {max:3600,   color:'#aa44ff'},
+  {max:10800,  color:'#2244aa'},
+  {max:Infinity,color:'#888888'}
+];
+const HKO_MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+
+let hkoEnabled = false;
+let hkoRefreshTimer = null;
+let hkoMarkers = [];
+let hkoLegendEl = null;
+
+function hkoColorForAge(ageSec){
+  for(const tier of HKO_BIN_COLORS){ if(ageSec<tier.max) return tier.color; }
+  return HKO_BIN_COLORS[HKO_BIN_COLORS.length-1].color;
+}
+
+function hkoParseBinEndTime(dateStr, timeRange){
+  const [, endHH, endMM] = timeRange.match(/-(\d{2}):(\d{2})$/) || timeRange.match(/(\d{2}):(\d{2})$/);
+  const [dd, monStr, yyyy] = dateStr.split('-');
+  const mon = HKO_MONTHS[monStr];
+  if(mon===undefined) return null;
+  const utcMs = Date.UTC(parseInt(yyyy), mon, parseInt(dd), parseInt(endHH), parseInt(endMM), 0) - 8*3600*1000;
+  return utcMs/1000;
+}
+
+function hkoClearMarkers(){
+  hkoMarkers.forEach(m=>map.removeLayer(m));
+  hkoMarkers=[];
+}
+
+async function hkoFetchAndRender(){
+  document.getElementById('hko-toggle').textContent='🛰 HKO ⟳';
+  try{
+    const res = await fetch(HKO_URL+'?'+Date.now(), {signal:AbortSignal.timeout(15000)});
+    const text = await res.text();
+    hkoClearMarkers();
+    const nowSec = Date.now()/1000;
+    const lines = text.trim().split('\n').filter(Boolean);
+    lines.forEach(line=>{
+      const parts = line.trim().split(/\s+/);
+      if(parts.length<3) return;
+      const dateStr = parts[0];
+      const timeRange = parts[1];
+      const binEnd = hkoParseBinEndTime(dateStr, timeRange);
+      if(binEnd===null) return;
+      const age = nowSec - binEnd;
+      const color = hkoColorForAge(age);
+      for(let i=2;i+1<parts.length;i+=2){
+        const lat = parseFloat(parts[i]);
+        const lon = parseFloat(parts[i+1]);
+        if(isNaN(lat)||isNaN(lon)) continue;
+        const m = L.circleMarker([lat,lon],{
+          radius:3, color, fillColor:color, weight:0, opacity:0.85, fillOpacity:0.7,
+          renderer:hkoRenderer, pane:'hko', interactive:false
+        }).addTo(map);
+        m._hkoBinEnd = binEnd;
+        hkoMarkers.push(m);
+      }
+    });
+    document.getElementById('hko-toggle').textContent='🛰 HKO ('+hkoMarkers.length+')';
+  }catch(e){
+    console.warn('[HKO]', e);
+    document.getElementById('hko-toggle').textContent='🛰 HKO ⚠';
+  }
+}
+
+function hkoRecolor(){
+  if(!hkoEnabled) return;
+  const nowSec = Date.now()/1000;
+  hkoMarkers.forEach(m=>{
+    const age = nowSec - m._hkoBinEnd;
+    const color = hkoColorForAge(age);
+    m.setStyle({color, fillColor:color});
+  });
+}
+
+function hkoShowLegend(){
+  if(hkoLegendEl) return;
+  hkoLegendEl = document.createElement('div');
+  hkoLegendEl.id='hko-legend';
+  hkoLegendEl.style.cssText='position:absolute;top:130px;right:10px;z-index:1000;background:rgba(8,8,18,0.9);border:0.5px solid rgba(180,100,255,0.3);border-radius:10px;padding:8px 12px;font-size:10px;color:#ccc;backdrop-filter:blur(6px);font-family:\'Courier New\',monospace;max-width:160px;';
+  hkoLegendEl.innerHTML = `
+    <div style="font-size:10px;color:#b864ff;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:5px;border-bottom:0.5px solid rgba(180,100,255,0.2);padding-bottom:4px;">HKO Past Strikes</div>
+    <div style="display:flex;flex-direction:column;gap:3px;">
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ff3300;display:inline-block;"></span>&lt;5 min</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ff8800;display:inline-block;"></span>&lt;15 min</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#66ccff;display:inline-block;"></span>&lt;30 min</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#aa44ff;display:inline-block;"></span>&lt;1 hour</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#2244aa;display:inline-block;"></span>&lt;3 hours</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#888888;display:inline-block;"></span>Older</div>
+    </div>
+  `;
+  document.getElementById('wrap').appendChild(hkoLegendEl);
+}
+
+function hkoHideLegend(){
+  if(hkoLegendEl){ hkoLegendEl.remove(); hkoLegendEl=null; }
+}
+
+function hkoEnable(){
+  hkoEnabled=true;
+  document.getElementById('hko-toggle').classList.add('active');
+  hkoShowLegend();
+  hkoFetchAndRender();
+  if(hkoRefreshTimer) clearInterval(hkoRefreshTimer);
+  hkoRefreshTimer = setInterval(hkoFetchAndRender, HKO_REFRESH_MS);
+}
+
+function hkoDisable(){
+  hkoEnabled=false;
+  document.getElementById('hko-toggle').classList.remove('active');
+  document.getElementById('hko-toggle').textContent='🛰 HKO';
+  hkoHideLegend();
+  if(hkoRefreshTimer){ clearInterval(hkoRefreshTimer); hkoRefreshTimer=null; }
+  hkoClearMarkers();
+}
+
+document.getElementById('hko-toggle').addEventListener('click',()=>{
+  if(hkoEnabled) hkoDisable(); else hkoEnable();
+});
+
+setInterval(hkoRecolor, 2000);
 
 // ── WebSocket — HK/SE Asia focused bbox ───────────────────────
 // Subscribe to a tight SE Asia bbox for dense regional data
