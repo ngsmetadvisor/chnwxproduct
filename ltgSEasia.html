@@ -635,6 +635,7 @@ ctxCoords.addEventListener('click',()=>{
 
 // ── HKO Lightning (Hong Kong Observatory, past bins) ───────────
 const HKO_URL = 'https://maps.weather.gov.hk/llis/input_files/gislatest_c2g.txt';
+const HKO_PROXY = 'https://api.allorigins.win/raw?url=';
 const HKO_REFRESH_MS = 5 * 60 * 1000;
 const HKO_BIN_COLORS = [
   {max:300,    color:'#ff3300'},
@@ -673,7 +674,8 @@ function hkoClearMarkers(){
 async function hkoFetchAndRender(){
   document.getElementById('hko-toggle').textContent='🛰 HKO ⟳';
   try{
-    const res = await fetch(HKO_URL+'?'+Date.now(), {signal:AbortSignal.timeout(15000)});
+    const target = HKO_URL+'?'+Date.now();
+    const res = await fetch(HKO_PROXY+encodeURIComponent(target), {signal:AbortSignal.timeout(15000)});
     const text = await res.text();
     hkoClearMarkers();
     const nowSec = Date.now()/1000;
