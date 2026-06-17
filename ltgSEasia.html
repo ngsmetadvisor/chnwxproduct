@@ -119,7 +119,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
         <button id="rv-play-btn">▶</button>
         <input id="rv-scrub" type="range" min="0" max="11" value="11" step="1">
         <span id="rv-time-label">--:--Z</span>
-        <input id="rv-opacity" type="range" min="10" max="95" value="75" title="Opacity">
+        <input id="rv-opacity" type="range" min="10" max="95" value="30" title="Opacity">
       </div>
     </div>
   </div>
@@ -145,8 +145,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   </div>
 
   <!-- Radar loading bar -->
-  <div id="radar-load-bar" style="display:none;position:absolute;bottom:0;left:0;right:0;z-index:1100;height:3px;background:rgba(100,180,255,0.12);">
-    <div id="radar-load-fill" style="height:100%;width:0%;background:#88ccff;transition:width 0.2s ease;box-shadow:0 0 6px #88ccff;"></div>
+  <div id="radar-load-bar" style="display:none;position:absolute;bottom:28px;left:0;right:0;z-index:1200;height:4px;background:rgba(100,180,255,0.15);">
+    <div id="radar-load-fill" style="height:100%;width:0%;background:#88ccff;transition:width 0.2s ease;"></div>
   </div>
 
   <!-- Status bar -->
@@ -171,7 +171,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <script>
 // ── Map — Hong Kong centred, zoom 9 ≈ 200 km view ─────────────
 const map = L.map('map', { zoomControl:true, attributionControl:true, preferCanvas:true })
-  .setView([22.3, 114.2], 9);
+  .setView([22.3, 114.2], 8);
 
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
@@ -340,7 +340,7 @@ const RV_COLOR = 2;   // 2 = original RainViewer palette (green→yellow→red)
 let rvEnabled = false, rvFrames = [], rvLayers = [];
 let rvFrameIdx = 0, rvAnimTimer = null, rvRefreshTimer = null;
 let rvPlaying = true;
-let rvOpacity = 0.75;
+let rvOpacity = 0.30;
 const RV_ANIM_MS = 500;
 
 async function rvFetchFrames(){
