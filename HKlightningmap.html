@@ -578,13 +578,23 @@ function onGPSError(err){
 
 
 let _compassRings=[];
+
 function _showCompassRings(lat,lon){
   _compassRings.forEach(r=>map.removeLayer(r));
   _compassRings=[];
   [25,50,75,100].forEach(d=>{
     _compassRings.push(L.circle([lat,lon],{
-      radius:d*1000,pane:'gps',color:'#666',weight:1,opacity:0.5,
-      fill:false,dashArray:'4 6',interactive:false
+      radius:d*1000,pane:'gps',color:'#666',weight:1.5,opacity:0.6,
+      fill:false,interactive:false
+    }).addTo(map));
+    const labelLL=_destPoint(lat,lon,0,d);
+    _compassRings.push(L.marker(labelLL,{
+      interactive:false,pane:'gps',
+      icon:L.divIcon({
+        className:'',
+        html:'<span style="color:#666;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000,0 0 3px #000;">'+d+'km</span>',
+        iconAnchor:[-4,8]
+      })
     }).addTo(map));
   });
 }
