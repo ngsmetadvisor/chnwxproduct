@@ -222,7 +222,10 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
   <!-- Toolbar -->
   <div id="toolbar">
+
     <button id="zone-toggle" class="active">Zones</button>
+    <div class="sep"></div>
+    <button id="basemap-btn" class="tb-btn">🌙 Dark</button>
     <div class="sep"></div>
     <button id="gps-btn">⊕ GPS</button>
     <div class="sep"></div>
@@ -361,9 +364,37 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <script>
 // ── Map ───────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl:false, attributionControl:true, preferCanvas:true }).setView([55.0,-115.0],5);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
-}).addTo(map);
+
+
+
+const BASEMAPS = {
+  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
+  }),
+  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution:'Tiles &copy; Esri', maxZoom:19
+  }),
+  street: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
+  })
+};
+const BASEMAP_LABELS = {dark:'🌙 Dark', sat:'🌍 Sat', street:'🗺 Street'};
+const BASEMAP_ORDER = ['dark','sat','street'];
+let currentBasemap='dark';
+BASEMAPS[currentBasemap].addTo(map);
+
+function setBasemap(name){
+  if(!BASEMAPS[name]||name===currentBasemap)return;
+  map.removeLayer(BASEMAPS[currentBasemap]);
+  currentBasemap=name;
+  BASEMAPS[currentBasemap].addTo(map);
+  document.getElementById('basemap-btn').textContent=BASEMAP_LABELS[name];
+}
+function cycleBasemap(){
+  const idx=BASEMAP_ORDER.indexOf(currentBasemap);
+  setBasemap(BASEMAP_ORDER[(idx+1)%BASEMAP_ORDER.length]);
+}
+document.getElementById('basemap-btn').addEventListener('click',cycleBasemap);
 
 map.createPane('radar');        map.getPane('radar').style.zIndex        = 350;
 map.createPane('zones');        map.getPane('zones').style.zIndex        = 400;
