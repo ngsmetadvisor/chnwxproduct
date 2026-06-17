@@ -144,6 +144,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div id="region-label">strikes</div>
   </div>
 
+  <!-- Radar loading bar -->
+  <div id="radar-load-bar" style="display:none;position:absolute;bottom:0;left:0;right:0;z-index:1100;height:3px;background:rgba(100,180,255,0.12);">
+    <div id="radar-load-fill" style="height:100%;width:0%;background:#88ccff;transition:width 0.2s ease;box-shadow:0 0 6px #88ccff;"></div>
+  </div>
+
   <!-- Status bar -->
   <div id="status">
     <span>Strikes: <span id="counter">0</span></span>
@@ -378,9 +383,34 @@ async function rvBuild(){
   rvFrames=await rvFetchFrames();
   if(!rvFrames.length){document.getElementById('radarStatus').textContent='⚠ No data';return;}
   document.getElementById('rv-scrub').max=rvFrames.length-1;
+let rvTileTotal=0,rvTileLoaded=0;
+  function rvUpdateLoadBar(){
+    if(rvTileTotal===0)return;
+    const pct=Math.round((rvTileLoaded/rvTileTotal)*100);
+    const fill=document.getElementById('radar-load-fill');
+    const bar=document.getElementById('radar-load-bar');
+    if(fill)fill.style.width=pct+'%';
+    if(pct>=100){setTimeout(()=>{if(bar)bar.style.display='none';if(fill)fill.style.width='0%';rvTileTotal=0;rvTileLoaded=0;},400);}
+  }
+  const bar=document.getElementById('radar-load-bar');
+  if(bar){bar.style.display='block';}
+  rvTileTotal=0;rvTileLoaded=0;
   rvFrames.forEach(f=>{
-    const url=f.host+f.path+'/256/{z}/{x}/{y}/'+RV_COLOR+'/1_1.png';
-    const layer=L.tileLayer(url,{tileSize:256,opacity:0,pane:'rvRadar',interactive:false,maxNativeZoom:6,attribution:'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>'}).addTo(map);
+    const url=f.host+f.path+'/512/{z}/{x}/{y}/'+RV_COLOR+'/1_1.png';
+    const layer=L.tileLayer(url,{tileSize:512,opacity:0,pane:'rvRadar',interactive:false,maxNativeZoom:6,zoomOffset:-1,attribution:'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>'}).addTo(map);    layer.on('tileloadstart',()=>{rvTileTotal++;rvUpdateLoadBar();});
+    layer.on('tileload tileerror',()=>{rvTileLoaded++;rvUpdateLoadBar();});
+    // Pre-warm HK z=4,5,6 tiles within ~200 km
+    const hkTiles=[
+      {z:4,x:13,y:7},{z:4,x:14,y:7},
+      {z:5,x:26,y:14},{z:5,x:27,y:14},{z:5,x:26,y:15},{z:5,x:27,y:15},
+      {z:6,x:52,y:28},{z:6,x:53,y:28},{z:6,x:54,y:28},
+      {z:6,x:52,y:29},{z:6,x:53,y:29},{z:6,x:54,y:29},
+      {z:6,x:52,y:30},{z:6,x:53,y:30},{z:6,x:54,y:30}
+    ];
+    hkTiles.forEach(({z,x,y})=>{
+      const tUrl=f.host+f.path+'/512/'+z+'/'+x+'/'+y+'/'+RV_COLOR+'/1_1.png';
+      const img=new Image(); img.src=tUrl;
+    });
     rvLayers.push(layer);
   });
   rvFrameIdx=rvLayers.length-1;
