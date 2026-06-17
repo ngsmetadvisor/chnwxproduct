@@ -299,6 +299,7 @@ const PROX_VIBRATE_MS=[200,100,200,100,200], PROX_VIBRATE_DELAY=5000;
 let proximityRing=null,proximityWarning=null,proximityActive=false;
 let _proxVibrateTimer=null,_proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null;
+let _proxLastRenderedKey='';
 let _gpsLastLL=null;
 
 function triggerProximityVibrate(){
@@ -321,24 +322,27 @@ function checkLightningProximity(){
   const now=t||Date.now()/1000;
   let closest=Infinity,count=0;
   window._proxNearestLL=null;
-  let newestWarningTime=-Infinity,newestWarningLL=null;
-  let newestCautionTime=-Infinity,newestCautionLL=null;
+  let newestWarningLL=null,closestWarningDist=Infinity;
+  let newestCautionLL=null,closestCautionDist=Infinity;
   strokes.forEach(m=>{
     if((now-m._strokeTime)>windowSec)return;
     const d=haversineKm(lat,lon,m._lat,m._lon);
     if(d<=PROX_RADIUS_KM){
       count++;if(d<closest)closest=d;
-      if(d<=PROX_WARNING_KM){if(m._strokeTime>newestWarningTime){newestWarningTime=m._strokeTime;newestWarningLL={lat:m._lat,lon:m._lon};}}
-      else{if(m._strokeTime>newestCautionTime){newestCautionTime=m._strokeTime;newestCautionLL={lat:m._lat,lon:m._lon};}}
+      if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon};}}
+      else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon};}}
     }
   });
   window._proxNearestLL=newestWarningLL||newestCautionLL;
-  const latestStrikeTime=Math.max(newestWarningTime>-Infinity?newestWarningTime:-Infinity,newestCautionTime>-Infinity?newestCautionTime:-Infinity);
-  if(latestStrikeTime>_proxLastStrikeTime){_proxLastStrikeTime=latestStrikeTime;if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}}
+  const hasNewStrike=(newestWarningLL||newestCautionLL)?true:false;
+  if(hasNewStrike){_proxLastStrikeTime=t||Date.now()/1000;if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}}
   if(count>0){
     const isWarning=closest<=PROX_WARNING_KM;
     if(isWarning&&!_proxLastWasWarning)triggerProximityVibrate();
     _proxLastWasWarning=isWarning;
+    const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
+    if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
+    _proxLastRenderedKey=renderKey;
     const lineColor=isWarning?'#ff4400':'#ffdd00';
     if(!window._proxNearestLine){
       window._proxNearestLine=L.polyline([[lat,lon],[window._proxNearestLL.lat,window._proxNearestLL.lon]],{color:lineColor,weight:2,opacity:0.85,dashArray:'6 5',interactive:false,pane:'gps'}).addTo(map);
@@ -375,7 +379,7 @@ function checkLightningProximity(){
       if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
       if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
       if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-      proximityActive=false;_proxFadeTimer=null;
+      proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
     },5000);}
   } else {
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
@@ -384,7 +388,7 @@ function checkLightningProximity(){
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
     if(_proxVibrateTimer){clearTimeout(_proxVibrateTimer);_proxVibrateTimer=null;}
     if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
-    _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;proximityActive=false;
+    _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;
   }
 }
 
