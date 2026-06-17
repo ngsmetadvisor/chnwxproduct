@@ -675,8 +675,8 @@ function openWeatherPopup(lat, lon){
 
 async function fetchAndDrawWeather(lat, lon){
   const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`+
-    `&hourly=temperature_2m,relativehumidity_2m,windspeed_10m,winddirection_10m,precipitation,cloudcover`+
-    `&models=ecmwf_ifs04`+
+    `&hourly=temperature_2m,relative_humidity_2m,windspeed_10m,winddirection_10m,precipitation,cloudcover`+
+    `&models=ecmwf_ifs025`+
     `&forecast_days=5&timezone=Asia%2FHong_Kong`;
   try{
     const res=await fetch(url);
@@ -688,7 +688,7 @@ async function fetchAndDrawWeather(lat, lon){
     for(let i=0;i<h.time.length;i+=3){
       times.push(h.time[i]);
       temp.push(h.temperature_2m[i]);
-      rh.push(h.relativehumidity_2m[i]);
+      rh.push(h.relative_humidity_2m[i]);
       ws.push(h.windspeed_10m[i]);
       wd.push(h.winddirection_10m[i]);
       // Sum precip over 3-hr block
