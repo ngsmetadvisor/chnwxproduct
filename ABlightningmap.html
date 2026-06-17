@@ -488,10 +488,6 @@ let _proxLastRenderedKey='';
 function triggerProximityVibrate(){
   if(!navigator.vibrate) return;
   navigator.vibrate(PROX_VIBRATE_MS);
-  if(_proxVibrateTimer) clearTimeout(_proxVibrateTimer);
-  _proxVibrateTimer=setTimeout(()=>{
-    if(_proxLastWasWarning) triggerProximityVibrate();
-  }, PROX_VIBRATE_DELAY);
 }
 
 function haversineKm(lat1,lon1,lat2,lon2){
