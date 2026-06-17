@@ -663,7 +663,7 @@ function _showCompassRings(lat,lon){
       interactive:false,pane:'gps',
       icon:L.divIcon({
         className:'',
-        html:'<span style="color:#666;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000,0 0 3px #000;">'+d+'km</span>',
+        html:'<span style="color:#666;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+',0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+';">'+d+'km</span>',
         iconAnchor:[-4,8]
       })
     }).addTo(map));
