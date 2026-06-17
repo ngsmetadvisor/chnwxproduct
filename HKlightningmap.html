@@ -566,8 +566,8 @@ function onGPSSuccess(pos){
       if(mins===60)gpsHeadingLine._ticks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ff4444;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">60min GPS</span>',iconAnchor:[-4,12]})}).addTo(map));
     });
   }else if(gpsHeadingLine){gpsHeadingLine._ticks&&gpsHeadingLine._ticks.forEach(tk=>map.removeLayer(tk));map.removeLayer(gpsHeadingLine);gpsHeadingLine=null;}
+  if(!gpsCompassLine) _showCompassRings(lat,lon);
 }
-
 function onGPSError(err){
   document.getElementById('gps-btn').classList.remove('searching','active');
   document.getElementById('gps-btn').textContent='⊕ GPS';
@@ -576,11 +576,28 @@ function onGPSError(err){
   document.getElementById('gpsStatus').style.color='#ff8844';
 }
 
+
+let _compassRings=[];
+function _showCompassRings(lat,lon){
+  _compassRings.forEach(r=>map.removeLayer(r));
+  _compassRings=[];
+  [25,50,75,100].forEach(d=>{
+    _compassRings.push(L.circle([lat,lon],{
+      radius:d*1000,pane:'gps',color:'#666',weight:1,opacity:0.5,
+      fill:false,dashArray:'4 6',interactive:false
+    }).addTo(map));
+  });
+}
+function _hideCompassRings(){
+  _compassRings.forEach(r=>map.removeLayer(r));
+  _compassRings=[];
+}
 function onCompass(e){
   let h=null;
   if(e.webkitCompassHeading!=null)h=e.webkitCompassHeading;
   else if(e.absolute&&e.alpha!=null)h=(360-e.alpha)%360;
   if(h===null||!gpsMarker)return;
+  _hideCompassRings();
   const ll=gpsMarker.getLatLng();
   const tip=_destPoint(ll.lat,ll.lng,h,100);
   if(!gpsCompassLine)gpsCompassLine=L.polyline([[ll.lat,ll.lng],tip],{color:'#00ff96',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
@@ -624,6 +641,7 @@ if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=nu
     if(gpsRing){map.removeLayer(gpsRing);gpsRing=null;}
     if(gpsAccCircle){map.removeLayer(gpsAccCircle);gpsAccCircle=null;}
     if(gpsHeadingLine){gpsHeadingLine._ticks&&gpsHeadingLine._ticks.forEach(tk=>map.removeLayer(tk));map.removeLayer(gpsHeadingLine);gpsHeadingLine=null;}
+    _hideCompassRings();
     _gpsPrev=null;_gpsLastLL=null;
     document.getElementById('gps-btn').classList.remove('active','searching');
     document.getElementById('gps-btn').textContent='⊕ GPS';
