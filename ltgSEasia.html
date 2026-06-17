@@ -380,7 +380,7 @@ async function rvBuild(){
   document.getElementById('rv-scrub').max=rvFrames.length-1;
   rvFrames.forEach(f=>{
     const url=f.host+f.path+'/256/{z}/{x}/{y}/'+RV_COLOR+'/1_1.png';
-    const layer=L.tileLayer(url,{tileSize:256,opacity:0,pane:'rvRadar',interactive:false,attribution:'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>'}).addTo(map);
+    const layer=L.tileLayer(url,{tileSize:256,opacity:0,pane:'rvRadar',interactive:false,maxNativeZoom:6,attribution:'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>'}).addTo(map);
     rvLayers.push(layer);
   });
   rvFrameIdx=rvLayers.length-1;
