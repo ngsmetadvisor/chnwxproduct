@@ -548,40 +548,22 @@ function strokeStyle(age){
 
 function addStroke(lat,lon,time){
   try {
-  const now=t||Date.now()/1000;
-  const age=now-time;
-  if(archive.length>=ARCHIVE_MAX) archive.shift();
-archive.push({lat,lon,time,inAB:inAB(lat,lon)});
-  if(age>windowSec) return;
-  const m=L.circleMarker([lat,lon],{
-    ...strokeStyle(age),weight:0,interactive:false,renderer:canvasRenderer,pane:'strikes'
-  }).addTo(map);
-  m._strokeTime=time; m._lat=lat; m._lon=lon; m._inAB=inAB(lat,lon);
-  strokes.push(m);
-  if(strokes.length>MAX){ const old=strokes.shift(); map.removeLayer(old); }
-  document.getElementById('counter').textContent=strokes.length;
-  updateABCount();
-  } catch(e){ console.warn('[addStroke]',e); }
-}
-
-function restoreFromArchive(){
-  const now=t||Date.now()/1000;
-  const visible=new Set(strokes.map(m=>m._strokeTime));
-  archive.forEach(a=>{
-    const age=now-a.time;
-    if(age>windowSec||visible.has(a.time)) return;
-    const m=L.circleMarker([a.lat,a.lon],{
+    const now=t||Date.now()/1000;
+    const age=now-time;
+    if(archive.length>=ARCHIVE_MAX) archive.shift();
+    archive.push({lat,lon,time,inAB:inAB(lat,lon)});
+    if(age>windowSec) return;
+    const m=L.circleMarker([lat,lon],{
       ...strokeStyle(age),weight:0,interactive:false,renderer:canvasRenderer,pane:'strikes'
     }).addTo(map);
-    m._strokeTime=a.time; m._lat=a.lat; m._lon=a.lon; m._inAB=a.inAB;
-    strokes.push(m); visible.add(a.time);
-  });
-  while(strokes.length>MAX){ const old=strokes.shift(); map.removeLayer(old); }
-
-  document.getElementById('counter').textContent=strokes.length;
-  updateABCount();
+    m._strokeTime=time; m._lat=lat; m._lon=lon; m._inAB=inAB(lat,lon);
+    strokes.push(m);
+    if(strokes.length>MAX){ const old=strokes.shift(); map.removeLayer(old); }
+    document.getElementById('counter').textContent=strokes.length;
+    updateABCount();
   } catch(e){ console.warn('[addStroke]',e); }
 }
+
 function restoreFromArchive(){
   const now=t||Date.now()/1000;
   for(let i=strokes.length-1;i>=0;i--){
