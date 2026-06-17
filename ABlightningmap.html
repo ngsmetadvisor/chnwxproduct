@@ -446,11 +446,12 @@ window.addEventListener('error', function(e){
   } catch(ex){}
 });
 
+
 window.addEventListener('unhandledrejection', function(e){
   console.warn('[unhandled promise]', e.reason);
   e.preventDefault();
 });
-2. Throttle zoom/pan redraws on iOS to preve
+
 map.on('click', function(e){
   if(!strokes.length) return;
   const clickLL=e.latlng;
