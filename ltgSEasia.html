@@ -132,7 +132,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div class="sep"></div>
     <button id="ec-lightning-toggle" class="tb-btn">⚡ 3h</button>
     <div class="sep"></div>
-    <button id="hko-radar-toggle" class="tb-btn" title="HKO Radar (256 km, zoom in near HK)">🌧 HKO</button>
+    <button id="hko-radar-toggle" class="tb-btn" title="Radar (RainViewer — global, incl. HK/SE Asia)">🌧 Radar</button>
   </div>
 
   <!-- Radar panel -->
@@ -846,121 +846,110 @@ map.on('mousedown touchstart', e => {
 map.on('mouseup touchend touchmove', () => { clearTimeout(_lpTimer); });
 ctxItem.addEventListener('click', () => { ctxMenu.style.display = 'none'; });
 
-// ── HKO Radar (PNG ImageOverlay) ─────────────────────────────
-// HKO publishes flat PNG radar images (no WMS). The 256 km image is
-// georeferenced to this fixed bounding box centred on Tai Mo Shan radar.
-// Bounds source: HKO KML ground overlay metadata (community-verified).
-const HKO_BOUNDS = [[21.42, 113.52], [24.05, 116.49]]; // [[S,W],[N,E]]
+// ── RainViewer Radar (replaces HKO PNG) ──────────────────────
+// RainViewer aggregates 1200+ radars worldwide incl. SE Asia / HKO.
+// Free, no API key, full CORS, tiled XYZ — same source Windy uses.
+// API: https://api.rainviewer.com/public/weather-maps.json
+// Tile URL: {host}/v2/radar/{timestamp}/256/{z}/{x}/{y}/2/1_1.png
+// Color scheme 2 = original RainViewer; smooth=1, snow=1.
 
-// URL pattern: radar0NW.png = 256 km, no terrain overlay, latest frame.
-// HKO rotates through files named radar0NW_YYYYMMDDHHMM.png for history;
-// the current frame is always at the base URL below.
-// Images update every 12 minutes. CORS: hko.gov.hk does NOT send CORS
-// headers, so we proxy through a CORS-anywhere service or use a workaround.
-// We use a canvas-based approach loading via an <img> tag into L.imageOverlay
-// which works when the page is served from the same origin or when the
-// browser does not enforce CORS for image display (no canvas pixel read needed).
+let rvEnabled = false;
+let rvFrames = [];       // [{path, time}] from API
+let rvLayers = [];       // L.tileLayer instances
+let rvFrameIdx = 0;
+let rvAnimTimer = null;
+let rvRefreshTimer = null;
+let rvOpacity = 0.75;
+let rvPlaying = true;
+const RV_ANIM_MS = 500;
+const RV_COLOR = 2;      // 0=original, 1=universal-blue, 2=TITAN, 3=rainbow, 4=dark-sky
 
-const HKO_RADAR_FRAMES = 6; // number of past frames to animate (12-min each)
-const HKO_BASE = 'https://www.hko.gov.hk/wxinfo/radars/images/radar0NW.png';
+map.createPane('rvRadar'); map.getPane('rvRadar').style.zIndex = 360;
 
-// Build timestamped URLs for the last N frames (12-min intervals, rounded)
-function hkoFrameURLs(n) {
-  const urls = [];
-  const now = new Date();
-  // Round down to nearest 12-minute mark
-  const mins = now.getUTCMinutes();
-  const rounded = Math.floor(mins / 12) * 12;
-  now.setUTCMinutes(rounded, 0, 0);
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 12 * 60000);
-    const ts = d.getUTCFullYear().toString()
-      + String(d.getUTCMonth() + 1).padStart(2, '0')
-      + String(d.getUTCDate()).padStart(2, '0')
-      + String(d.getUTCHours()).padStart(2, '0')
-      + String(d.getUTCMinutes()).padStart(2, '0');
-    // HKO archived frames: radar0NW_YYYYMMDDHHMM.png
-    // Latest frame: radar0NW.png (no timestamp)
-    if (i === 0) urls.push({ ts, url: HKO_BASE });
-    else urls.push({ ts, url: 'https://www.hko.gov.hk/wxinfo/radars/images/radar0NW_' + ts + '.png' });
-  }
-  return urls;
+async function rvFetchFrames() {
+  try {
+    const res = await fetch('https://api.rainviewer.com/public/weather-maps.json', { signal: AbortSignal.timeout(10000) });
+    const data = await res.json();
+    // Combine past radar frames + nowcast
+    const past = (data.radar?.past || []);
+    const now  = (data.radar?.nowcast || []);
+    // Use past frames only (nowcast is extrapolated)
+    return past.map(f => ({ path: f.path, time: f.time, host: data.host }));
+  } catch(e) { console.warn('[RainViewer]', e); return []; }
 }
 
-let hkoEnabled = false;
-let hkoOverlays = []; // [{overlay, ts}]
-let hkoFrameIdx = 0;
-let hkoAnimTimer = null;
-let hkoRefreshTimer = null;
-let hkoOpacity = 0.75;
-
-map.createPane('hkoRadar'); map.getPane('hkoRadar').style.zIndex = 360;
-
-function hkoBuildOverlays() {
-  hkoOverlays.forEach(o => { try { map.removeLayer(o.overlay); } catch(e) {} });
-  hkoOverlays = [];
-  const frames = hkoFrameURLs(HKO_RADAR_FRAMES);
-  frames.forEach((f, idx) => {
-    const ov = L.imageOverlay(f.url, HKO_BOUNDS, {
-      opacity: 0,
-      interactive: false,
-      pane: 'hkoRadar',
-      attribution: '🌧 HKO Radar © Hong Kong Observatory'
-    }).addTo(map);
-    hkoOverlays.push({ overlay: ov, ts: f.ts });
-    // Show latest frame immediately while others load
-    if (idx === frames.length - 1) ov.setOpacity(hkoOpacity);
-  });
-  hkoFrameIdx = hkoOverlays.length - 1;
-  updateHkoStatus();
+function rvShowFrame(idx) {
+  rvLayers.forEach((l, i) => l.setOpacity(i === idx ? rvOpacity : 0));
+  rvFrameIdx = idx;
+  rvUpdateUI();
 }
 
-function hkoShowFrame(idx) {
-  hkoOverlays.forEach((o, i) => o.overlay.setOpacity(i === idx ? hkoOpacity : 0));
-  hkoFrameIdx = idx;
-  updateHkoStatus();
+function rvStartAnim() {
+  if (rvAnimTimer) clearInterval(rvAnimTimer);
+  rvAnimTimer = setInterval(() => {
+    if (!rvLayers.length) return;
+    rvShowFrame((rvFrameIdx + 1) % rvLayers.length);
+  }, RV_ANIM_MS);
 }
 
-function hkoStartAnim() {
-  if (hkoAnimTimer) clearInterval(hkoAnimTimer);
-  hkoAnimTimer = setInterval(() => {
-    if (!hkoOverlays.length) return;
-    hkoShowFrame((hkoFrameIdx + 1) % hkoOverlays.length);
-  }, 600);
+function rvStopAnim() {
+  if (rvAnimTimer) { clearInterval(rvAnimTimer); rvAnimTimer = null; }
 }
 
-function hkoStopAnim() {
-  if (hkoAnimTimer) { clearInterval(hkoAnimTimer); hkoAnimTimer = null; }
-}
-
-function updateHkoStatus() {
+function rvUpdateUI() {
   const btn = document.getElementById('hko-radar-toggle');
-  if (!hkoEnabled) { btn.textContent = '🌧 HKO'; return; }
-  const f = hkoOverlays[hkoFrameIdx];
-  btn.textContent = f ? '🌧 HKO ' + f.ts.substring(8, 10) + ':' + f.ts.substring(10, 12) + 'Z' : '🌧 HKO';
+  if (!rvEnabled) { btn.textContent = '🌧 Radar'; return; }
+  const f = rvFrames[rvFrameIdx];
+  if (f) {
+    const d = new Date(f.time * 1000);
+    const hh = String(d.getUTCHours()).padStart(2,'0');
+    const mm = String(d.getUTCMinutes()).padStart(2,'0');
+    btn.textContent = '🌧 ' + hh + ':' + mm + 'Z';
+  } else {
+    btn.textContent = '🌧 Radar';
+  }
 }
 
-function enableHkoRadar() {
-  hkoEnabled = true;
+async function rvBuild() {
+  // Remove old layers
+  rvLayers.forEach(l => { try { map.removeLayer(l); } catch(e) {} });
+  rvLayers = [];
+  rvFrames = await rvFetchFrames();
+  if (!rvFrames.length) { console.warn('[RainViewer] no frames'); return; }
+  rvFrames.forEach((f, idx) => {
+    const url = f.host + f.path + '/256/{z}/{x}/{y}/' + RV_COLOR + '/1_1.png';
+    const layer = L.tileLayer(url, {
+      tileSize: 256, opacity: 0, zIndex: 360,
+      pane: 'rvRadar', interactive: false,
+      attribution: 'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>'
+    }).addTo(map);
+    rvLayers.push(layer);
+  });
+  rvFrameIdx = rvLayers.length - 1;
+  rvShowFrame(rvFrameIdx);
+  if (rvPlaying) rvStartAnim();
+}
+
+function enableRvRadar() {
+  rvEnabled = true;
   document.getElementById('hko-radar-toggle').classList.add('active');
-  hkoBuildOverlays();
-  hkoStartAnim();
-  if (hkoRefreshTimer) clearInterval(hkoRefreshTimer);
-  hkoRefreshTimer = setInterval(() => { if (hkoEnabled) hkoBuildOverlays(); }, 12 * 60 * 1000);
+  rvBuild();
+  if (rvRefreshTimer) clearInterval(rvRefreshTimer);
+  rvRefreshTimer = setInterval(() => { if (rvEnabled) rvBuild(); }, 5 * 60 * 1000);
 }
 
-function disableHkoRadar() {
-  hkoEnabled = false;
+function disableRvRadar() {
+  rvEnabled = false;
   document.getElementById('hko-radar-toggle').classList.remove('active');
-  hkoStopAnim();
-  if (hkoRefreshTimer) { clearInterval(hkoRefreshTimer); hkoRefreshTimer = null; }
-  hkoOverlays.forEach(o => { try { map.removeLayer(o.overlay); } catch(e) {} });
-  hkoOverlays = [];
-  updateHkoStatus();
+  rvStopAnim();
+  if (rvRefreshTimer) { clearInterval(rvRefreshTimer); rvRefreshTimer = null; }
+  rvLayers.forEach(l => { try { map.removeLayer(l); } catch(e) {} });
+  rvLayers = []; rvFrames = [];
+  rvUpdateUI();
 }
 
 document.getElementById('hko-radar-toggle').addEventListener('click', () => {
-  if (hkoEnabled) disableHkoRadar(); else enableHkoRadar();
+  if (rvEnabled) disableRvRadar(); else enableRvRadar();
 });
 
 // ── WebSocket — SE Asia focused bbox ─────────────────────────
