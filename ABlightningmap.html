@@ -393,12 +393,24 @@ let currentBasemap=localStorage.getItem('basemap')||'dark';
 BASEMAPS[currentBasemap].addTo(map);
 document.getElementById('basemap-btn').textContent=BASEMAP_LABELS[currentBasemap];
 
+
 function setBasemap(name){
   if(!BASEMAPS[name]||name===currentBasemap)return;
   map.removeLayer(BASEMAPS[currentBasemap]);
   currentBasemap=name;
   BASEMAPS[currentBasemap].addTo(map);
   document.getElementById('basemap-btn').textContent=BASEMAP_LABELS[name];
+  // Rebuild station labels with correct shadow
+  const isLight=currentBasemap==='street';
+  stationLabelMarkers.forEach(m=>{
+    const id=m._stationId;
+    if(!id)return;
+    m.setIcon(L.divIcon({
+      className:'',
+      html:'<div style="position:absolute;transform:translate(-50%,-50%);color:'+(isLight?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';">'+id+'</div>',
+      iconSize:[0,0],iconAnchor:[0,0]
+    }));
+  });
 }
 
 function cycleBasemap(){
@@ -1176,7 +1188,7 @@ function _showCompassRings(lat,lon){
       interactive:false,pane:'gps',
       icon:L.divIcon({
         className:'',
-        html:'<span style="color:#666;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000,0 0 3px #000;">'+d+'km</span>',
+        html:'<span style="color:#666;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+',0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+';">'+d+'km</span>',
         iconAnchor:[-4,8]
       })
     }).addTo(map));
@@ -1444,10 +1456,11 @@ fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/st
       stations[id] = {lat, lon, name};
       const icon = L.divIcon({
         className: '',
-        html: '<div style="position:absolute;transform:translate(-50%,-50%);color:#aaa;font-size:10px;font-family:monospace;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px #000,0 0 3px #000;">' + id + '</div>',
+        html: '<div style="position:absolute;transform:translate(-50%,-50%);color:'+(currentBasemap==='street'?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+',0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+';">' + id + '</div>',
         iconSize: [0, 0], iconAnchor: [0, 0]
       });
       const m = L.marker([lat, lon], {icon, interactive: false}).addTo(map);
+      m._stationId = id;
       stationLabelMarkers.push(m);
     });
     buildStationDropdown();
