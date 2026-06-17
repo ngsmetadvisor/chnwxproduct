@@ -87,6 +87,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
 /* ── GPS marker ── */
 .gps-dot { width:14px; height:14px; border-radius:50%; background:#00ff96; border:2px solid #fff; box-shadow:0 0 10px #00ff96; }
+.gps-dot-fake { width:14px; height:14px; border-radius:50%; background:#ffdd00; border:2px solid #fff; box-shadow:0 0 10px #ffdd00; }
 .gps-ring { width:40px; height:40px; border-radius:50%; border:2px solid rgba(0,255,150,0.4); animation:gps-expand 2s ease-out infinite; }
 @keyframes gps-expand { 0%{transform:scale(0.3);opacity:0.8}100%{transform:scale(1);opacity:0} }
 
@@ -260,7 +261,7 @@ function haversineKm(lat1,lon1,lat2,lon2){
 }
 
 function checkLightningProximity(){
-  const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
+  const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL||{lat:22.3193,lon:114.1694};
   if(!src)return;
   const lat=src.lat,lon=src.lng??src.lon;
   const now=t||Date.now()/1000;
@@ -539,6 +540,9 @@ function onCompass(e){
 }
 
 function toggleGPS(){
+if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;_gpsLastLL=null;}
+  if(window._fakeCompassLine){map.removeLayer(window._fakeCompassLine);window._fakeCompassLine=null;}
+  if(window._fakeCompassTicks){window._fakeCompassTicks.forEach(tk=>map.removeLayer(tk));window._fakeCompassTicks=[];}
   if(!gpsActive){
     gpsActive=true;
     document.getElementById('gps-btn').classList.add('searching');
@@ -571,6 +575,24 @@ function toggleGPS(){
   }
 }
 document.getElementById('gps-btn').addEventListener('click',toggleGPS);
+
+(function initFakeGPS(){
+  const fakeLL={lat:22.3193,lng:114.1694};
+  _gpsLastLL={lat:22.3193,lon:114.1694};
+  const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
+  window._fakeMarker=L.marker([fakeLL.lat,fakeLL.lng],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
+  const tip=_destPoint(fakeLL.lat,fakeLL.lng,0,100);
+  window._fakeCompassLine=L.polyline([[fakeLL.lat,fakeLL.lng],tip],{color:'#ffdd00',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+  const perp=90;
+  window._fakeCompassTicks=[];
+  [25,50,75,100].forEach(dist=>{
+    const mid=_destPoint(fakeLL.lat,fakeLL.lng,0,dist);
+    const a=_destPoint(mid[0],mid[1],perp,10);
+    const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
+    window._fakeCompassTicks.push(L.polyline([a,b],{color:'#ffdd00',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+    if(dist===100)window._fakeCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ffdd00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km N</span>',iconAnchor:[-4,12]})}).addTo(map));
+  });
+})();
 
 // ── Context menu ───────────────────────────────────────────────
 const ctxMenu=document.getElementById('mapContextMenu');
@@ -662,6 +684,9 @@ function openWeatherPopup(lat, lon){
     <div style="position:relative;width:100%;height:340px;"><canvas id="wx-chart" role="img" aria-label="5-day ECMWF weather forecast"></canvas></div>
     <div style="position:relative;width:100%;height:120px;margin-top:8px;"><canvas id="wx-wind-chart" role="img" aria-label="Wind direction arrows"></canvas></div>
     <div id="wx-error" style="display:none;color:#ff6644;font-size:11px;margin-top:8px;text-align:center;"></div>
+    <div style="margin-top:12px;text-align:center;border-top:0.5px solid rgba(100,180,255,0.1);padding-top:10px;">
+      <a href="https://buymeacoffee.com/dispatcher" target="_blank" style="color:#ffdd00;font-size:10px;text-decoration:none;opacity:0.6;">☕ Buy me a coffee</a>
+    </div>
   `;
 
   overlay.appendChild(box);
@@ -703,7 +728,7 @@ async function fetchAndDrawWeather(lat, lon){
       return dd+'/'+hh;
     });
     document.getElementById('wx-subtitle').textContent=`ECMWF · 5-day · 3-hr · HKT · ${data.hourly_units?.temperature_2m||'°C'}`;
-    drawWeatherChart(labels,temp,rh,ws,precip,cloud);
+drawWeatherChart(labels,times,temp,rh,ws,precip,cloud);
     drawWindArrows(labels,ws,wd);
   }catch(e){
     const errEl=document.getElementById('wx-error');
@@ -713,16 +738,16 @@ async function fetchAndDrawWeather(lat, lon){
   }
 }
 
-function drawWeatherChart(labels,temp,rh,ws,precip,cloud){
+function drawWeatherChart(labels,times,temp,rh,ws,precip,cloud){
   if(!window.Chart){
     const s=document.createElement('script');
     s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
-    s.onload=()=>_renderChart(labels,temp,rh,ws,precip,cloud);
+    s.onload=()=>_renderChart(labels,times,temp,rh,ws,precip,cloud);
     document.head.appendChild(s);
-  }else _renderChart(labels,temp,rh,ws,precip,cloud);
+  }else _renderChart(labels,times,temp,rh,ws,precip,cloud);
 }
 
-function _renderChart(labels,temp,rh,ws,precip,cloud){
+function _renderChart(labels,times,temp,rh,ws,precip,cloud){
   const ctx=document.getElementById('wx-chart');
   if(!ctx)return;
   if(ctx._chartInst){ctx._chartInst.destroy();}
@@ -738,8 +763,8 @@ function _renderChart(labels,temp,rh,ws,precip,cloud){
     <button id="wx-wind-unit-btn" style="margin-left:6px;background:transparent;border:0.5px solid rgba(100,180,255,0.4);color:#88ccff;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;">${window._wxKnots?'kt → km/h':'km/h → kt'}</button>
   `;
   document.getElementById('wx-wind-unit-btn').addEventListener('click',()=>{
-    window._wxKnots=!window._wxKnots;
-    _renderChart(labels,temp,rh,ws,precip,cloud);
+window._wxKnots=!window._wxKnots;
+    _renderChart(labels,times,temp,rh,ws,precip,cloud);
   });
 
   ctx._chartInst=new Chart(ctx,{
