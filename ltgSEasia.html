@@ -881,7 +881,7 @@ function hkoFrameURLs(n) {
       + String(d.getUTCMinutes()).padStart(2, '0');
     // HKO archived frames: radar0NW_YYYYMMDDHHMM.png
     // Latest frame: radar0NW.png (no timestamp)
-    if (i === 0) urls.push({ ts, url: HKO_BASE + '?t=' + Date.now() });
+    if (i === 0) urls.push({ ts, url: HKO_BASE });
     else urls.push({ ts, url: 'https://www.hko.gov.hk/wxinfo/radars/images/radar0NW_' + ts + '.png' });
   }
   return urls;
@@ -905,7 +905,6 @@ function hkoBuildOverlays() {
       opacity: 0,
       interactive: false,
       pane: 'hkoRadar',
-      crossOrigin: 'anonymous',
       attribution: '🌧 HKO Radar © Hong Kong Observatory'
     }).addTo(map);
     hkoOverlays.push({ overlay: ov, ts: f.ts });
