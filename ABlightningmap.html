@@ -1005,8 +1005,8 @@ const perpBear=(bear+90)%360;
     gpsHeadingLine._ticks&&gpsHeadingLine._ticks.forEach(t=>map.removeLayer(t));
     map.removeLayer(gpsHeadingLine); gpsHeadingLine=null;
   }
+  if(!gpsCompassLine) _showCompassRings(lat,lon);
 }
-
 function onGPSError(err){
   document.getElementById('gps-btn').classList.remove('searching','active');
   document.getElementById('gps-btn').textContent='⊕ GPS';
@@ -1051,6 +1051,7 @@ gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHi
     if(gpsRing){map.removeLayer(gpsRing);gpsRing=null;}
     if(gpsAccCircle){map.removeLayer(gpsAccCircle);gpsAccCircle=null;}
     if(gpsHeadingLine){gpsHeadingLine._ticks&&gpsHeadingLine._ticks.forEach(t=>map.removeLayer(t));map.removeLayer(gpsHeadingLine);gpsHeadingLine=null;}
+    _hideCompassRings();
     _gpsPrev=null;
     document.getElementById('gps-btn').classList.remove('active','searching');
     document.getElementById('gps-btn').textContent='⊕ GPS';
@@ -1059,11 +1060,27 @@ gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHi
   }
 }
 
+let _compassRings=[];
+function _showCompassRings(lat,lon){
+  _compassRings.forEach(r=>map.removeLayer(r));
+  _compassRings=[];
+  [25,50,75,100].forEach(d=>{
+    _compassRings.push(L.circle([lat,lon],{
+      radius:d*1000,pane:'gps',color:'#666',weight:1,opacity:0.5,
+      fill:false,dashArray:'4 6',interactive:false
+    }).addTo(map));
+  });
+}
+function _hideCompassRings(){
+  _compassRings.forEach(r=>map.removeLayer(r));
+  _compassRings=[];
+}
 function onCompass(e){
   let h=null;
   if(e.webkitCompassHeading!=null) h=e.webkitCompassHeading;
   else if(e.absolute&&e.alpha!=null) h=(360-e.alpha)%360;
   if(h===null||!gpsMarker) return;
+  _hideCompassRings();
   const ll=gpsMarker.getLatLng();
   const lat=ll.lat, lon=ll.lng;
   const tip=_destPoint(lat,lon,h,100);
