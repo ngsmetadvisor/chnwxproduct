@@ -625,7 +625,6 @@ const PROX_RADIUS_KM     = 100  // total watch radius distance in km. 100km in d
 const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
 const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
 const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
-const PROX_VIBRATE_DELAY = 5000;   // ms between vibration repeats
 const PROX_FADE_DELAY_MS = 30000;  // ms after last strike before warning clears
 
 
@@ -1087,6 +1086,8 @@ enableRadar();
 let gpsMarker=null, gpsRing=null, gpsAccCircle=null, gpsHeadingLine=null, gpsCompassLine=null, gpsCompassTicks=[], gpsActive=false, gpsWatchId=null;
 let ecLightningLayers=[], ecLightningTimer=null, ecLightningEnabled=false;
 let _gpsPrev=null;
+let _gpsLastLL=null;
+
 const gpsIcon=L.divIcon({className:'',html:'<div class="gps-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]});
 const gpsRingIcon=L.divIcon({className:'',html:'<div class="gps-ring"></div>',iconSize:[40,40],iconAnchor:[20,20]});
 
@@ -1115,7 +1116,9 @@ function onGPSSuccess(pos){
   _gpsPrev={lat,lon};
   const spdStr=speed!=null&&!isNaN(speed)?' '+(speed*3.6).toFixed(0)+'km/h':'';
   const bearStr=bear!=null?' '+Math.round(bear)+'°':'';
+
   document.getElementById('gpsStatus').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4)+' '+accStr+spdStr+bearStr;
+  _gpsLastLL={lat,lon};
   if(!gpsMarker){
     gpsRing=L.marker([lat,lon],{icon:gpsRingIcon,interactive:false,pane:'gps'}).addTo(map);
     gpsMarker=L.marker([lat,lon],{icon:gpsIcon,interactive:false,pane:'gps'}).addTo(map);
@@ -1200,8 +1203,10 @@ gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHi
     if(gpsRing){map.removeLayer(gpsRing);gpsRing=null;}
     if(gpsAccCircle){map.removeLayer(gpsAccCircle);gpsAccCircle=null;}
     if(gpsHeadingLine){gpsHeadingLine._ticks&&gpsHeadingLine._ticks.forEach(t=>map.removeLayer(t));map.removeLayer(gpsHeadingLine);gpsHeadingLine=null;}
+
     _hideCompassRings();
     _gpsPrev=null;
+    _gpsLastLL=null;
     document.getElementById('gps-btn').classList.remove('active','searching');
     document.getElementById('gps-btn').textContent='⊕ GPS';
     document.getElementById('gpsStatus').textContent='';
