@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>* { -webkit-tap-highlight-color: transparent; }</style>
 <title>Lightning Map – Alberta</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
@@ -427,8 +431,26 @@ map.createPane('strikes');      map.getPane('strikes').style.zIndex      = 650;
 map.createPane('ecLightningPane'); map.getPane('ecLightningPane').style.zIndex = 640;
 
 
-const canvasRenderer = L.canvas({ pane:'strikes' });
 
+const canvasRenderer = L.canvas({ pane:'strikes', tolerance:5 });
+
+// Global error handler — catch canvas/WebGL crashes and recover
+window.addEventListener('error', function(e){
+  console.warn('[crash guard]', e.message);
+  try {
+    // Re-add canvas renderer pane if lost
+    const sp = map.getPane('strikes');
+    if(sp) sp.style.zIndex = 650;
+    // Force redraw
+    map.invalidateSize();
+  } catch(ex){}
+});
+
+window.addEventListener('unhandledrejection', function(e){
+  console.warn('[unhandled promise]', e.reason);
+  e.preventDefault();
+});
+2. Throttle zoom/pan redraws on iOS to preve
 map.on('click', function(e){
   if(!strokes.length) return;
   const clickLL=e.latlng;
@@ -524,6 +546,7 @@ function strokeStyle(age){
 }
 
 function addStroke(lat,lon,time){
+  try {
   const now=t||Date.now()/1000;
   const age=now-time;
   if(archive.length>=ARCHIVE_MAX) archive.shift();
@@ -552,11 +575,12 @@ function restoreFromArchive(){
     strokes.push(m); visible.add(a.time);
   });
   while(strokes.length>MAX){ const old=strokes.shift(); map.removeLayer(old); }
+
   document.getElementById('counter').textContent=strokes.length;
   updateABCount();
+  } catch(e){ console.warn('[addStroke]',e); }
 }
-
-function pruneOld(){
+function restoreFromArchive(){
   const now=t||Date.now()/1000;
   for(let i=strokes.length-1;i>=0;i--){
     if(now-strokes[i]._strokeTime>windowSec){map.removeLayer(strokes[i]);strokes.splice(i,1);}
@@ -582,8 +606,19 @@ function updateABCount(){
   document.getElementById('ab-total-num').textContent=ab;
 }
 
-setInterval(()=>{updateColors();rebuildZoneCounts();checkLightningProximity();},2000);
 
+setInterval(()=>{
+  try{updateColors();}catch(e){console.warn('[updateColors]',e);}
+  try{rebuildZoneCounts();}catch(e){console.warn('[rebuildZoneCounts]',e);}
+  try{checkLightningProximity();}catch(e){console.warn('[checkLightningProximity]',e);}
+},2000);
+
+// Throttle map redraws during pinch-zoom on iOS
+let _zoomThrottle=null;
+map.on('zoomanim zoom', function(){
+  if(_zoomThrottle) return;
+  _zoomThrottle=setTimeout(()=>{_zoomThrottle=null;},100);
+});
 // ── Lightning Proximity Warning ───────────────────────────────
 const PROX_RADIUS_KM     = 100  // total watch radius distance in km. 100km in default
 const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
@@ -1332,16 +1367,19 @@ function connect(){
     document.getElementById('connStatus').textContent='Live';
     ws.send(JSON.stringify({v:24,i:{},s:false,x:0,w:0,tx:0,tw:0,a:4,z:map.getZoom(),b:true,h:'',l:0,t:0,from_lightningmaps_org:true,p:[90,180,-90,-180]}));
   };
+
   ws.onmessage=(event)=>{
     try{
       const msg=JSON.parse(event.data);
       if(msg.time)t=msg.time;
       if(msg.strokes)msg.strokes.forEach(s=>{
-        if(s&&s.lat&&s.lon){
-          const time=s.time?s.time/1000:Date.now()/1000;
-          if((t||Date.now()/1000)-time<=86400)addStroke(parseFloat(s.lat),parseFloat(s.lon),time);
-          if(s.del)document.getElementById('delay').textContent='Delay: '+(s.del/1000).toFixed(1)+'s';
-        }
+        try{
+          if(s&&s.lat&&s.lon){
+            const time=s.time?s.time/1000:Date.now()/1000;
+            if((t||Date.now()/1000)-time<=86400)addStroke(parseFloat(s.lat),parseFloat(s.lon),time);
+            if(s.del)document.getElementById('delay').textContent='Delay: '+(s.del/1000).toFixed(1)+'s';
+          }
+        }catch(se){console.warn('[stroke]',se);}
       });
     }catch(e){}
   };
