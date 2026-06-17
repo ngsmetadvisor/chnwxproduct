@@ -893,8 +893,7 @@ async function fetchAndDrawWeather(lat, lon){
       return dd+'/'+hh;
     });
     document.getElementById('wx-subtitle').textContent=`ECMWF · 5-day · 3-hr · HKT · ${data.hourly_units?.temperature_2m||'°C'}`;
-drawWeatherChart(labels,times,temp,rh,ws,precip,cloud);
-    drawWindArrows(labels,ws,wd);
+drawWeatherChart(labels,times,temp,rh,ws,precip,cloud,wd);
   }catch(e){
     const errEl=document.getElementById('wx-error');
     if(errEl){errEl.style.display='block';errEl.textContent='Failed to load: '+e.message;}
@@ -903,16 +902,16 @@ drawWeatherChart(labels,times,temp,rh,ws,precip,cloud);
   }
 }
 
-function drawWeatherChart(labels,times,temp,rh,ws,precip,cloud){
+function drawWeatherChart(labels,times,temp,rh,ws,precip,cloud,wd){
   if(!window.Chart){
     const s=document.createElement('script');
     s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
-    s.onload=()=>_renderChart(labels,times,temp,rh,ws,precip,cloud);
+    s.onload=()=>_renderChart(labels,times,temp,rh,ws,precip,cloud,wd);
     document.head.appendChild(s);
-  }else _renderChart(labels,times,temp,rh,ws,precip,cloud);
+  }else _renderChart(labels,times,temp,rh,ws,precip,cloud,wd);
 }
 
-function _renderChart(labels,times,temp,rh,ws,precip,cloud){
+function _renderChart(labels,times,temp,rh,ws,precip,cloud,wd){
   const ctx=document.getElementById('wx-chart');
   if(!ctx)return;
   if(ctx._chartInst){ctx._chartInst.destroy();}
@@ -927,9 +926,9 @@ function _renderChart(labels,times,temp,rh,ws,precip,cloud){
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(180,180,200,0.25);display:inline-block;border-radius:2px;"></span>Cloud (%)</span>
     <button id="wx-wind-unit-btn" style="margin-left:6px;background:transparent;border:0.5px solid rgba(100,180,255,0.4);color:#88ccff;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;">${window._wxKnots?'kt → km/h':'km/h → kt'}</button>
   `;
-  document.getElementById('wx-wind-unit-btn').addEventListener('click',()=>{
+document.getElementById('wx-wind-unit-btn').addEventListener('click',()=>{
 window._wxKnots=!window._wxKnots;
-    _renderChart(labels,times,temp,rh,ws,precip,cloud);
+    _renderChart(labels,times,temp,rh,ws,precip,cloud,wd);
   });
 
   ctx._chartInst=new Chart(ctx,{
@@ -940,9 +939,13 @@ window._wxKnots=!window._wxKnots;
         {type:'line',label:'RH (%)',data:rh,yAxisID:'yRH',borderColor:'#00ccff',backgroundColor:'transparent',borderWidth:1.5,borderDash:[6,3],pointRadius:0,tension:0.3,order:2},
 {type:'line',label:'Wind',data:window._wxKnots?ws.map(v=>parseFloat((v*0.539957).toFixed(1))):ws,yAxisID:'yW',borderColor:'#44aaff',backgroundColor:'transparent',borderWidth:1.5,borderDash:[2,2],pointRadius:0,tension:0.3,order:3},
         {type:'bar',label:'Precip 3h (mm)',data:precip,yAxisID:'yP',backgroundColor:'rgba(0,150,255,0.45)',order:4},
-        {type:'bar',label:'Cloud (%)',data:cloud,yAxisID:'yC',backgroundColor:'rgba(180,180,200,0.25)',order:5},
+{type:'bar',label:'Cloud (%)',data:cloud,yAxisID:'yC',backgroundColor:'rgba(180,180,200,0.25)',order:5},
       ]
     },
+    plugins:[{
+      id:'windArrowSync',
+      afterLayout:(chart)=>drawWindArrows(labels,ws,wd,chart.scales.x)
+    }],
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
@@ -996,15 +999,16 @@ window._wxKnots=!window._wxKnots;
   });
 }
 
-function drawWindArrows(labels,ws,wd){
+function drawWindArrows(labels,ws,wd,xScale){
   const canvas=document.getElementById('wx-wind-chart');
   if(!canvas)return;
-  const W=canvas.offsetWidth||640;
+  const W=(xScale&&xScale.chart&&xScale.chart.width)||canvas.offsetWidth||640;
   canvas.width=W; canvas.height=100;
   const ctx2=canvas.getContext('2d');
   ctx2.clearRect(0,0,W,100);
   const n=labels.length;
   const step=W/n;
+  const getX=i=>xScale?xScale.getPixelForValue(i):(step*i+step/2);
   const unitLabel=window._wxKnots?'kt':'km/h';
   const thresholds=window._wxKnots?[8,16,27,34]:[15,30,50,63];
 
@@ -1012,7 +1016,7 @@ function drawWindArrows(labels,ws,wd){
   ctx2.textAlign='center';
 
   for(let i=0;i<n;i++){
-    const x=step*i+step/2;
+    const x=getX(i);
     const y=44;
     const spdKmh=ws[i]||0;
     const spd=window._wxKnots?spdKmh*0.539957:spdKmh;
