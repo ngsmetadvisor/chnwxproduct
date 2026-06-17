@@ -810,45 +810,62 @@ function drawWindArrows(labels,ws,wd){
   const canvas=document.getElementById('wx-wind-chart');
   if(!canvas)return;
   const W=canvas.offsetWidth||640;
-  canvas.width=W; canvas.height=120;
+  canvas.width=W; canvas.height=100;
   const ctx2=canvas.getContext('2d');
-  ctx2.clearRect(0,0,W,120);
+  ctx2.clearRect(0,0,W,100);
   const n=labels.length;
   const step=W/n;
+  const unitLabel=window._wxKnots?'kt':'km/h';
+  const thresholds=window._wxKnots?[8,16,27,34]:[15,30,50,63];
+
   ctx2.font='8px Courier New';
   ctx2.textAlign='center';
 
   for(let i=0;i<n;i++){
     const x=step*i+step/2;
-    const y=55;
-    const spd=ws[i]||0;
+    const y=44;
+    const spdKmh=ws[i]||0;
+    const spd=window._wxKnots?spdKmh*0.539957:spdKmh;
     const dir=(wd[i]||0)*Math.PI/180;
-    const len=Math.min(12+spd*0.25,30);
-    const col=spd<15?'#44ff99':spd<30?'#ffdd00':spd<50?'#ff8800':'#ff3300';
+    const len=Math.min(10+spd*0.5,28);
+    const col=spd<thresholds[0]?'#44ff99':spd<thresholds[1]?'#ffdd00':spd<thresholds[2]?'#ff8800':'#ff3300';
+
+    const lbl=labels[i]||'';
+    const hh=lbl.slice(-2);
+    if(['00','06','12','18'].includes(hh)){
+      ctx2.strokeStyle=lbl.endsWith('/00')?'rgba(255,255,255,0.2)':'rgba(255,255,255,0.06)';
+      ctx2.lineWidth=lbl.endsWith('/00')?1.5:0.5;
+      ctx2.beginPath();ctx2.moveTo(x,0);ctx2.lineTo(x,100);ctx2.stroke();
+    }
+
     ctx2.save();
     ctx2.translate(x,y);
     ctx2.rotate(dir);
     ctx2.strokeStyle=col;
     ctx2.lineWidth=1.5;
     ctx2.beginPath();ctx2.moveTo(0,len/2);ctx2.lineTo(0,-len/2);ctx2.stroke();
-    ctx2.beginPath();ctx2.moveTo(0,-len/2);ctx2.lineTo(-4,-len/2+7);ctx2.stroke();
-    ctx2.beginPath();ctx2.moveTo(0,-len/2);ctx2.lineTo(4,-len/2+7);ctx2.stroke();
+    ctx2.beginPath();ctx2.moveTo(0,-len/2);ctx2.lineTo(-3.5,-len/2+6);ctx2.stroke();
+    ctx2.beginPath();ctx2.moveTo(0,-len/2);ctx2.lineTo(3.5,-len/2+6);ctx2.stroke();
     ctx2.restore();
-    ctx2.fillStyle='#556';
-    if(i%4===0){ctx2.fillStyle='#888';ctx2.fillText(labels[i],x,110);}
+
     ctx2.fillStyle=col;
-    ctx2.fillText(Math.round(spd),x,y+22);
+    ctx2.fillText(Math.round(spd),x,y+18);
   }
-  ctx2.fillStyle='#445';
+
   ctx2.font='9px Courier New';
   ctx2.textAlign='left';
-  ctx2.fillText('Wind dir ↑ · speed km/h',4,12);
-  ctx2.fillText('≤15 ■  ≤30 ■  ≤50 ■  >50 ■',4,24);
+  ctx2.fillStyle='#556';
+  ctx2.fillText('Wind ('+unitLabel+') · arrow = direction from',4,10);
+
   const cols=['#44ff99','#ffdd00','#ff8800','#ff3300'];
+  const lbls=window._wxKnots?['<8kt','<16kt','<27kt','>27kt']:['<15','<30','<50','>50'];
   let cx=4;
-  ['≤15','≤30','≤50','>50'].forEach((lbl,i)=>{
+  lbls.forEach((l,i)=>{
     ctx2.fillStyle=cols[i];
-    ctx2.fillRect(cx+27+i*38,16,8,8);
+    ctx2.fillRect(cx,88,8,8);
+    ctx2.fillStyle='#778';
+    ctx2.fillText(l,cx+10,96);
+    cx+=42;
   });
 }
 
