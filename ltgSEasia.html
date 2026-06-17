@@ -592,7 +592,10 @@ map.on('mousedown touchstart',e=>{_lpTimer=setTimeout(()=>{
   ctxMenu.style.display='block';
 },600);});
 map.on('mouseup touchend touchmove',()=>clearTimeout(_lpTimer));
-ctxCoords.addEventListener('click',()=>ctxMenu.style.display='none');
+ctxCoords.addEventListener('click',()=>{
+  ctxMenu.style.display='none';
+  if(window._ctxLL) openWeatherPopup(window._ctxLL.lat, window._ctxLL.lng);
+});
 
 // ── WebSocket — HK/SE Asia focused bbox ───────────────────────
 // Subscribe to a tight SE Asia bbox for dense regional data
@@ -634,6 +637,181 @@ setInterval(()=>{
 },5000);
 
 connect();
+
+// ── Weather Popup ──────────────────────────────────────────────
+function openWeatherPopup(lat, lon){
+  const existing=document.getElementById('wx-popup-overlay');
+  if(existing) existing.remove();
+
+  const overlay=document.createElement('div');
+  overlay.id='wx-popup-overlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:19000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:12px;';
+
+  const box=document.createElement('div');
+  box.style.cssText='background:#0d0f1a;border:0.5px solid rgba(100,180,255,0.3);border-radius:14px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;padding:16px;font-family:\'Courier New\',monospace;position:relative;';
+
+  box.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div>
+        <div style="font-size:13px;color:#88ccff;font-weight:700;">📍 ${lat.toFixed(4)}°, ${lon.toFixed(4)}°</div>
+        <div id="wx-subtitle" style="font-size:10px;color:#556;margin-top:2px;">Loading ECMWF forecast…</div>
+      </div>
+      <button id="wx-close-btn" style="background:transparent;border:0.5px solid rgba(100,180,255,0.3);color:#88ccff;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+    <div id="wx-legend" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;font-size:10px;color:#777;"></div>
+    <div style="position:relative;width:100%;height:340px;"><canvas id="wx-chart" role="img" aria-label="5-day ECMWF weather forecast"></canvas></div>
+    <div style="position:relative;width:100%;height:120px;margin-top:8px;"><canvas id="wx-wind-chart" role="img" aria-label="Wind direction arrows"></canvas></div>
+    <div id="wx-error" style="display:none;color:#ff6644;font-size:11px;margin-top:8px;text-align:center;"></div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  document.getElementById('wx-close-btn').addEventListener('click',()=>overlay.remove());
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+
+  fetchAndDrawWeather(lat, lon);
+}
+
+async function fetchAndDrawWeather(lat, lon){
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`+
+    `&hourly=temperature_2m,relativehumidity_2m,windspeed_10m,winddirection_10m,precipitation,cloudcover`+
+    `&models=ecmwf_ifs04`+
+    `&forecast_days=5&timezone=Asia%2FHong_Kong`;
+  try{
+    const res=await fetch(url);
+    const data=await res.json();
+    if(data.error){throw new Error(data.reason||'API error');}
+    const h=data.hourly;
+    // Downsample to every 3rd hour
+    const times=[],temp=[],rh=[],ws=[],wd=[],precip=[],cloud=[];
+    for(let i=0;i<h.time.length;i+=3){
+      times.push(h.time[i]);
+      temp.push(h.temperature_2m[i]);
+      rh.push(h.relativehumidity_2m[i]);
+      ws.push(h.windspeed_10m[i]);
+      wd.push(h.winddirection_10m[i]);
+      // Sum precip over 3-hr block
+      let p=0;for(let j=i;j<Math.min(i+3,h.precipitation.length);j++)p+=(h.precipitation[j]||0);
+      precip.push(parseFloat(p.toFixed(2)));
+      cloud.push(h.cloudcover[i]);
+    }
+    const labels=times.map(t=>{
+      const d=new Date(t);
+      const dd=String(d.getDate()).padStart(2,'0');
+      const hh=String(d.getHours()).padStart(2,'0');
+      return dd+'/'+hh;
+    });
+    document.getElementById('wx-subtitle').textContent=`ECMWF · 5-day · 3-hr · HKT · ${data.hourly_units?.temperature_2m||'°C'}`;
+    drawWeatherChart(labels,temp,rh,ws,precip,cloud);
+    drawWindArrows(labels,ws,wd);
+  }catch(e){
+    const errEl=document.getElementById('wx-error');
+    if(errEl){errEl.style.display='block';errEl.textContent='Failed to load: '+e.message;}
+    const sub=document.getElementById('wx-subtitle');
+    if(sub)sub.textContent='Error loading forecast';
+  }
+}
+
+function drawWeatherChart(labels,temp,rh,ws,precip,cloud){
+  if(!window.Chart){
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
+    s.onload=()=>_renderChart(labels,temp,rh,ws,precip,cloud);
+    document.head.appendChild(s);
+  }else _renderChart(labels,temp,rh,ws,precip,cloud);
+}
+
+function _renderChart(labels,temp,rh,ws,precip,cloud){
+  const ctx=document.getElementById('wx-chart');
+  if(!ctx)return;
+  if(ctx._chartInst){ctx._chartInst.destroy();}
+
+  const legend=document.getElementById('wx-legend');
+  if(legend) legend.innerHTML=`
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#ff6b35;display:inline-block;"></span>Temp (°C)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#00ccff;display:inline-block;border-top:2px dashed #00ccff;border-bottom:none;height:0;"></span>RH (%)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#44aaff;display:inline-block;border-top:2px dotted #44aaff;border-bottom:none;height:0;"></span>Wind (km/h)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(0,150,255,0.45);display:inline-block;border-radius:2px;"></span>Precip 3h (mm)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(180,180,200,0.35);display:inline-block;border-radius:2px;"></span>Cloud (%)</span>
+  `;
+
+  ctx._chartInst=new Chart(ctx,{
+    data:{
+      labels,
+      datasets:[
+        {type:'line',label:'Temp (°C)',data:temp,yAxisID:'yT',borderColor:'#ff6b35',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:0.3,order:1},
+        {type:'line',label:'RH (%)',data:rh,yAxisID:'yRH',borderColor:'#00ccff',backgroundColor:'transparent',borderWidth:1.5,borderDash:[6,3],pointRadius:0,tension:0.3,order:2},
+        {type:'line',label:'Wind (km/h)',data:ws,yAxisID:'yW',borderColor:'#44aaff',backgroundColor:'transparent',borderWidth:1.5,borderDash:[2,2],pointRadius:0,tension:0.3,order:3},
+        {type:'bar',label:'Precip 3h (mm)',data:precip,yAxisID:'yP',backgroundColor:'rgba(0,150,255,0.45)',order:4},
+        {type:'bar',label:'Cloud (%)',data:cloud,yAxisID:'yC',backgroundColor:'rgba(180,180,200,0.25)',order:5},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{
+        backgroundColor:'rgba(8,10,24,0.95)',titleColor:'#88ccff',bodyColor:'#ccc',
+        titleFont:{family:'Courier New',size:11},bodyFont:{family:'Courier New',size:11},
+        callbacks:{title:items=>'🕐 '+items[0].label+'HKT'}
+      }},
+      scales:{
+        x:{ticks:{color:'#556',font:{size:9},maxRotation:45,autoSkip:true,maxTicksLimit:20},grid:{color:'rgba(255,255,255,0.04)'}},
+        yT:{position:'left',title:{display:true,text:'°C',color:'#ff6b35',font:{size:10}},ticks:{color:'#ff6b35',font:{size:9}},grid:{color:'rgba(255,255,255,0.06)'}},
+        yRH:{position:'right',min:0,max:100,title:{display:true,text:'RH%',color:'#00ccff',font:{size:10}},ticks:{color:'#00ccff',font:{size:9}},grid:{display:false}},
+        yW:{position:'right',title:{display:true,text:'km/h',color:'#44aaff',font:{size:10}},ticks:{color:'#44aaff',font:{size:9}},grid:{display:false},offset:true},
+        yP:{position:'left',title:{display:true,text:'mm',color:'rgba(0,150,255,0.8)',font:{size:10}},ticks:{color:'rgba(0,150,255,0.8)',font:{size:9}},grid:{display:false},offset:true},
+        yC:{display:false,min:0,max:100},
+      }
+    }
+  });
+}
+
+function drawWindArrows(labels,ws,wd){
+  const canvas=document.getElementById('wx-wind-chart');
+  if(!canvas)return;
+  const W=canvas.offsetWidth||640;
+  canvas.width=W; canvas.height=120;
+  const ctx2=canvas.getContext('2d');
+  ctx2.clearRect(0,0,W,120);
+  const n=labels.length;
+  const step=W/n;
+  ctx2.font='8px Courier New';
+  ctx2.textAlign='center';
+
+  for(let i=0;i<n;i++){
+    const x=step*i+step/2;
+    const y=55;
+    const spd=ws[i]||0;
+    const dir=(wd[i]||0)*Math.PI/180;
+    const len=Math.min(12+spd*0.25,30);
+    const col=spd<15?'#44ff99':spd<30?'#ffdd00':spd<50?'#ff8800':'#ff3300';
+    ctx2.save();
+    ctx2.translate(x,y);
+    ctx2.rotate(dir);
+    ctx2.strokeStyle=col;
+    ctx2.lineWidth=1.5;
+    ctx2.beginPath();ctx2.moveTo(0,len/2);ctx2.lineTo(0,-len/2);ctx2.stroke();
+    ctx2.beginPath();ctx2.moveTo(0,-len/2);ctx2.lineTo(-4,-len/2+7);ctx2.stroke();
+    ctx2.beginPath();ctx2.moveTo(0,-len/2);ctx2.lineTo(4,-len/2+7);ctx2.stroke();
+    ctx2.restore();
+    ctx2.fillStyle='#556';
+    if(i%4===0){ctx2.fillStyle='#888';ctx2.fillText(labels[i],x,110);}
+    ctx2.fillStyle=col;
+    ctx2.fillText(Math.round(spd),x,y+22);
+  }
+  ctx2.fillStyle='#445';
+  ctx2.font='9px Courier New';
+  ctx2.textAlign='left';
+  ctx2.fillText('Wind dir ↑ · speed km/h',4,12);
+  ctx2.fillText('≤15 ■  ≤30 ■  ≤50 ■  >50 ■',4,24);
+  const cols=['#44ff99','#ffdd00','#ff8800','#ff3300'];
+  let cx=4;
+  ['≤15','≤30','≤50','>50'].forEach((lbl,i)=>{
+    ctx2.fillStyle=cols[i];
+    ctx2.fillRect(cx+27+i*38,16,8,8);
+  });
+}
 
 // ── iOS compass prompt ─────────────────────────────────────────
 (function initCompassPrompt(){
