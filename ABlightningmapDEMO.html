@@ -472,7 +472,7 @@ function updateABCount(){
 setInterval(()=>{updateColors();rebuildZoneCounts();checkLightningProximity();},2000);
 
 // ── Lightning Proximity Warning ───────────────────────────────
-const PROX_RADIUS_KM     = 1000  // total watch radius distance in km
+const PROX_RADIUS_KM     = 10000  // total watch radius distance in km
 const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
 const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
 const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
@@ -510,7 +510,7 @@ let closest=Infinity, count=0;
   let newestWarningLL=null, closestWarningDist=Infinity;
   let newestCautionLL=null, closestCautionDist=Infinity;
   strokes.forEach(m=>{
-    if((now-m._strokeTime)>windowSec) return;
+    if((now-m._strokeTime)>60) return;
     const d=haversineKm(lat,lon,m._lat,m._lon);
     if(d<=PROX_RADIUS_KM){
       count++;
