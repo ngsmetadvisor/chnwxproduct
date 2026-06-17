@@ -380,8 +380,10 @@ const BASEMAPS = {
 };
 const BASEMAP_LABELS = {dark:'🌙 Dark', sat:'🌍 Sat', street:'🗺 Street'};
 const BASEMAP_ORDER = ['dark','sat','street'];
-let currentBasemap='dark';
+
+let currentBasemap=localStorage.getItem('basemap')||'dark';
 BASEMAPS[currentBasemap].addTo(map);
+document.getElementById('basemap-btn').textContent=BASEMAP_LABELS[currentBasemap];
 
 function setBasemap(name){
   if(!BASEMAPS[name]||name===currentBasemap)return;
@@ -390,9 +392,11 @@ function setBasemap(name){
   BASEMAPS[currentBasemap].addTo(map);
   document.getElementById('basemap-btn').textContent=BASEMAP_LABELS[name];
 }
+
 function cycleBasemap(){
   const idx=BASEMAP_ORDER.indexOf(currentBasemap);
   setBasemap(BASEMAP_ORDER[(idx+1)%BASEMAP_ORDER.length]);
+  localStorage.setItem('basemap',currentBasemap);
 }
 document.getElementById('basemap-btn').addEventListener('click',cycleBasemap);
 
