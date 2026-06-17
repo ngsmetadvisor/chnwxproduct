@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>* { -webkit-tap-highlight-color: transparent; }</style>
 <title>Lightning Map – Hong Kong</title>
 <link rel="icon" href="http://orangecore.net/met/wp-content/uploads/2021/04/cropped-logo-bighead-32x32.png" sizes="32x32" />
 <link rel="icon" href="http://orangecore.net/met/wp-content/uploads/2021/04/cropped-logo-bighead-192x192.png" sizes="192x192" />
@@ -246,7 +250,22 @@ map.createPane('hko');     map.getPane('hko').style.zIndex     = 640;
 
 
 
-const canvasRenderer = L.canvas({ pane:'strikes' });
+
+const canvasRenderer = L.canvas({ pane:'strikes', tolerance:5 });
+
+window.addEventListener('error', function(e){
+  console.warn('[crash guard]', e.message);
+  try {
+    const sp = map.getPane('strikes');
+    if(sp) sp.style.zIndex = 650;
+    map.invalidateSize();
+  } catch(ex){}
+});
+
+window.addEventListener('unhandledrejection', function(e){
+  console.warn('[unhandled promise]', e.reason);
+  e.preventDefault();
+});
 
 map.on('click', function(e){
   if(!strokes.length) return;
@@ -327,7 +346,9 @@ function strokeStyle(age){
   return              {color:'#441100',fillColor:'#441100',opacity:0.15,fillOpacity:0.15,radius:1.5};
 }
 
+
 function addStroke(lat,lon,time){
+  try {
   const now=t||Date.now()/1000;
   const age=now-time;
   if(archive.length>=ARCHIVE_MAX) archive.shift();
@@ -339,10 +360,11 @@ function addStroke(lat,lon,time){
   m._strokeTime=time; m._lat=lat; m._lon=lon;
   strokes.push(m);
   if(strokes.length>MAX){ const old=strokes.shift(); map.removeLayer(old); }
+
   document.getElementById('counter').textContent=strokes.length;
   updateRegionCount();
+  } catch(e){ console.warn('[addStroke]',e); }
 }
-
 function updateColors(){
   const now=t||Date.now()/1000;
   for(let i=strokes.length-1;i>=0;i--){
@@ -360,7 +382,18 @@ function updateRegionCount(){
   document.getElementById('region-total').textContent=count;
 }
 
-setInterval(()=>{ updateColors(); updateRegionCount(); checkLightningProximity(); }, 2000);
+
+setInterval(()=>{
+  try{updateColors();}catch(e){console.warn('[updateColors]',e);}
+  try{updateRegionCount();}catch(e){console.warn('[updateRegionCount]',e);}
+  try{checkLightningProximity();}catch(e){console.warn('[checkLightningProximity]',e);}
+},2000);
+
+let _zoomThrottle=null;
+map.on('zoomanim zoom', function(){
+  if(_zoomThrottle) return;
+  _zoomThrottle=setTimeout(()=>{_zoomThrottle=null;},100);
+});
 map.on('moveend zoomend', updateRegionCount);
 
 // ── Lightning Proximity Warning ────────────────────────────────
@@ -950,11 +983,13 @@ function connect(){
       const msg=JSON.parse(event.data);
       if(msg.time)t=msg.time;
       if(msg.strokes)msg.strokes.forEach(s=>{
-        if(s&&s.lat&&s.lon){
-          const time=s.time?s.time/1000:Date.now()/1000;
-          if((t||Date.now()/1000)-time<=86400)addStroke(parseFloat(s.lat),parseFloat(s.lon),time);
-          if(s.del)document.getElementById('delay').textContent='Delay: '+(s.del/1000).toFixed(1)+'s';
-        }
+        try{
+          if(s&&s.lat&&s.lon){
+            const time=s.time?s.time/1000:Date.now()/1000;
+            if((t||Date.now()/1000)-time<=86400)addStroke(parseFloat(s.lat),parseFloat(s.lon),time);
+            if(s.del)document.getElementById('delay').textContent='Delay: '+(s.del/1000).toFixed(1)+'s';
+          }
+        }catch(se){console.warn('[stroke]',se);}
       });
     }catch(e){}
   };
