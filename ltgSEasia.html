@@ -825,6 +825,9 @@ document.getElementById('hko-toggle').addEventListener('click',()=>{
 
 setInterval(hkoRecolor, 2000);
 
+// Auto-start HKO on load
+hkoEnable();
+
 // ── WebSocket — HK/SE Asia focused bbox ───────────────────────
 // Subscribe to a tight SE Asia bbox for dense regional data
 const SEA_BBOX=[28,141,-11,92];
