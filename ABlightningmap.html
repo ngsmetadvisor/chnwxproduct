@@ -212,9 +212,17 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 .ec-error { padding: 14px 16px; font-size: 12px; color: #ff6b35; line-height: 1.7; }
 
+
 @media (max-width: 480px) {
   #precip-legend { bottom: 80px; }
 }
+.strike-popup .leaflet-popup-content-wrapper {
+  background: rgba(8,8,18,0.95); border: 0.5px solid rgba(255,220,0,0.3);
+  border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+}
+.strike-popup .leaflet-popup-tip { background: rgba(8,8,18,0.95); }
+.strike-popup .leaflet-popup-close-button { color: #666; }
 </style>
 </head>
 <body>
@@ -406,7 +414,65 @@ map.createPane('gps');          map.getPane('gps').style.zIndex          = 600;
 map.createPane('strikes');      map.getPane('strikes').style.zIndex      = 650;
 map.createPane('ecLightningPane'); map.getPane('ecLightningPane').style.zIndex = 640;
 
+
 const canvasRenderer = L.canvas({ pane:'strikes' });
+
+map.on('click', function(e){
+  if(!strokes.length) return;
+  const clickLL=e.latlng;
+  const clickPx=map.latLngToContainerPoint(clickLL);
+  const TOLERANCE=12; // px
+  let best=null, bestDist=Infinity;
+  strokes.forEach(m=>{
+    const mPx=map.latLngToContainerPoint([m._lat,m._lon]);
+    const dx=mPx.x-clickPx.x, dy=mPx.y-clickPx.y;
+    const px=Math.sqrt(dx*dx+dy*dy);
+    if(px<TOLERANCE&&px<bestDist){bestDist=px;best=m;}
+  });
+  if(!best) return;
+  const now=t||Date.now()/1000;
+  const age=now-best._strokeTime;
+  // Format time
+  const d=new Date(best._strokeTime*1000);
+  const dateStr=d.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
+  const timeStr=d.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZoneName:'short'});
+  // Age string
+  let ageStr;
+  if(age<60) ageStr=Math.round(age)+'s ago';
+  else if(age<3600) ageStr=Math.round(age/60)+'m ago';
+  else if(age<86400) ageStr=Math.round(age/3600*10)/10+'h ago';
+  else ageStr=Math.round(age/86400)+'d ago';
+  // Distance & bearing to GPS
+  const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
+  let distStr='', bearStr='';
+  if(src){
+    const slat=src.lat, slon=src.lng??src.lon;
+    const km=haversineKm(slat,slon,best._lat,best._lon);
+    distStr=km<1?(km*1000).toFixed(0)+' m':km.toFixed(1)+' km';
+    // Bearing from GPS to strike
+    const φ1=slat*Math.PI/180, φ2=best._lat*Math.PI/180;
+    const dλ=(best._lon-slon)*Math.PI/180;
+    const y=Math.sin(dλ)*Math.cos(φ2);
+    const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(dλ);
+    const brng=(Math.atan2(y,x)*180/Math.PI+360)%360;
+    const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    const dir=dirs[Math.round(brng/22.5)%16];
+    bearStr=Math.round(brng)+'° '+dir;
+  }
+  const popupContent=
+    '<div style="font-family:monospace;font-size:11px;line-height:1.8;color:#ccc;min-width:160px;">'+
+    '<div style="font-size:12px;font-weight:700;color:#ffdd00;margin-bottom:4px;">⚡ Lightning Strike</div>'+
+    '<div>🕐 '+timeStr+'</div>'+
+    '<div>📅 '+dateStr+' ('+ageStr+')</div>'+
+    '<div>📍 '+best._lat.toFixed(4)+'°, '+best._lon.toFixed(4)+'°</div>'+
+    (distStr?'<div>📏 '+distStr+' from you</div>':'')+
+    (bearStr?'<div>🧭 '+bearStr+'</div>':'')+
+    '</div>';
+  L.popup({closeButton:true,className:'strike-popup'})
+    .setLatLng([best._lat,best._lon])
+    .setContent(popupContent)
+    .openOn(map);
+});
 
 // ── Alberta bbox ──────────────────────────────────────────────
 const AB = { latMin:49, latMax:60, lonMin:-120, lonMax:-110 };
