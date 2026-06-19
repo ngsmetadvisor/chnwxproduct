@@ -460,7 +460,7 @@ map.on('zoomanim zoom', function(){
 map.on('moveend zoomend', updateRegionCount);
 
 // ── Lightning Proximity Warning ────────────────────────────────
-const PROX_RADIUS_KM=10000, PROX_WARNING_PCT=0.25;
+const PROX_RADIUS_KM=100, PROX_WARNING_PCT=0.25;
 const PROX_WARNING_KM=PROX_RADIUS_KM*PROX_WARNING_PCT;
 const PROX_VIBRATE_MS=[200,100,200,100,200];
 let proximityRing=null,proximityWarning=null,proximityActive=false;
