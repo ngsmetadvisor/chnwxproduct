@@ -1075,6 +1075,101 @@ let gpsMarker=null, gpsRing=null, gpsAccCircle=null, gpsHeadingLine=null, gpsCom
 let ecLightningLayers=[], ecLightningTimer=null, ecLightningEnabled=false;
 let _gpsPrev=null;
 let _gpsLastLL=null;
+let compassHeading=null;
+
+// ── Compass Deviation Calibration (background) ─────────────────
+const DEV_DIR_NAMES=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+const DEV_N_DIRS=16, DEV_DIR_STEP=360/DEV_N_DIRS;
+const DEV_STEADY_SEC=5, DEV_STEADY_TOL=10, DEV_SPEED_MIN=3;
+const DEV_DIR_TOL=5;
+const DEV_STORAGE_KEY='ltg_compass_deviation_v1';
+const DEV_REC_THROTTLE_MS=2000;
+
+let deviationTable=Array.from({length:DEV_N_DIRS},()=>[]);
+let devManualRaw=false; // true = user forced "Raw" mode, ignore corrections
+let _devSteadyStart=null, _devSteadyAnchor=null, _devLastRecAt=0;
+let _devLastGpsHeading=null, _devLastGpsSpeedKmh=0;
+
+function devSaveTable(){ try{ localStorage.setItem(DEV_STORAGE_KEY, JSON.stringify(deviationTable)); }catch(e){} }
+function devLoadTable(){
+  try{
+    const raw=localStorage.getItem(DEV_STORAGE_KEY);
+    if(!raw) return;
+    const saved=JSON.parse(raw);
+    if(Array.isArray(saved)&&saved.length===DEV_N_DIRS) saved.forEach((arr,i)=>{ if(Array.isArray(arr)) deviationTable[i]=arr; });
+  }catch(e){}
+}
+devLoadTable();
+
+function devAngDiff(a,b){ let d=((a-b)+360)%360; return d>180?d-360:d; }
+function devSector(h){ return Math.round((((h%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS; }
+function devNearestDirDiff(h){ return Math.abs(devAngDiff(h, devSector(h)*DEV_DIR_STEP)); }
+function devAvg(arr){ return arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null; }
+function devCapturedCount(){ return deviationTable.filter(arr=>arr.length>0).length; }
+
+// Called on every GPS fix and every compass reading — passively accumulates deviation
+// samples when driving steady near a 16-point mark. No UI interruption.
+function devTryRecord(){
+  const now=Date.now();
+  const gh=_devLastGpsHeading, ch=compassHeading, spd=_devLastGpsSpeedKmh;
+
+  if(gh==null||ch==null||spd<DEV_SPEED_MIN){
+    _devSteadyStart=null; _devSteadyAnchor=null;
+    return;
+  }
+  if(_devSteadyStart===null||_devSteadyAnchor===null){
+    _devSteadyStart=now; _devSteadyAnchor=gh;
+    return;
+  }
+  const steady=Math.abs(devAngDiff(gh,_devSteadyAnchor))<=DEV_STEADY_TOL;
+  if(!steady){ _devSteadyStart=now; _devSteadyAnchor=gh; return; }
+
+  const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+  if(!onMark) return;
+
+  const elapsed=(now-_devSteadyStart)/1000;
+  if(elapsed<DEV_STEADY_SEC) return;
+  if(now-_devLastRecAt<DEV_REC_THROTTLE_MS) return;
+
+  _devLastRecAt=now;
+  const dev=devAngDiff(ch,gh);
+  deviationTable[devSector(gh)].push(dev);
+  devSaveTable();
+  updateDevStatus();
+}
+  
+// Returns {heading, corrected} — corrected:true means a deviation value was applied (green line),
+// corrected:false means raw heading is used as-is (yellow line).
+function getCorrectedHeading(rawHeading){
+  if(devManualRaw) return{heading:rawHeading,corrected:false};
+
+  const avgs=deviationTable.map(devAvg);
+  const onIdx=devSector(rawHeading);
+  const onMark=devNearestDirDiff(rawHeading)<=DEV_DIR_TOL;
+
+  // Rule: heading lands on a captured mark -> apply that mark's deviation directly, regardless of neighbors.
+  if(onMark && avgs[onIdx]!==null){
+    const corrected=((rawHeading-avgs[onIdx])+360)%360;
+    return{heading:corrected,corrected:true};
+  }
+
+  // Rule: between two marks -> only correct if BOTH flanking marks have data; interpolate between them.
+  const lowIdx=Math.floor((((rawHeading%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS;
+  const highIdx=(lowIdx+1)%DEV_N_DIRS;
+  const lowDev=avgs[lowIdx], highDev=avgs[highIdx];
+  if(lowDev!==null && highDev!==null){
+    const lowAng=lowIdx*DEV_DIR_STEP;
+    const span=DEV_DIR_STEP;
+    const fromLow=(((rawHeading%360)+360)%360 - lowAng + 360)%360;
+    const tt=fromLow/span;
+    const dev=lowDev+(highDev-lowDev)*tt;
+    const corrected=((rawHeading-dev)+360)%360;
+    return{heading:corrected,corrected:true};
+  }
+
+  // Otherwise: not enough bracketing data -> raw heading, uncorrected.
+  return{heading:rawHeading,corrected:false};
+}
 
 const gpsIcon=L.divIcon({className:'',html:'<div class="gps-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]});
 const gpsRingIcon=L.divIcon({className:'',html:'<div class="gps-ring"></div>',iconSize:[40,40],iconAnchor:[20,20]});
@@ -1107,6 +1202,11 @@ function onGPSSuccess(pos){
 
   document.getElementById('gpsStatus').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4)+' '+accStr+spdStr+bearStr;
   _gpsLastLL={lat,lon};
+  _devLastGpsHeading=bear;
+  _devLastGpsSpeedKmh=(speed!=null&&!isNaN(speed))?speed*3.6:0;
+  devTryRecord();
+
+  
   if(!gpsMarker){
     gpsRing=L.marker([lat,lon],{icon:gpsRingIcon,interactive:false,pane:'gps'}).addTo(map);
     gpsMarker=L.marker([lat,lon],{icon:gpsIcon,interactive:false,pane:'gps'}).addTo(map);
@@ -1254,21 +1354,25 @@ function onCompass(e){
   if(e.webkitCompassHeading!=null) h=e.webkitCompassHeading;
   else if(e.absolute&&e.alpha!=null) h=(360-e.alpha)%360;
   if(h===null||!gpsMarker) return;
+  compassHeading=h;
+  devTryRecord();
+  const{heading:hCorr,corrected}=getCorrectedHeading(h);
+  const lineColor=corrected?'#00ff96':'#ffdd00';
   _hideCompassRings();
   const ll=gpsMarker.getLatLng();
   const lat=ll.lat, lon=ll.lng;
-  const tip=_destPoint(lat,lon,h,100);
-  if(!gpsCompassLine) gpsCompassLine=L.polyline([[lat,lon],tip],{color:'#00ff96',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
-  else gpsCompassLine.setLatLngs([[lat,lon],tip]);
+  const tip=_destPoint(lat,lon,hCorr,100);
+  if(!gpsCompassLine) gpsCompassLine=L.polyline([[lat,lon],tip],{color:lineColor,weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+  else{ gpsCompassLine.setLatLngs([[lat,lon],tip]); gpsCompassLine.setStyle({color:lineColor}); }
   gpsCompassTicks.forEach(t=>map.removeLayer(t));
   gpsCompassTicks=[];
-  const perp=(h+90)%360;
+  const perp=(hCorr+90)%360;
   [25,50,75,100].forEach(dist=>{
-    const mid=_destPoint(lat,lon,h,dist);
+    const mid=_destPoint(lat,lon,hCorr,dist);
     const a=_destPoint(mid[0],mid[1],perp,10);
     const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
-    gpsCompassTicks.push(L.polyline([a,b],{color:'#00ff96',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
-    if(dist===100) gpsCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#00ff96;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km Compass</span>',iconAnchor:[-4,12]})}).addTo(map));
+    gpsCompassTicks.push(L.polyline([a,b],{color:lineColor,weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+    if(dist===100) gpsCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:'+lineColor+';font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km Compass</span>',iconAnchor:[-4,12]})}).addTo(map));
   });
 }
 
