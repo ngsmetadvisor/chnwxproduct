@@ -517,7 +517,7 @@ function checkLightningProximity(){
   if(hasNewStrike){_proxLastStrikeTime=t||Date.now()/1000;if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}}
 if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
-  if(count>0 && _proxElapsed<60){
+  if(count>0 && _proxElapsed<10){
     const isWarning=closest<=PROX_WARNING_KM;
     if(isWarning&&!_proxLastWasWarning)triggerProximityVibrate();
     _proxLastWasWarning=isWarning;
