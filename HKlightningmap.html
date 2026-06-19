@@ -117,6 +117,14 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 @media (max-width: 480px) {
   #precip-legend { bottom: 80px; }
 }
+#hko-countdown-bar {
+  position: absolute; bottom: 24px; left: 0; right: 0; z-index: 999;
+  height: 3px; background: rgba(180,100,255,0.1); display: none;
+}
+#hko-countdown-fill {
+  height: 100%; width: 100%; background: #b864ff;
+  transition: width 1s linear; box-shadow: 0 0 4px rgba(180,100,255,0.6);
+}
 .strike-popup .leaflet-popup-content-wrapper {
   background: rgba(8,8,18,0.95); border: 0.5px solid rgba(255,220,0,0.3);
   border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.6);
@@ -169,9 +177,14 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div id="region-label">strikes</div>
   </div>
 
-  <!-- Radar loading bar -->
+<!-- Radar loading bar -->
   <div id="radar-load-bar" style="display:none;position:absolute;bottom:28px;left:0;right:0;z-index:1200;height:4px;background:rgba(100,180,255,0.15);">
     <div id="radar-load-fill" style="height:100%;width:0%;background:#88ccff;transition:width 0.2s ease;"></div>
+  </div>
+
+  <!-- HKO refresh countdown bar -->
+  <div id="hko-countdown-bar">
+    <div id="hko-countdown-fill"></div>
   </div>
 
   <!-- Buy me a coffee -->
@@ -902,6 +915,8 @@ let hkoEnabled = false;
 let hkoRefreshTimer = null;
 let hkoMarkers = [];
 let hkoLegendEl = null;
+let hkoCountdownTimer = null;
+let hkoCountdownRemaining = 0;
 
 function hkoColorForAge(ageSec){
   for(const tier of HKO_BIN_COLORS){ if(ageSec<tier.max) return tier.color; }
@@ -1009,13 +1024,34 @@ function hkoHideLegend(){
   if(hkoLegendEl){ hkoLegendEl.remove(); hkoLegendEl=null; }
 }
 
+function hkoStartCountdown(){
+  hkoCountdownRemaining = HKO_REFRESH_MS/1000;
+  const bar=document.getElementById('hko-countdown-bar');
+  const fill=document.getElementById('hko-countdown-fill');
+  if(bar) bar.style.display='block';
+  if(fill){ fill.style.transition='none'; fill.style.width='100%'; void fill.offsetWidth; fill.style.transition='width 1s linear'; }
+  if(hkoCountdownTimer) clearInterval(hkoCountdownTimer);
+  hkoCountdownTimer = setInterval(()=>{
+    hkoCountdownRemaining--;
+    if(hkoCountdownRemaining<=0){ hkoCountdownRemaining=0; }
+    if(fill) fill.style.width=Math.max(0,(hkoCountdownRemaining/(HKO_REFRESH_MS/1000))*100)+'%';
+  },1000);
+}
+
+function hkoStopCountdown(){
+  if(hkoCountdownTimer){ clearInterval(hkoCountdownTimer); hkoCountdownTimer=null; }
+  const bar=document.getElementById('hko-countdown-bar');
+  if(bar) bar.style.display='none';
+}
+
 function hkoEnable(){
   hkoEnabled=true;
   document.getElementById('hko-toggle').classList.add('active');
   hkoShowLegend();
   hkoFetchAndRender();
+  hkoStartCountdown();
   if(hkoRefreshTimer) clearInterval(hkoRefreshTimer);
-  hkoRefreshTimer = setInterval(hkoFetchAndRender, HKO_REFRESH_MS);
+  hkoRefreshTimer = setInterval(()=>{ hkoFetchAndRender(); hkoStartCountdown(); }, HKO_REFRESH_MS);
 }
 
 function hkoDisable(){
@@ -1024,6 +1060,7 @@ function hkoDisable(){
   document.getElementById('hko-toggle').textContent='🛰 HKO';
   hkoHideLegend();
   if(hkoRefreshTimer){ clearInterval(hkoRefreshTimer); hkoRefreshTimer=null; }
+  hkoStopCountdown();
   hkoClearMarkers();
 }
 
