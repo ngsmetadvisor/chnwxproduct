@@ -503,7 +503,7 @@ function checkLightningProximity(){
   });
   if(hkoEnabled){
     hkoMarkers.forEach(m=>{
-      if((nowSec-m._hkoBinEnd)>600)return;
+      if((nowSec-m._hkoBinEnd)>60)return;
       const d=haversineKm(lat,lon,m._lat,m._lon);
       if(d<=PROX_RADIUS_KM){
         count++;if(d<closest)closest=d;
