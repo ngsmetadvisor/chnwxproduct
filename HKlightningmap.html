@@ -59,9 +59,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   overflow-x: auto; scrollbar-width: none;
 }
 #toolbar::-webkit-scrollbar { display: none; }
-.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; position: relative; overflow: hidden; }
 .tb-btn:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
-.tb-btn.active { background: rgba(180,100,255,0.15); border-color: #b864ff; color: #b864ff; }
+.tb-btn.active { border-color: #b864ff; color: #b864ff; }
+.tb-btn .tb-fill { position: absolute; inset: 0; background: rgba(180,100,255,0.22); width: 100%; transform-origin: left; transition: transform 1s linear; z-index: 0; }
+.tb-btn .tb-label { position: relative; z-index: 1; }
 .sep { width: 1px; height: 16px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
 #gps-btn { background: transparent; border: 0.5px solid rgba(0,255,150,0.4); color: #00ff96; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 #gps-btn.active { background: rgba(0,255,150,0.15); border-color: #00ff96; }
@@ -118,14 +120,6 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 @media (max-width: 480px) {
   #precip-legend { bottom: 80px; }
 }
-#hko-countdown-bar {
-  flex-shrink: 0; width: 100%; height: 3px;
-  background: rgba(180,100,255,0.1); display: none;
-}
-#hko-countdown-fill {
-  height: 100%; width: 100%; background: #b864ff;
-  transition: width 1s linear; box-shadow: 0 0 4px rgba(180,100,255,0.6);
-}
 .strike-popup .leaflet-popup-content-wrapper {
   background: rgba(8,8,18,0.95); border: 0.5px solid rgba(255,220,0,0.3);
   border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.6);
@@ -160,7 +154,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div class="sep"></div>
     <button id="basemap-btn" class="tb-btn">🌙 Dark</button>
     <div class="sep"></div>
-    <button id="hko-toggle" class="tb-btn">🛰 HKO</button>
+<button id="hko-toggle" class="tb-btn"><span class="tb-fill" id="hko-fill" style="transform:scaleX(0);"></span><span class="tb-label" id="hko-label">🛰 HKO</span></button>
   </div>
 
 <!-- Map -->
@@ -185,10 +179,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       <div id="radar-load-fill" style="height:100%;width:0%;background:#88ccff;transition:width 0.2s ease;"></div>
     </div>
 
-    <!-- HKO refresh countdown bar -->
-    <div id="hko-countdown-bar">
-      <div id="hko-countdown-fill"></div>
-    </div>
+  
 
     <!-- Buy me a coffee -->
     <div id="bmac-bar" style="flex-shrink:0;display:flex;justify-content:center;padding:4px 0;">
@@ -546,18 +537,18 @@ function checkLightningProximity(){
     const colorBg=isWarning?'rgba(255,68,0,0.18)':'rgba(255,221,0,0.12)';
     const label=isWarning?'⚡ LIGHTNING WARNING':'⚡ LIGHTNING CAUTION';
     if(!proximityWarning){
-      proximityWarning=document.createElement('div');
+proximityWarning=document.createElement('div');
       proximityWarning.id='proximity-warning';
-      proximityWarning.style.cssText='position:fixed;bottom:36px;left:50%;transform:translateX(-50%);z-index:9000;pointer-events:none;display:flex;flex-direction:column;align-items:center;min-width:260px;max-width:90vw;';
+      proximityWarning.style.cssText='position:absolute;bottom:0;left:50%;transform:translateX(-50%);z-index:1500;pointer-events:none;display:flex;flex-direction:column;align-items:center;min-width:260px;max-width:90vw;';
       const sty=document.createElement('style');
       sty.textContent='@keyframes proximityPulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes proximityFadeIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
       document.head.appendChild(sty);
-      proximityWarning.innerHTML='<div id="prox-banner" style="border-radius:10px;padding:8px 20px;text-align:center;font-family:\'Courier New\',monospace;backdrop-filter:blur(6px);border:1.5px solid;width:100%;box-sizing:border-box;"><div id="prox-label" style="font-size:13px;font-weight:700;letter-spacing:0.07em;"></div><div id="prox-detail" style="font-size:10px;margin-top:2px;opacity:0.85;"></div></div>';
+      proximityWarning.innerHTML='<div id="prox-banner" style="border-radius:10px;padding:8px 20px;text-align:center;font-family:\'Courier New\',monospace;background:rgba(8,8,18,0.95);backdrop-filter:blur(6px);border:1.5px solid;width:100%;box-sizing:border-box;"><div id="prox-label" style="font-size:13px;font-weight:700;letter-spacing:0.07em;"></div><div id="prox-detail" style="font-size:10px;margin-top:2px;opacity:0.9;"></div></div>';
       proximityWarning.style.animation='proximityFadeIn 0.3s ease';
-      document.body.appendChild(proximityWarning);proximityActive=true;
+      document.getElementById('map').appendChild(proximityWarning);proximityActive=true;
     }
     const banner=document.getElementById('prox-banner');
-    banner.style.background=colorBg;banner.style.borderColor=color;
+    banner.style.borderColor=color;
     banner.style.animation=isWarning?'proximityPulse 1.2s ease-in-out infinite':'none';
     document.getElementById('prox-label').style.color=color;document.getElementById('prox-label').textContent=label;
     document.getElementById('prox-detail').style.color=color;
@@ -922,7 +913,8 @@ const HKO_PROXIES = [
   'https://corsproxy.io/?url=',
   'https://api.codetabs.com/v1/proxy?quest='
 ];
-const HKO_REFRESH_MS = 5 * 60 * 1000;
+const HKO_REFRESH_SEC = 180; // 3 minutes — shared by both the fetch interval and the pill countdown fill
+const HKO_REFRESH_MS = HKO_REFRESH_SEC * 1000;
 const HKO_BIN_COLORS = [
   {max:300,    color:'#ff3300'},
   {max:900,    color:'#ff8800'},
@@ -939,6 +931,11 @@ let hkoMarkers = [];
 let hkoLegendEl = null;
 let hkoCountdownTimer = null;
 let hkoCountdownRemaining = 0;
+
+function hkoSetLabel(text){
+  const el=document.getElementById('hko-label');
+  if(el) el.textContent=text;
+}
 
 function hkoColorForAge(ageSec){
   for(const tier of HKO_BIN_COLORS){ if(ageSec<tier.max) return tier.color; }
@@ -978,7 +975,7 @@ async function hkoFetchWithFallback(){
 }
 
 async function hkoFetchAndRender(){
-  document.getElementById('hko-toggle').textContent='🛰 HKO ⟳';
+  hkoSetLabel('🛰 HKO ⟳');
   try{
     const text = await hkoFetchWithFallback();
     hkoClearMarkers();
@@ -1006,10 +1003,10 @@ const m = L.circleMarker([lat,lon],{
         hkoMarkers.push(m);
       }
     });
-    document.getElementById('hko-toggle').textContent='🛰 HKO ('+hkoMarkers.length+')';
+hkoSetLabel('🛰 HKO ('+hkoMarkers.length+')');
   }catch(e){
     console.warn('[HKO]', e);
-    document.getElementById('hko-toggle').textContent='🛰 HKO ⚠';
+    hkoSetLabel('🛰 HKO ⚠');
   }
 }
 
@@ -1047,39 +1044,37 @@ function hkoHideLegend(){
 }
 
 function hkoStartCountdown(){
-  hkoCountdownRemaining = HKO_REFRESH_MS/1000;
-  const bar=document.getElementById('hko-countdown-bar');
-  const fill=document.getElementById('hko-countdown-fill');
-  if(bar) bar.style.display='block';
-  if(fill){ fill.style.transition='none'; fill.style.width='100%'; void fill.offsetWidth; fill.style.transition='width 1s linear'; }
+  hkoCountdownRemaining = HKO_REFRESH_SEC;
+  const fill=document.getElementById('hko-fill');
+  if(fill){ fill.style.transition='none'; fill.style.transform='scaleX(1)'; void fill.offsetWidth; fill.style.transition='transform 1s linear'; }
   if(hkoCountdownTimer) clearInterval(hkoCountdownTimer);
   hkoCountdownTimer = setInterval(()=>{
     hkoCountdownRemaining--;
-    if(hkoCountdownRemaining<=0){ hkoCountdownRemaining=0; }
-    if(fill) fill.style.width=Math.max(0,(hkoCountdownRemaining/(HKO_REFRESH_MS/1000))*100)+'%';
+    if(fill) fill.style.transform='scaleX('+Math.max(0,hkoCountdownRemaining/HKO_REFRESH_SEC)+')';
+    if(hkoCountdownRemaining<=0){
+      clearInterval(hkoCountdownTimer); hkoCountdownTimer=null;
+      hkoFetchAndRender().then(hkoStartCountdown);
+    }
   },1000);
 }
 
 function hkoStopCountdown(){
   if(hkoCountdownTimer){ clearInterval(hkoCountdownTimer); hkoCountdownTimer=null; }
-  const bar=document.getElementById('hko-countdown-bar');
-  if(bar) bar.style.display='none';
+  const fill=document.getElementById('hko-fill');
+  if(fill){ fill.style.transition='none'; fill.style.transform='scaleX(0)'; }
 }
 
 function hkoEnable(){
   hkoEnabled=true;
   document.getElementById('hko-toggle').classList.add('active');
   hkoShowLegend();
-  hkoFetchAndRender();
-  hkoStartCountdown();
-  if(hkoRefreshTimer) clearInterval(hkoRefreshTimer);
-  hkoRefreshTimer = setInterval(()=>{ hkoFetchAndRender(); hkoStartCountdown(); }, HKO_REFRESH_MS);
+  hkoFetchAndRender().then(hkoStartCountdown);
 }
 
 function hkoDisable(){
   hkoEnabled=false;
   document.getElementById('hko-toggle').classList.remove('active');
-  document.getElementById('hko-toggle').textContent='🛰 HKO';
+  hkoSetLabel('🛰 HKO');
   hkoHideLegend();
   if(hkoRefreshTimer){ clearInterval(hkoRefreshTimer); hkoRefreshTimer=null; }
   hkoStopCountdown();
