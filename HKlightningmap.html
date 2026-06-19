@@ -283,10 +283,10 @@ map.on('click', function(e){
   if(!best) return;
   const now=t||Date.now()/1000;
   const age=now-best._strokeTime;
-  // Format time
+  // Format time (always Hong Kong time, regardless of viewer's device timezone)
   const d=new Date(best._strokeTime*1000);
-  const dateStr=d.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
-  const timeStr=d.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZoneName:'short'});
+  const dateStr=d.toLocaleDateString('en-CA',{month:'short',day:'numeric',timeZone:'Asia/Hong_Kong'});
+  const timeStr=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Hong_Kong'})+' HKT';
   // Age string
   let ageStr;
   if(age<60) ageStr=Math.round(age)+'s ago';
@@ -326,6 +326,59 @@ map.on('click', function(e){
 });
   
 const hkoRenderer = L.canvas({ pane:'hko' });
+
+map.on('click', function(e){
+  if(!hkoEnabled || !hkoMarkers.length) return;
+  const clickLL=e.latlng;
+  const clickPx=map.latLngToContainerPoint(clickLL);
+  const TOLERANCE=12; // px
+  let best=null, bestDist=Infinity;
+  hkoMarkers.forEach(m=>{
+    const mPx=map.latLngToContainerPoint([m._lat,m._lon]);
+    const dx=mPx.x-clickPx.x, dy=mPx.y-clickPx.y;
+    const px=Math.sqrt(dx*dx+dy*dy);
+    if(px<TOLERANCE&&px<bestDist){bestDist=px;best=m;}
+  });
+  if(!best) return;
+  const nowSec=Date.now()/1000;
+  const age=nowSec-best._hkoBinEnd;
+  const d=new Date(best._hkoBinEnd*1000);
+  const dateStr=d.toLocaleDateString('en-CA',{month:'short',day:'numeric',timeZone:'Asia/Hong_Kong'});
+  const timeStr=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Hong_Kong'})+' HKT';
+  let ageStr;
+  if(age<60) ageStr=Math.round(age)+'s ago';
+  else if(age<3600) ageStr=Math.round(age/60)+'m ago';
+  else if(age<86400) ageStr=Math.round(age/3600*10)/10+'h ago';
+  else ageStr=Math.round(age/86400)+'d ago';
+  const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
+  let distStr='', bearStr='';
+  if(src){
+    const slat=src.lat, slon=src.lng??src.lon;
+    const km=haversineKm(slat,slon,best._lat,best._lon);
+    distStr=km<1?(km*1000).toFixed(0)+' m':km.toFixed(1)+' km';
+    const φ1=slat*Math.PI/180, φ2=best._lat*Math.PI/180;
+    const dλ=(best._lon-slon)*Math.PI/180;
+    const y=Math.sin(dλ)*Math.cos(φ2);
+    const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(dλ);
+    const brng=(Math.atan2(y,x)*180/Math.PI+360)%360;
+    const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    const dir=dirs[Math.round(brng/22.5)%16];
+    bearStr=Math.round(brng)+'° '+dir;
+  }
+  const popupContent=
+    '<div style="font-family:monospace;font-size:11px;line-height:1.8;color:#ccc;min-width:160px;">'+
+    '<div style="font-size:12px;font-weight:700;color:#b864ff;margin-bottom:4px;">🛰 HKO Lightning</div>'+
+    '<div>🕐 '+timeStr+'</div>'+
+    '<div>📅 '+dateStr+' ('+ageStr+')</div>'+
+    '<div>📍 '+best._lat.toFixed(4)+'°, '+best._lon.toFixed(4)+'°</div>'+
+    (distStr?'<div>📏 '+distStr+' from you</div>':'')+
+    (bearStr?'<div>🧭 '+bearStr+'</div>':'')+
+    '</div>';
+  L.popup({closeButton:true,className:'strike-popup'})
+    .setLatLng([best._lat,best._lon])
+    .setContent(popupContent)
+    .openOn(map);
+});
 
 // ── Lightning core ─────────────────────────────────────────────
 let windowSec = 86400, t = 0, ws = null;
@@ -645,7 +698,8 @@ function onGPSSuccess(pos){
   const bearStr=bear!=null?' '+Math.round(bear)+'°':'';
   document.getElementById('gpsStatus').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4)+' '+accStr+spdStr+bearStr;
   _gpsLastLL={lat,lon};
-  if(!gpsMarker){
+if(!gpsMarker){
+    _hideCompassRings();
     gpsRing=L.marker([lat,lon],{icon:gpsRingIcon,interactive:false,pane:'gps'}).addTo(map);
     gpsMarker=L.marker([lat,lon],{icon:gpsIcon,interactive:false,pane:'gps'}).addTo(map);
     gpsAccCircle=L.circle([lat,lon],{radius:accuracy,pane:'gps',color:'#00ff96',fillColor:'#00ff96',fillOpacity:0.04,weight:1,opacity:0.3,interactive:false}).addTo(map);
@@ -745,7 +799,7 @@ if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=nu
         if(state==='granted'){window.addEventListener('deviceorientationabsolute',onCompass,true);window.addEventListener('deviceorientation',onCompass,true);}
       }).catch(()=>{window.addEventListener('deviceorientationabsolute',onCompass,true);window.addEventListener('deviceorientation',onCompass,true);});
     }else{window.addEventListener('deviceorientationabsolute',onCompass,true);window.addEventListener('deviceorientation',onCompass,true);}
-  }else{
+ }else{
     gpsActive=false;
     if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
     window.removeEventListener('deviceorientationabsolute',onCompass,true);
@@ -762,13 +816,15 @@ if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=nu
     document.getElementById('gps-btn').textContent='⊕ GPS';
     document.getElementById('gpsStatus').textContent='';
     document.getElementById('gpsStatus').style.color='#00ff96';
+    const fakeLL={lat:22.3193,lon:114.1694};
+    _gpsLastLL=fakeLL;
+    _showCompassRings(fakeLL.lat,fakeLL.lon);
   }
 }
-document.getElementById('gps-btn').addEventListener('click',toggleGPS);
-
-(function initFakeGPS(){
+document.getElementById('gps-btn').addEventListener('click',toggleGPS);(function initFakeGPS(){
   const fakeLL={lat:22.3193,lng:114.1694};
   _gpsLastLL={lat:22.3193,lon:114.1694};
+  _showCompassRings(fakeLL.lat,fakeLL.lng);
   const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
   window._fakeMarker=L.marker([fakeLL.lat,fakeLL.lng],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
   const tip=_destPoint(fakeLL.lat,fakeLL.lng,0,100);
@@ -890,11 +946,12 @@ async function hkoFetchAndRender(){
         const lat = parseFloat(parts[i]);
         const lon = parseFloat(parts[i+1]);
         if(isNaN(lat)||isNaN(lon)) continue;
-        const m = L.circleMarker([lat,lon],{
-          radius:3, color, fillColor:color, weight:0, opacity:0.85, fillOpacity:0.7,
+const m = L.circleMarker([lat,lon],{
+          radius:5, color, fillColor:color, weight:0, opacity:0.85, fillOpacity:0.7,
           renderer:hkoRenderer, pane:'hko', interactive:false
         }).addTo(map);
         m._hkoBinEnd = binEnd;
+        m._lat = lat; m._lon = lon;
         hkoMarkers.push(m);
       }
     });
