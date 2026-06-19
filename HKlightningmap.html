@@ -198,7 +198,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
         <div class="leg-item"><div class="leg-dot" style="background:#ff3300;"></div> &lt;30m</div>
         <div class="leg-item"><div class="leg-dot" style="background:#cc2200;"></div> &lt;1h</div>
 <div class="leg-item"><div class="leg-dot" style="background:#551100;"></div> Older</div>
-        <div class="leg-item"><div class="leg-dot" style="background:transparent;border:1.5px solid #66ccff;box-sizing:border-box;"></div> HKO ring</div>
+        <div class="leg-item"><div class="leg-dot" style="background:transparent;border:1.5px solid #66ccff;box-sizing:border-box;"></div> HKO</div>
       </div>
     </div>
 
@@ -936,7 +936,7 @@ function hkoSetLabel(text){
 
 function hkoStyleForAge(ageSec){
   const s = strokeStyle(ageSec); // same age→color scale as live WS strikes
-  return { fillColor:s.fillColor, fillOpacity:1, radius:s.radius, color:HKO_RING_COLOR, weight:1.5, opacity:1 };
+  return { fillColor:s.fillColor, fillOpacity:1, radius:s.radius, color:HKO_RING_COLOR, weight:1.0, opacity:1 };
 }
 
 function hkoParseBinEndTime(dateStr, timeRange){
