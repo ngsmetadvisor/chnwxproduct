@@ -465,7 +465,7 @@ const PROX_WARNING_KM=PROX_RADIUS_KM*PROX_WARNING_PCT;
 const PROX_VIBRATE_MS=[200,100,200,100,200];
 let proximityRing=null,proximityWarning=null,proximityActive=false;
 let _proxLastWasWarning=false;
-let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null;
+let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null;
 let _proxLastRenderedKey='';
 let _gpsLastLL=null;
 
@@ -503,7 +503,7 @@ function checkLightningProximity(){
   });
   if(hkoEnabled){
     hkoMarkers.forEach(m=>{
-      if((nowSec-m._hkoBinEnd)>60)return;
+      if((nowSec-m._hkoBinEnd)>600)return;
       const d=haversineKm(lat,lon,m._lat,m._lon);
       if(d<=PROX_RADIUS_KM){
         count++;if(d<closest)closest=d;
@@ -515,7 +515,9 @@ function checkLightningProximity(){
   window._proxNearestLL=newestWarningLL||newestCautionLL;
   const hasNewStrike=(newestWarningLL||newestCautionLL)?true:false;
   if(hasNewStrike){_proxLastStrikeTime=t||Date.now()/1000;if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}}
-  if(count>0){
+if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
+  const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
+  if(count>0 && _proxElapsed<60){
     const isWarning=closest<=PROX_WARNING_KM;
     if(isWarning&&!_proxLastWasWarning)triggerProximityVibrate();
     _proxLastWasWarning=isWarning;
@@ -565,8 +567,8 @@ proximityWarning=document.createElement('div');
     if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
     if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-    if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
-    _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;
+if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
+    _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
   }
 }
 
