@@ -240,11 +240,15 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div class="sep"></div>
     <button id="basemap-btn" class="tb-btn">🌙 Dark</button>
     <div class="sep"></div>
-    <button id="gps-btn">⊕ GPS</button>
+<button id="gps-btn">⊕ GPS</button>
     <div class="sep"></div>
     <button id="ec-lightning-toggle" class="tb-btn">⚡ 3h</button>
     <div class="sep"></div>
     <button id="station-toggle" class="tb-btn active">📡 Stns</button>
+    <div class="sep"></div>
+    <button id="dev-mode-btn" class="tb-btn active">🧭 Corr</button>
+    <div class="sep"></div>
+    <button id="dev-reset-btn" class="tb-btn" style="border-color:rgba(255,80,80,0.4);color:#ff8080;">↺ Cal</button>
   </div>
 
   <!-- Radar panel -->
@@ -359,8 +363,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <span>AB: <span id="ab-count">0</span></span>
     <span id="connStatus">Connecting…</span>
     <span id="delay"></span>
-    <span id="zoneStatus">Loading zones…</span>
+<span id="zoneStatus">Loading zones…</span>
     <span id="gpsStatus"></span>
+    <span id="devStatus" style="color:#00ff96;font-size:10px;"></span>
     <div class="legend">
       <div class="leg-item"><div class="leg-dot" style="background:#ffffff;box-shadow:0 0 4px #fff;"></div> New</div>
       <div class="leg-item"><div class="leg-dot" style="background:#ffee00;"></div> &lt;1m</div>
@@ -892,7 +897,9 @@ document.getElementById('ab-collapse-btn').addEventListener('click',()=>{
 });
 
 loadZones();
+updateDevStatus();
 
+  
 // ── GeoMet Radar ──────────────────────────────────────────────
 const GEOMET='https://geo.weather.gc.ca/geomet';
 let ANIM_STEPS=12;
@@ -1106,6 +1113,23 @@ function devSector(h){ return Math.round((((h%360)+360)%360)/DEV_DIR_STEP)%DEV_N
 function devNearestDirDiff(h){ return Math.abs(devAngDiff(h, devSector(h)*DEV_DIR_STEP)); }
 function devAvg(arr){ return arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null; }
 function devCapturedCount(){ return deviationTable.filter(arr=>arr.length>0).length; }
+
+function updateDevStatus(){
+  const el=document.getElementById('devStatus');
+  if(!el) return;
+  const n=devCapturedCount();
+  const total=deviationTable.reduce((s,a)=>s+a.length,0);
+  if(devManualRaw){
+    el.textContent='🧭 Raw (forced)';
+    el.style.color='#ffaa00';
+  } else if(n===0){
+    el.textContent='🧭 Uncalibrated';
+    el.style.color='#888';
+  } else {
+    el.textContent='🧭 '+n+'/16 dirs ('+total+' smp)';
+    el.style.color='#00ff96';
+  }
+}
 
 // Called on every GPS fix and every compass reading — passively accumulates deviation
 // samples when driving steady near a 16-point mark. No UI interruption.
@@ -1672,6 +1696,19 @@ document.getElementById('station-toggle').addEventListener('click', function(){
     if(stationLabelsVisible) m.addTo(map); else map.removeLayer(m);
   });
   this.classList.toggle('active', stationLabelsVisible);
+});
+
+document.getElementById('dev-mode-btn').addEventListener('click', function(){
+  devManualRaw=!devManualRaw;
+  this.classList.toggle('active', !devManualRaw);
+  this.textContent = devManualRaw ? '🧭 Raw' : '🧭 Corr';
+});
+
+document.getElementById('dev-reset-btn').addEventListener('click', function(){
+  if(!confirm('Reset compass deviation calibration? This deletes all '+deviationTable.reduce((s,a)=>s+a.length,0)+' collected samples.')) return;
+  deviationTable=Array.from({length:DEV_N_DIRS},()=>[]);
+  devSaveTable();
+  updateDevStatus();
 });
 
 // ── EC Public Forecast Modal ──────────────────────────────────
