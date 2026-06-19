@@ -1202,7 +1202,8 @@ gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHi
     document.getElementById('gps-btn').textContent='⊕ GPS';
     document.getElementById('gpsStatus').textContent='';
     document.getElementById('gpsStatus').style.color='#00ff96';
-    const fallbackLL=lastLL?{lat:lastLL.lat,lon:lastLL.lng}:{lat:55.0,lon:-115.0};
+    const fallbackLL=lastLL?{lat:lastLL.lat,lon:lastLL.lng}:{lat:53.5461,lon:-113.4938};
+
     _gpsLastLL=fallbackLL;
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
@@ -1410,6 +1411,25 @@ setInterval(()=>{
 },5000);
 
 connect();
+connect();
+(function initFakeGPS(){
+  const fakeLL={lat:53.5461,lng:-113.4938}; // Edmonton fallback
+  _gpsLastLL={lat:53.5461,lon:-113.4938};
+  _showCompassRings(fakeLL.lat,fakeLL.lng);
+  const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
+  window._fakeMarker=L.marker([fakeLL.lat,fakeLL.lng],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
+  const tip=_destPoint(fakeLL.lat,fakeLL.lng,0,100);
+  window._fakeHeadingLine=L.polyline([[fakeLL.lat,fakeLL.lng],tip],{color:'#ffdd00',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+  const perp=90;
+  window._fakeTicks=[];
+  [25,50,75,100].forEach(dist=>{
+    const mid=_destPoint(fakeLL.lat,fakeLL.lng,0,dist);
+    const a=_destPoint(mid[0],mid[1],perp,10);
+    const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
+    window._fakeTicks.push(L.polyline([a,b],{color:'#ffdd00',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+    if(dist===100)window._fakeTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ffdd00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km N</span>',iconAnchor:[-4,12]})}).addTo(map));
+  });
+})();
 setTimeout(toggleGPS, 500);
 
 (function initCompassPrompt() {
