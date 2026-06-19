@@ -1183,7 +1183,7 @@ gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHi
       window.addEventListener('deviceorientationabsolute',onCompass,true);
       window.addEventListener('deviceorientation',onCompass,true);
     }
-  }else{
+
 }else{
     gpsActive=false;
     const lastLL=gpsMarker?gpsMarker.getLatLng():null;
