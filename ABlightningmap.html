@@ -128,8 +128,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
 /* ── GPS marker ── */
 .gps-dot { width:14px; height:14px; border-radius:50%; background:#00ff96; border:2px solid #fff; box-shadow:0 0 10px #00ff96; }
-.gps-ring { width:40px; height:40px; border-radius:50%; border:2px solid rgba(0,255,150,0.4); animation:gps-expand 2s ease-out infinite; }
-@keyframes gps-expand { 0%{transform:scale(0.3);opacity:0.8}100%{transform:scale(1);opacity:0} }
+.gps-dot-fake { width:14px; height:14px; border-radius:50%; background:#ffdd00; border:2px solid #fff; box-shadow:0 0 10px #ffdd00; }
+.gps-ring { width:40px; height:40px; border-radius:50%; border:2px solid rgba(0,255,150,0.4); animation:gps-expand 2s ease-out infinite; }@keyframes gps-expand { 0%{transform:scale(0.3);opacity:0.8}100%{transform:scale(1);opacity:0} }
 
 /* ── Station finder ── */
 #station-finder {
@@ -1157,6 +1157,9 @@ function onGPSError(err){
 
 function toggleGPS(){
   if(!gpsActive){
+    if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
+    if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
+    if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
     gpsActive=true;
     document.getElementById('gps-btn').classList.add('searching');
     document.getElementById('gps-btn').textContent='⊕ …';
@@ -1181,7 +1184,9 @@ gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHi
       window.addEventListener('deviceorientation',onCompass,true);
     }
   }else{
+}else{
     gpsActive=false;
+    const lastLL=gpsMarker?gpsMarker.getLatLng():null;
     if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
     window.removeEventListener('deviceorientationabsolute',onCompass,true);
     window.removeEventListener('deviceorientation',onCompass,true);
@@ -1191,17 +1196,33 @@ gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHi
     if(gpsRing){map.removeLayer(gpsRing);gpsRing=null;}
     if(gpsAccCircle){map.removeLayer(gpsAccCircle);gpsAccCircle=null;}
     if(gpsHeadingLine){gpsHeadingLine._ticks&&gpsHeadingLine._ticks.forEach(t=>map.removeLayer(t));map.removeLayer(gpsHeadingLine);gpsHeadingLine=null;}
-
     _hideCompassRings();
     _gpsPrev=null;
-    _gpsLastLL=null;
     document.getElementById('gps-btn').classList.remove('active','searching');
     document.getElementById('gps-btn').textContent='⊕ GPS';
     document.getElementById('gpsStatus').textContent='';
     document.getElementById('gpsStatus').style.color='#00ff96';
+    const fallbackLL=lastLL?{lat:lastLL.lat,lon:lastLL.lng}:{lat:55.0,lon:-115.0};
+    _gpsLastLL=fallbackLL;
+    if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
+    if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
+    if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
+    const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
+    window._fakeMarker=L.marker([fallbackLL.lat,fallbackLL.lon],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
+    const tip=_destPoint(fallbackLL.lat,fallbackLL.lon,0,100);
+    window._fakeHeadingLine=L.polyline([[fallbackLL.lat,fallbackLL.lon],tip],{color:'#ffdd00',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+    const perp=90;
+    window._fakeTicks=[];
+    [25,50,75,100].forEach(dist=>{
+      const mid=_destPoint(fallbackLL.lat,fallbackLL.lon,0,dist);
+      const a=_destPoint(mid[0],mid[1],perp,10);
+      const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
+      window._fakeTicks.push(L.polyline([a,b],{color:'#ffdd00',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+      if(dist===100)window._fakeTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ffdd00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km N</span>',iconAnchor:[-4,12]})}).addTo(map));
+    });
+    _showCompassRings(fallbackLL.lat,fallbackLL.lon);
   }
 }
-
 let _compassRings=[];
 
 function _showCompassRings(lat,lon){
