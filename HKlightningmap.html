@@ -936,7 +936,7 @@ function hkoSetLabel(text){
 
 function hkoStyleForAge(ageSec){
   const s = strokeStyle(ageSec); // same age→color scale as live WS strikes
-  return { fillColor:s.fillColor, fillOpacity:s.fillOpacity, radius:s.radius*1.8+2, color:HKO_RING_COLOR, weight:2, opacity:0.95 };
+  return { fillColor:s.fillColor, fillOpacity:1, radius:s.radius, color:HKO_RING_COLOR, weight:1.5, opacity:1 };
 }
 
 function hkoParseBinEndTime(dateStr, timeRange){
