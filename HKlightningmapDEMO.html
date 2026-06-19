@@ -198,7 +198,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
         <div class="leg-item"><div class="leg-dot" style="background:#ff8800;"></div> &lt;10m</div>
         <div class="leg-item"><div class="leg-dot" style="background:#ff3300;"></div> &lt;30m</div>
         <div class="leg-item"><div class="leg-dot" style="background:#cc2200;"></div> &lt;1h</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#551100;"></div> Older</div>
+<div class="leg-item"><div class="leg-dot" style="background:#551100;"></div> Older</div>
+        <div class="leg-item"><div class="leg-dot" style="background:transparent;border:1.5px solid #66ccff;box-sizing:border-box;"></div> HKO ring</div>
       </div>
     </div>
 
@@ -936,7 +937,7 @@ function hkoSetLabel(text){
 
 function hkoStyleForAge(ageSec){
   const s = strokeStyle(ageSec); // same age→color scale as live WS strikes
-  return { fillColor:s.fillColor, fillOpacity:s.fillOpacity, radius:s.radius, color:HKO_RING_COLOR, weight:1.5, opacity:0.9 };
+  return { fillColor:s.fillColor, fillOpacity:s.fillOpacity, radius:s.radius*1.8+2, color:HKO_RING_COLOR, weight:2, opacity:0.95 };
 }
 
 function hkoParseBinEndTime(dateStr, timeRange){
@@ -1016,29 +1017,9 @@ function hkoRecolor(){
   });
 }
 
-function hkoShowLegend(){
-  if(hkoLegendEl) return;
-  hkoLegendEl = document.createElement('div');
-  hkoLegendEl.id='hko-legend';
-  hkoLegendEl.style.cssText='position:absolute;top:130px;right:10px;z-index:1000;background:rgba(8,8,18,0.9);border:0.5px solid rgba(180,100,255,0.3);border-radius:10px;padding:8px 12px;font-size:10px;color:#ccc;backdrop-filter:blur(6px);font-family:\'Courier New\',monospace;max-width:160px;';
-  hkoLegendEl.innerHTML = `
-<div style="font-size:10px;color:#b864ff;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:5px;border-bottom:0.5px solid rgba(180,100,255,0.2);padding-bottom:4px;">HKO Past Strikes</div>
-    <div style="display:flex;flex-direction:column;gap:3px;">
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ffffff;border:1.5px solid #66ccff;display:inline-block;"></span>New</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ffee00;border:1.5px solid #66ccff;display:inline-block;"></span>&lt;1m</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ff8800;border:1.5px solid #66ccff;display:inline-block;"></span>&lt;10m</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ff3300;border:1.5px solid #66ccff;display:inline-block;"></span>&lt;30m</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#cc2200;border:1.5px solid #66ccff;display:inline-block;"></span>&lt;1h</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#551100;border:1.5px solid #66ccff;display:inline-block;"></span>Older</div>
-    </div>
-    <div style="margin-top:6px;font-size:9px;color:#66ccff;opacity:0.8;">🔵 ring = HKO source</div>
-  `;
-  document.getElementById('wrap').appendChild(hkoLegendEl);
-}
+function hkoShowLegend(){ /* floating HKO legend removed — ring indicator now lives in the bottom status bar */ }
 
-function hkoHideLegend(){
-  if(hkoLegendEl){ hkoLegendEl.remove(); hkoLegendEl=null; }
-}
+function hkoHideLegend(){ /* no-op */ }
 
 function hkoStartCountdown(){
   hkoCountdownRemaining = HKO_REFRESH_SEC;
