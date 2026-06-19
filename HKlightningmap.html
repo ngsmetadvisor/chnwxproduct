@@ -503,7 +503,7 @@ if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarni
   });
   if(hkoEnabled){
     hkoMarkers.forEach(m=>{
-      if((nowSec-m._hkoBinEnd)>120)return;
+      if((nowSec-m._hkoBinEnd)>600)return;
       const d=haversineKm(lat,lon,m._lat,m._lon);
       if(d<=PROX_RADIUS_KM){
         count++;if(d<closest)closest=d;
