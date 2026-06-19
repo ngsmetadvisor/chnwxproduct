@@ -919,14 +919,7 @@ const HKO_PROXIES = [
   'https://api.codetabs.com/v1/proxy?quest='
 ];
 const HKO_REFRESH_SEC = 150; // 2.5 minutes — shared by both the fetch interval and the pill countdown fillconst HKO_REFRESH_MS = HKO_REFRESH_SEC * 1000;
-const HKO_BIN_COLORS = [
-  {max:300,    color:'#ff3300'},
-  {max:900,    color:'#ff8800'},
-  {max:1800,   color:'#66ccff'},
-  {max:3600,   color:'#aa44ff'},
-  {max:10800,  color:'#2244aa'},
-  {max:Infinity,color:'#888888'}
-];
+const HKO_RING_COLOR = '#66ccff'; // light blue ring identifies HKO-sourced dots
 const HKO_MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
 
 let hkoEnabled = false;
@@ -941,9 +934,9 @@ function hkoSetLabel(text){
   if(el) el.textContent=text;
 }
 
-function hkoColorForAge(ageSec){
-  for(const tier of HKO_BIN_COLORS){ if(ageSec<tier.max) return tier.color; }
-  return HKO_BIN_COLORS[HKO_BIN_COLORS.length-1].color;
+function hkoStyleForAge(ageSec){
+  const s = strokeStyle(ageSec); // same age→color scale as live WS strikes
+  return { fillColor:s.fillColor, fillOpacity:s.fillOpacity, radius:s.radius, color:HKO_RING_COLOR, weight:1.5, opacity:0.9 };
 }
 
 function hkoParseBinEndTime(dateStr, timeRange){
@@ -992,14 +985,14 @@ async function hkoFetchAndRender(){
       const timeRange = parts[1];
       const binEnd = hkoParseBinEndTime(dateStr, timeRange);
       if(binEnd===null) return;
-      const age = nowSec - binEnd;
-      const color = hkoColorForAge(age);
+const age = nowSec - binEnd;
+      const style = hkoStyleForAge(age);
       for(let i=2;i+1<parts.length;i+=2){
         const lat = parseFloat(parts[i]);
         const lon = parseFloat(parts[i+1]);
         if(isNaN(lat)||isNaN(lon)) continue;
 const m = L.circleMarker([lat,lon],{
-          radius:5, color, fillColor:color, weight:0, opacity:0.85, fillOpacity:0.7,
+          ...style,
           renderer:hkoRenderer, pane:'hko', interactive:false
         }).addTo(map);
         m._hkoBinEnd = binEnd;
@@ -1019,8 +1012,7 @@ function hkoRecolor(){
   const nowSec = Date.now()/1000;
   hkoMarkers.forEach(m=>{
     const age = nowSec - m._hkoBinEnd;
-    const color = hkoColorForAge(age);
-    m.setStyle({color, fillColor:color});
+    m.setStyle(hkoStyleForAge(age));
   });
 }
 
@@ -1030,15 +1022,16 @@ function hkoShowLegend(){
   hkoLegendEl.id='hko-legend';
   hkoLegendEl.style.cssText='position:absolute;top:130px;right:10px;z-index:1000;background:rgba(8,8,18,0.9);border:0.5px solid rgba(180,100,255,0.3);border-radius:10px;padding:8px 12px;font-size:10px;color:#ccc;backdrop-filter:blur(6px);font-family:\'Courier New\',monospace;max-width:160px;';
   hkoLegendEl.innerHTML = `
-    <div style="font-size:10px;color:#b864ff;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:5px;border-bottom:0.5px solid rgba(180,100,255,0.2);padding-bottom:4px;">HKO Past Strikes</div>
+<div style="font-size:10px;color:#b864ff;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:5px;border-bottom:0.5px solid rgba(180,100,255,0.2);padding-bottom:4px;">HKO Past Strikes</div>
     <div style="display:flex;flex-direction:column;gap:3px;">
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ff3300;display:inline-block;"></span>&lt;5 min</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ff8800;display:inline-block;"></span>&lt;10 min</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#66ccff;display:inline-block;"></span>&lt;15 min</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#aa44ff;display:inline-block;"></span>&lt;20 min</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#2244aa;display:inline-block;"></span>&lt;25 min</div>
-      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#888888;display:inline-block;"></span>30 min</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ffffff;border:1.5px solid #66ccff;display:inline-block;"></span>New</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ffee00;border:1.5px solid #66ccff;display:inline-block;"></span>&lt;1m</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ff8800;border:1.5px solid #66ccff;display:inline-block;"></span>&lt;10m</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ff3300;border:1.5px solid #66ccff;display:inline-block;"></span>&lt;30m</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#cc2200;border:1.5px solid #66ccff;display:inline-block;"></span>&lt;1h</div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#551100;border:1.5px solid #66ccff;display:inline-block;"></span>Older</div>
     </div>
+    <div style="margin-top:6px;font-size:9px;color:#66ccff;opacity:0.8;">🔵 ring = HKO source</div>
   `;
   document.getElementById('wrap').appendChild(hkoLegendEl);
 }
