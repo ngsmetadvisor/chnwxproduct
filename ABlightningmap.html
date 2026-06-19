@@ -897,7 +897,6 @@ document.getElementById('ab-collapse-btn').addEventListener('click',()=>{
 });
 
 loadZones();
-updateDevStatus();
 
   
 // ── GeoMet Radar ──────────────────────────────────────────────
@@ -1155,13 +1154,15 @@ function devTryRecord(){
   if(elapsed<DEV_STEADY_SEC) return;
   if(now-_devLastRecAt<DEV_REC_THROTTLE_MS) return;
 
-  _devLastRecAt=now;
+_devLastRecAt=now;
   const dev=devAngDiff(ch,gh);
   deviationTable[devSector(gh)].push(dev);
   devSaveTable();
   updateDevStatus();
 }
-  
+
+updateDevStatus(); // paint initial status on load now that all calibration state exists
+
 // Returns {heading, corrected} — corrected:true means a deviation value was applied (green line),
 // corrected:false means raw heading is used as-is (yellow line).
 function getCorrectedHeading(rawHeading){
