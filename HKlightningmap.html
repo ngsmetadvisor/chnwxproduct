@@ -465,7 +465,7 @@ const PROX_WARNING_KM=PROX_RADIUS_KM*PROX_WARNING_PCT;
 const PROX_VIBRATE_MS=[200,100,200,100,200];
 let proximityRing=null,proximityWarning=null,proximityActive=false;
 let _proxLastWasWarning=false;
-let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null;
+let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null,_proxVibratedKey=null;
 let _proxLastRenderedKey='';
 let _gpsLastLL=null;
 
@@ -493,11 +493,11 @@ function checkLightningProximity(){
   let newestWarningLL=null,closestWarningDist=Infinity;
   let newestCautionLL=null,closestCautionDist=Infinity;
   strokes.forEach(m=>{
-    if((now-m._strokeTime)>60)return;
+    if((now-m._strokeTime)>30)return;
     const d=haversineKm(lat,lon,m._lat,m._lon);
     if(d<=PROX_RADIUS_KM){
       count++;if(d<closest)closest=d;
-      if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon};}}
+if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon,key:'ws_'+m._strokeTime+'_'+m._lat+'_'+m._lon};}}
       else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon};}}
     }
   });
@@ -507,7 +507,7 @@ function checkLightningProximity(){
       const d=haversineKm(lat,lon,m._lat,m._lon);
       if(d<=PROX_RADIUS_KM){
         count++;if(d<closest)closest=d;
-        if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon};}}
+if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon,key:'hko_'+m._hkoBinEnd+'_'+m._lat+'_'+m._lon};}}
         else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon};}}
       }
     });
@@ -518,8 +518,11 @@ function checkLightningProximity(){
 if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
   if(count>0 && _proxElapsed<10){
-    const isWarning=closest<=PROX_WARNING_KM;
-    if(isWarning&&!_proxLastWasWarning)triggerProximityVibrate();
+const isWarning=closest<=PROX_WARNING_KM;
+    if(isWarning&&newestWarningLL&&newestWarningLL.key&&newestWarningLL.key!==_proxVibratedKey){
+      triggerProximityVibrate();
+      _proxVibratedKey=newestWarningLL.key;
+    }
     _proxLastWasWarning=isWarning;
     const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
     if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
