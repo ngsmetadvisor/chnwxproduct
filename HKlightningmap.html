@@ -808,10 +808,10 @@ function onCompass(e){
 }
 
 function toggleGPS(){
-if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;_gpsLastLL=null;}
-  if(window._fakeCompassLine){map.removeLayer(window._fakeCompassLine);window._fakeCompassLine=null;}
-  if(window._fakeCompassTicks){window._fakeCompassTicks.forEach(tk=>map.removeLayer(tk));window._fakeCompassTicks=[];}
   if(!gpsActive){
+    if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
+    if(window._fakeCompassLine){map.removeLayer(window._fakeCompassLine);window._fakeCompassLine=null;}
+    if(window._fakeCompassTicks){window._fakeCompassTicks.forEach(tk=>map.removeLayer(tk));window._fakeCompassTicks=[];}
     gpsActive=true;
     document.getElementById('gps-btn').classList.add('searching');
     document.getElementById('gps-btn').textContent='⊕ …';
@@ -824,8 +824,9 @@ if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=nu
         if(state==='granted'){window.addEventListener('deviceorientationabsolute',onCompass,true);window.addEventListener('deviceorientation',onCompass,true);}
       }).catch(()=>{window.addEventListener('deviceorientationabsolute',onCompass,true);window.addEventListener('deviceorientation',onCompass,true);});
     }else{window.addEventListener('deviceorientationabsolute',onCompass,true);window.addEventListener('deviceorientation',onCompass,true);}
- }else{
+}else{
     gpsActive=false;
+    const lastLL=gpsMarker?gpsMarker.getLatLng():null;
     if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
     window.removeEventListener('deviceorientationabsolute',onCompass,true);
     window.removeEventListener('deviceorientation',onCompass,true);
@@ -836,14 +837,30 @@ if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=nu
     if(gpsAccCircle){map.removeLayer(gpsAccCircle);gpsAccCircle=null;}
     if(gpsHeadingLine){gpsHeadingLine._ticks&&gpsHeadingLine._ticks.forEach(tk=>map.removeLayer(tk));map.removeLayer(gpsHeadingLine);gpsHeadingLine=null;}
     _hideCompassRings();
-    _gpsPrev=null;_gpsLastLL=null;
+    _gpsPrev=null;
     document.getElementById('gps-btn').classList.remove('active','searching');
     document.getElementById('gps-btn').textContent='⊕ GPS';
     document.getElementById('gpsStatus').textContent='';
     document.getElementById('gpsStatus').style.color='#00ff96';
-    const fakeLL={lat:22.3193,lon:114.1694};
-    _gpsLastLL=fakeLL;
-    _showCompassRings(fakeLL.lat,fakeLL.lon);
+    const fallbackLL=lastLL?{lat:lastLL.lat,lon:lastLL.lng}:{lat:22.3193,lon:114.1694};
+    _gpsLastLL=fallbackLL;
+    if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
+    if(window._fakeCompassLine){map.removeLayer(window._fakeCompassLine);window._fakeCompassLine=null;}
+    if(window._fakeCompassTicks){window._fakeCompassTicks.forEach(tk=>map.removeLayer(tk));window._fakeCompassTicks=[];}
+    const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
+    window._fakeMarker=L.marker([fallbackLL.lat,fallbackLL.lon],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
+    const tip=_destPoint(fallbackLL.lat,fallbackLL.lon,0,100);
+    window._fakeCompassLine=L.polyline([[fallbackLL.lat,fallbackLL.lon],tip],{color:'#ffdd00',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+    const perp=90;
+    window._fakeCompassTicks=[];
+    [25,50,75,100].forEach(dist=>{
+      const mid=_destPoint(fallbackLL.lat,fallbackLL.lon,0,dist);
+      const a=_destPoint(mid[0],mid[1],perp,10);
+      const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
+      window._fakeCompassTicks.push(L.polyline([a,b],{color:'#ffdd00',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+      if(dist===100)window._fakeCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ffdd00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km N</span>',iconAnchor:[-4,12]})}).addTo(map));
+    });
+    _showCompassRings(fallbackLL.lat,fallbackLL.lon);
   }
 }
 document.getElementById('gps-btn').addEventListener('click',toggleGPS);
