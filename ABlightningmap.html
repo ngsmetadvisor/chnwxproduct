@@ -615,6 +615,7 @@ const PROX_FADE_DELAY_MS = 30000;  // ms after last strike before warning clears
 let proximityRing=null, proximityWarning=null, proximityActive=false;
 let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity, _proxFadeTimer=null;
+let _proxVibratedKey=null;
 let _proxLastRenderedKey='';
 
 function triggerProximityVibrate(){
@@ -643,8 +644,8 @@ let closest=Infinity, count=0;
     if(d<=PROX_RADIUS_KM){
       count++;
       if(d<closest) closest=d;
-      if(d<=PROX_WARNING_KM){
-        if(d<closestWarningDist){ closestWarningDist=d; newestWarningLL={lat:m._lat,lon:m._lon}; }
+if(d<=PROX_WARNING_KM){
+        if(d<closestWarningDist){ closestWarningDist=d; newestWarningLL={lat:m._lat,lon:m._lon,key:'ws_'+m._strokeTime+'_'+m._lat+'_'+m._lon}; }
       } else {
         if(d<closestCautionDist){ closestCautionDist=d; newestCautionLL={lat:m._lat,lon:m._lon}; }
       }
@@ -658,8 +659,11 @@ window._proxNearestLL = newestWarningLL || newestCautionLL;
   }
 if(count>0){
     // Determine warning vs caution first
-    const isWarning=closest<=PROX_WARNING_KM;
-    if(isWarning && !_proxLastWasWarning) triggerProximityVibrate();
+const isWarning=closest<=PROX_WARNING_KM;
+    if(isWarning && newestWarningLL && newestWarningLL.key && newestWarningLL.key!==_proxVibratedKey){
+      triggerProximityVibrate();
+      _proxVibratedKey=newestWarningLL.key;
+    }
     _proxLastWasWarning=isWarning;
 
     // Skip full re-render if nothing meaningful changed
