@@ -1790,10 +1790,10 @@ function connect(){
   document.getElementById('connStatus').style.color='#ffaa00';
   try{ws=new WebSocket('wss://'+srv+':443/');}
   catch(e){document.getElementById('connStatus').textContent='WebSocket blocked';document.getElementById('connStatus').style.color='#ff4444';return;}
-  ws.onopen=()=>{
+ws.onopen=()=>{
     document.getElementById('connStatus').style.color='#00ff99';
     document.getElementById('connStatus').textContent='Live';
-    ws.send(JSON.stringify({v:24,i:{},s:false,x:0,w:0,tx:0,tw:0,a:4,z:map.getZoom(),b:true,h:'',l:0,t:0,from_lightningmaps_org:true,p:[90,180,-90,-180]}));
+    try{ ws.send(JSON.stringify({v:24,i:{},s:false,x:0,w:0,tx:0,tw:0,a:4,z:map.getZoom(),b:true,h:'',l:0,t:0,from_lightningmaps_org:true,p:[90,180,-90,-180]})); }catch(e){}
   };
 
   ws.onmessage=(event)=>{
@@ -1822,7 +1822,6 @@ setInterval(()=>{
   }
 },5000);
 
-connect();
 connect();
 (function initFakeGPS(){
   const fakeLL={lat:53.5461,lng:-113.4938}; // Edmonton fallback
