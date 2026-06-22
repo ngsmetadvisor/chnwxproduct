@@ -162,7 +162,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
 /* ── Deviation Rose Panel ── */
 #dev-rose-panel {
-  position: absolute; top: 200px; left: 10px; z-index: 1000;
+  position: absolute; top: 130px; left: 10px; z-index: 1000;
   background: rgba(8,8,18,0.92); border: 0.5px solid rgba(138,92,246,0.35);
   border-radius: 14px; padding: 8px 10px; width: 180px;
   backdrop-filter: blur(6px); font-size: 11px; color: #aaa;
@@ -361,7 +361,10 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <div id="dev-rose-panel">
     <div class="rose-title">
       <span>Compass Cal</span>
-      <span id="dev-rose-close" style="cursor:pointer;color:#8b5cf6;font-size:13px;opacity:0.7;padding:0 2px;" title="Close rose">✕</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span id="dev-rose-collapse" style="cursor:pointer;color:#8b5cf6;">▼</span>
+        <span id="dev-rose-close" style="cursor:pointer;color:#8b5cf6;font-size:13px;opacity:0.7;padding:0 2px;" title="Close rose">✕</span>
+      </div>
     </div>
     <canvas id="rose-canvas-ltg" width="160" height="160"></canvas>
     <div id="dev-rose-meta">0 samples · 0/16 dirs</div>
