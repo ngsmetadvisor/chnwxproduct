@@ -264,9 +264,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div class="sep"></div>
     <button id="station-toggle" class="tb-btn active">📡 Stns</button>
     <div class="sep"></div>
-    <button id="dev-mode-btn" class="tb-btn active">🧭 Corr</button>
-    <div class="sep"></div>
-    <button id="dev-reset-btn" class="tb-btn" style="border-color:rgba(255,80,80,0.4);color:#ff8080;">↺ Cal</button>
+    <button id="compass-menu-btn" class="tb-btn active">🧭 Compass</button>
   </div>
 
   <!-- Radar panel -->
@@ -363,7 +361,10 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <div id="dev-rose-panel">
     <div class="rose-title">
       <span>Compass Cal</span>
-      <span id="dev-rose-collapse" style="cursor:pointer;color:#8b5cf6;">▼</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span id="dev-rose-collapse" style="cursor:pointer;color:#8b5cf6;">▼</span>
+        <span id="dev-rose-close" style="cursor:pointer;color:#8b5cf6;font-size:13px;opacity:0.7;padding:0 2px;" title="Close rose">✕</span>
+      </div>
     </div>
     <canvas id="rose-canvas-ltg" width="160" height="160"></canvas>
     <div id="dev-rose-meta">0 samples · 0/16 dirs</div>
@@ -403,6 +404,27 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       <div class="leg-item"><div class="leg-dot" style="background:#ff3300;"></div> &lt;30m</div>
       <div class="leg-item"><div class="leg-dot" style="background:#cc2200;"></div> &lt;1h</div>
       <div class="leg-item"><div class="leg-dot" style="background:#551100;"></div> Older</div>
+    </div>
+  </div>
+
+<!-- Compass popup menu -->
+  <div id="compass-popup" style="display:none;position:absolute;z-index:2000;background:rgba(8,8,18,0.97);border:0.5px solid rgba(138,92,246,0.45);border-radius:14px;padding:6px;min-width:200px;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.7);">
+    <div id="cmp-toggle-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(138,92,246,0.12)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:12px;color:#c4b5fd;font-family:monospace;">Compass correction</span>
+      <span id="cmp-toggle-indicator" style="font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(0,255,150,0.15);border:0.5px solid #00ff96;color:#00ff96;">ON</span>
+    </div>
+    <div id="cmp-rose-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(138,92,246,0.12)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:12px;color:#c4b5fd;font-family:monospace;">Compass rose</span>
+      <span id="cmp-rose-indicator" style="font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(138,92,246,0.15);border:0.5px solid rgba(138,92,246,0.5);color:#a78bfa;">Show</span>
+    </div>
+    <div style="height:0.5px;background:rgba(138,92,246,0.2);margin:4px 8px;"></div>
+    <div id="cmp-reset-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(255,80,80,0.1)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:12px;color:#f87171;font-family:monospace;">Reset calibration</span>
+      <span style="font-size:10px;color:#f87171;opacity:0.6;">↺</span>
+    </div>
+    <div style="height:0.5px;background:rgba(255,255,255,0.07);margin:4px 8px;"></div>
+    <div id="cmp-cancel-row" style="display:flex;align-items:center;justify-content:center;padding:7px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:11px;color:#555;font-family:monospace;">Cancel</span>
     </div>
   </div>
 
@@ -1307,13 +1329,19 @@ roseStartBlink();
 function updateRosePanel() {
   const panel = document.getElementById('dev-rose-panel');
   if (!panel) return;
-  const hasData = deviationTable.some(a => a.length > 0);
-  const active = gpsActive || hasData;
-  panel.style.display = active ? 'block' : 'none';
-  if (active) drawDeviationRose();
+  if (panel.style.display !== 'none') drawDeviationRose();
 }
 
 // Collapse toggle
+document.getElementById('dev-rose-close').addEventListener('click', () => {
+  document.getElementById('dev-rose-panel').style.display = 'none';
+  const roseInd = document.getElementById('cmp-rose-indicator');
+  if(roseInd){
+    roseInd.textContent = 'Show';
+    roseInd.style.background = 'rgba(138,92,246,0.12)';
+  }
+});
+
 document.getElementById('dev-rose-collapse').addEventListener('click', () => {
   const canvas = document.getElementById('rose-canvas-ltg');
   const meta   = document.getElementById('dev-rose-meta');
@@ -1956,18 +1984,102 @@ document.getElementById('station-toggle').addEventListener('click', function(){
   this.classList.toggle('active', stationLabelsVisible);
 });
 
-document.getElementById('dev-mode-btn').addEventListener('click', function(){
-  devManualRaw=!devManualRaw;
-  this.classList.toggle('active', !devManualRaw);
-  this.textContent = devManualRaw ? '🧭 Raw' : '🧭 Corr';
-});
+(function initCompassMenu(){
+  const btn      = document.getElementById('compass-menu-btn');
+  const popup    = document.getElementById('compass-popup');
+  const indicator= document.getElementById('cmp-toggle-indicator');
+  const roseInd  = document.getElementById('cmp-rose-indicator');
 
-document.getElementById('dev-reset-btn').addEventListener('click', function(){
-  if(!confirm('Reset compass deviation calibration? This deletes all '+deviationTable.reduce((s,a)=>s+a.length,0)+' collected samples.')) return;
-  deviationTable=Array.from({length:DEV_N_DIRS},()=>[]);
-  devSaveTable();
-  updateDevStatus();
-});
+  function syncIndicators(){
+    // Correction toggle
+    if(devManualRaw){
+      indicator.textContent='OFF';
+      indicator.style.background='rgba(255,100,100,0.12)';
+      indicator.style.borderColor='rgba(255,100,100,0.5)';
+      indicator.style.color='#f87171';
+      btn.classList.remove('active');
+      btn.style.borderColor='rgba(255,100,100,0.4)';
+      btn.style.color='#f87171';
+    } else {
+      indicator.textContent='ON';
+      indicator.style.background='rgba(0,255,150,0.15)';
+      indicator.style.borderColor='#00ff96';
+      indicator.style.color='#00ff96';
+      btn.classList.add('active');
+      btn.style.borderColor='';
+      btn.style.color='';
+    }
+    // Rose visibility
+    const rosePanel = document.getElementById('dev-rose-panel');
+    const roseOpen  = rosePanel && rosePanel.style.display !== 'none';
+    roseInd.textContent  = roseOpen ? 'Hide' : 'Show';
+    roseInd.style.background = roseOpen ? 'rgba(138,92,246,0.25)' : 'rgba(138,92,246,0.12)';
+  }
+
+  function positionPopup(){
+    const br = btn.getBoundingClientRect();
+    const pw = 210;
+    let left = br.right - pw;
+    if(left < 8) left = 8;
+    popup.style.left = left + 'px';
+    popup.style.top  = (br.bottom + 6) + 'px';
+  }
+
+  function openMenu(){
+    syncIndicators();
+    positionPopup();
+    popup.style.display = 'block';
+  }
+  function closeMenu(){ popup.style.display = 'none'; }
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    popup.style.display === 'none' ? openMenu() : closeMenu();
+  });
+
+  // Correction toggle
+  document.getElementById('cmp-toggle-row').addEventListener('click', () => {
+    devManualRaw = !devManualRaw;
+    updateDevStatus();
+    syncIndicators();
+    closeMenu();
+  });
+
+  // Rose toggle
+  document.getElementById('cmp-rose-row').addEventListener('click', () => {
+    const rosePanel = document.getElementById('dev-rose-panel');
+    if(!rosePanel) return;
+    const wasHidden = rosePanel.style.display === 'none' || rosePanel.style.display === '';
+    if(wasHidden){
+      rosePanel.style.display = 'block';
+      drawDeviationRose();
+    } else {
+      rosePanel.style.display = 'none';
+    }
+    syncIndicators();
+    closeMenu();
+  });
+
+  // Reset calibration
+  document.getElementById('cmp-reset-row').addEventListener('click', () => {
+    closeMenu();
+    if(!confirm('Reset compass deviation calibration? This deletes all '+deviationTable.reduce((s,a)=>s+a.length,0)+' collected samples.')) return;
+    deviationTable = Array.from({length:DEV_N_DIRS}, ()=>[]);
+    devSaveTable();
+    updateDevStatus();
+    drawDeviationRose();
+  });
+
+  // Cancel
+  document.getElementById('cmp-cancel-row').addEventListener('click', closeMenu);
+
+  // Close on outside click
+  document.addEventListener('click', e => {
+    if(!popup.contains(e.target) && e.target !== btn) closeMenu();
+  });
+
+  map.on('click', closeMenu);
+})();
 
 // ── EC Public Forecast Modal ──────────────────────────────────
 (function initECForecast() {
