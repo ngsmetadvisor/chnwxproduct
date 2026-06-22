@@ -1337,15 +1337,7 @@ document.getElementById('dev-rose-close').addEventListener('click', () => {
   }
 });
 
-document.getElementById('dev-rose-collapse').addEventListener('click', () => {
-  const canvas = document.getElementById('rose-canvas-ltg');
-  const meta   = document.getElementById('dev-rose-meta');
-  const btn    = document.getElementById('dev-rose-collapse');
-  const collapsed = canvas.style.display === 'none';
-  canvas.style.display = collapsed ? 'block' : 'none';
-  meta.style.display   = collapsed ? 'block' : 'none';
-  btn.textContent = collapsed ? '▼' : '▲';
-});
+
 
 // Wire active recording sector into rose
 function setRoseActiveSector(sectorIdx) {
