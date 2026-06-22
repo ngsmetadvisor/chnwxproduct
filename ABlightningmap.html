@@ -436,7 +436,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 const map = L.map('map', { zoomControl:false, attributionControl:true, preferCanvas:true }).setView([55.0,-115.0],5);
 
 
-
+let stationLabelMarkers = [];
 const BASEMAPS = {
   dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
@@ -1927,7 +1927,7 @@ map.on('mouseup touchend touchmove', () => { clearTimeout(_lpTimer); });
 
 // ── RAWS Stations ─────────────────────────────────────────────
 const stations = {};
-let stationLabelMarkers = [], stationLabelsVisible = true, stationFocusMarker = null;
+let stationLabelsVisible = true, stationFocusMarker = null;
 
 fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/stations.csv')
   .then(r => r.text())
