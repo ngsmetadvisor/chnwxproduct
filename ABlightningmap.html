@@ -1083,10 +1083,11 @@ let _gpsPrev=null;
 let _gpsLastLL=null;
 let compassHeading=null;
 
+  
 // ── Compass Deviation Calibration (background) ─────────────────
 const DEV_DIR_NAMES=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const DEV_N_DIRS=16, DEV_DIR_STEP=360/DEV_N_DIRS;
-const DEV_STEADY_SEC=5, DEV_STEADY_TOL=10, DEV_SPEED_MIN=3;
+const DEV_STEADY_SEC=5, DEV_STEADY_TOL=5, DEV_SPEED_MIN=3;
 const DEV_DIR_TOL=5;
 const DEV_STORAGE_KEY='ltg_compass_deviation_v1';
 const DEV_REC_THROTTLE_MS=2000;
@@ -1178,7 +1179,7 @@ function getCorrectedHeading(rawHeading){
     return{heading:corrected,corrected:true};
   }
 
-  // Rule: between two marks -> only correct if BOTH flanking marks have data; interpolate between them.
+// Rule: between two marks -> interpolate if both flanking sectors have data.
   const lowIdx=Math.floor((((rawHeading%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS;
   const highIdx=(lowIdx+1)%DEV_N_DIRS;
   const lowDev=avgs[lowIdx], highDev=avgs[highIdx];
@@ -1192,7 +1193,37 @@ function getCorrectedHeading(rawHeading){
     return{heading:corrected,corrected:true};
   }
 
-  // Otherwise: not enough bracketing data -> raw heading, uncorrected.
+  // Rule: straight-line correction — if driving steady off a cardinal mark, record
+  // a direct sample at this exact heading and apply it immediately.
+  // Requires the same steady/speed conditions as devTryRecord(), checked here via
+  // the live state variables rather than re-running the full accumulator.
+  const gh=_devLastGpsHeading, spd=_devLastGpsSpeedKmh;
+  if(gh!==null && spd>=DEV_SPEED_MIN && compassHeading!==null){
+    const angDiff=Math.abs(devAngDiff(rawHeading,gh));
+    const steadyElapsed=_devSteadyStart!==null?(Date.now()-_devSteadyStart)/1000:0;
+    if(angDiff<=DEV_STEADY_TOL && steadyElapsed>=DEV_STEADY_SEC){
+      // We have a confirmed steady run. Record into the nearest sector as a
+      // provisional sample so future interpolation benefits too.
+      const sector=devSector(gh);
+      const dev=devAngDiff(rawHeading,gh);
+      // Only push if this is genuinely new information (throttled by devTryRecord already
+      // for on-mark cases, so guard here to avoid double-recording).
+      const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+      if(!onMark){
+        const now=Date.now();
+        if(now-_devLastRecAt>=DEV_REC_THROTTLE_MS){
+          _devLastRecAt=now;
+          deviationTable[sector].push(dev);
+          devSaveTable();
+          updateDevStatus();
+        }
+      }
+      const corrected=((rawHeading-dev)+360)%360;
+      return{heading:corrected,corrected:true};
+    }
+  }
+
+  // Otherwise: not enough data -> raw heading, uncorrected.
   return{heading:rawHeading,corrected:false};
 }
 
@@ -1382,7 +1413,44 @@ function onCompass(e){
   compassHeading=h;
   devTryRecord();
   const{heading:hCorr,corrected}=getCorrectedHeading(h);
-  const lineColor=corrected?'#00ff96':'#ffdd00';
+
+  // Charging indicator — blink yellow line while steady timer is accumulating
+  const gh=_devLastGpsHeading, spd=_devLastGpsSpeedKmh;
+  const steadyElapsed=_devSteadyStart!==null?(Date.now()-_devSteadyStart)/1000:0;
+  const isCharging=!corrected && gh!==null && spd>=DEV_SPEED_MIN &&
+    Math.abs(devAngDiff(h,gh))<=5 && steadyElapsed>0 && steadyElapsed<DEV_STEADY_SEC;
+  const progress=isCharging?Math.min(steadyElapsed/DEV_STEADY_SEC,1):0;
+
+  let lineColor;
+  if(corrected){
+    lineColor='#00ff96';
+  } else if(isCharging){
+    // Pulse faster as progress increases; interpolate yellow→green tint
+    const g=Math.round(221+34*progress); // #ffdd00 → #ffff22 hint
+    lineColor='#ff'+g.toString(16).padStart(2,'0')+'00';
+    const pulseMs=Math.round(800-500*progress); // 800ms→300ms
+    if(!gpsCompassLine._blinkTimer){
+      gpsCompassLine._blinkTimer=setInterval(()=>{
+        if(!gpsCompassLine) return;
+        const cur=gpsCompassLine.options.opacity;
+        gpsCompassLine.setStyle({opacity:cur>0.5?0.2:0.85});
+      }, pulseMs);
+    }
+  } else {
+    lineColor='#ffdd00';
+    if(gpsCompassLine&&gpsCompassLine._blinkTimer){
+      clearInterval(gpsCompassLine._blinkTimer);
+      gpsCompassLine._blinkTimer=null;
+      gpsCompassLine.setStyle({opacity:0.85});
+    }
+  }
+
+  // Clear blink timer when corrected
+  if(corrected&&gpsCompassLine&&gpsCompassLine._blinkTimer){
+    clearInterval(gpsCompassLine._blinkTimer);
+    gpsCompassLine._blinkTimer=null;
+    gpsCompassLine.setStyle({opacity:0.85});
+  }
   _hideCompassRings();
   const ll=gpsMarker.getLatLng();
   const lat=ll.lat, lon=ll.lng;
