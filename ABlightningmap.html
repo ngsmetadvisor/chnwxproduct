@@ -1161,7 +1161,7 @@ function devLoadTable(){
   }catch(e){}
 }
 devLoadTable();
-updateRosePanel();
+setTimeout(updateRosePanel, 0);
 
 function devAngDiff(a,b){ let d=((a-b)+360)%360; return d>180?d-360:d; }
 function devSector(h){ return Math.round((((h%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS; }
@@ -1224,12 +1224,11 @@ updateDevStatus(); // paint initial status on load now that all calibration stat
 
 // ── Deviation Rose (inline compass calibration visual) ────────────────────
 const ROSE_MIN_SAMPLES = 3;
-function drawDeviationRose() {
+function roseWedgeColor(count, blinkOn) {
   if (count <= 0)               return blinkOn ? '#fde68a' : 'rgba(255,255,255,0.07)';
   if (count < ROSE_MIN_SAMPLES) return blinkOn ? '#fbbf24' : (count < 2 ? '#fef08a88' : '#fde04788');
   return blinkOn ? '#4ade80' : '#22c55e';
 }
-
 function drawDeviationRose() {
   const canvas = document.getElementById('rose-canvas-ltg');
   if (!canvas) return;
