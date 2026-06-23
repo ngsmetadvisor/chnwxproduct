@@ -803,9 +803,9 @@ if(d<=PROX_WARNING_KM){
 window._proxNearestLL = newestWarningLL || newestCautionLL;
   const hasNewStrike = (newestWarningLL || newestCautionLL) ? true : false;
 
-  if(hasNewStrike){
+if(hasNewStrike){
     _proxLastStrikeTime = t||Date.now()/1000;
-    if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; startProxCountdownFill(); }
+    if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
   }
 if(count>0){
     // Determine warning vs caution first
