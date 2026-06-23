@@ -802,8 +802,8 @@ if(d<=PROX_WARNING_KM){
   });
 window._proxNearestLL = newestWarningLL || newestCautionLL;
   const _nearestKey = window._proxNearestLL ? (window._proxNearestLL.key || (window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4))) : '';
-  const hasNewStrike = _nearestKey !== '' && _nearestKey !== _proxLastNearestKey;
-  if(hasNewStrike) _proxLastNearestKey = _nearestKey;
+const hasNewStrike = _nearestKey !== '' && _nearestKey !== _proxLastNearestKey;
+  if(hasNewStrike){ _proxLastNearestKey = _nearestKey; _proxLastRenderedKey = ''; }
 if(hasNewStrike){
     _proxLastStrikeTime = t||Date.now()/1000;
     if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
@@ -936,7 +936,6 @@ count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+clo
       'Updated '+nowD.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
 if(!_proxFadeTimer){
-      if(proximityWarning) startProxCountdownFill();
       _proxFadeTimer=setTimeout(()=>{
         if(proximityRing){ map.removeLayer(proximityRing); proximityRing=null; }
         if(proximityWarning){ proximityWarning.remove(); proximityWarning=null; }
