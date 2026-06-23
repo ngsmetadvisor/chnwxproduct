@@ -903,9 +903,9 @@ style.textContent=`
           border:2px solid;width:100%;box-sizing:border-box;
           background:#e8e8e8;overflow:hidden;
         ">
-          <div id="prox-countdown-fill" style="
+<div id="prox-countdown-fill" style="
             position:absolute;inset:0;background:#ffffff;
-            width:100%;border-radius:8px;
+            width:100%;border-radius:8px;pointer-events:none;
           "></div>
           <div style="position:relative;">
             <div id="prox-label" style="font-size:14px;font-weight:800;letter-spacing:0.07em;"></div>
@@ -921,8 +921,8 @@ proximityWarning.style.animation='proximityFadeIn 0.3s ease';
     }
 
 
-    const banner=document.getElementById('prox-banner');
-    banner.style.background='#ffffff';
+const banner=document.getElementById('prox-banner');
+    banner.style.background='#e8e8e8';
     banner.style.borderColor=color;
     banner.style.animation='none';
     document.getElementById('prox-label').style.color=color;
