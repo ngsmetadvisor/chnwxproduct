@@ -1138,7 +1138,7 @@ const DEV_DIR_NAMES=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','W
 const DEV_N_DIRS=16, DEV_DIR_STEP=360/DEV_N_DIRS;
 const DEV_STEADY_SEC=5, DEV_STEADY_TOL=5, DEV_SPEED_MIN=3;
 const DEV_DIR_TOL=5;
-const DEV_STORAGE_KEY='ltg_compass_deviation_v1';
+const DEV_STORAGE_KEY='compass_deviations_v1'; // match CDMVT's key
 const DEV_REC_THROTTLE_MS=2000;
 
 let deviationTable=Array.from({length:DEV_N_DIRS},()=>[]);
@@ -1200,15 +1200,17 @@ function devTryRecord(){
   const steady=Math.abs(devAngDiff(gh,_devSteadyAnchor))<=DEV_STEADY_TOL;
   if(!steady){ _devSteadyStart=now; _devSteadyAnchor=gh; return; }
 
-  const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
   if(!onMark) return;
 
   const elapsed=(now-_devSteadyStart)/1000;
   if(elapsed<DEV_STEADY_SEC) return;
   if(now-_devLastRecAt<DEV_REC_THROTTLE_MS) return;
 
-_devLastRecAt=now;
   const dev=devAngDiff(ch,gh);
+  if(Math.abs(dev)>90) return; // compass vs GPS track disagree by >90° — likely reversing/jitter, don't contaminate
+
+_devLastRecAt=now;
 deviationTable[devSector(gh)].push(dev);
   devSaveTable();
   updateDevStatus();
@@ -1376,17 +1378,19 @@ function getCorrectedHeading(rawHeading){
   const onIdx=devSector(rawHeading);
   const onMark=devNearestDirDiff(rawHeading)<=DEV_DIR_TOL;
 
+
   // Rule: heading lands on a captured mark -> apply that mark's deviation directly, regardless of neighbors.
-  if(onMark && avgs[onIdx]!==null){
+  // Require ROSE_MIN_SAMPLES before trusting the average (matches rose's green threshold).
+  if(onMark && avgs[onIdx]!==null && deviationTable[onIdx].length>=ROSE_MIN_SAMPLES){
     const corrected=((rawHeading-avgs[onIdx])+360)%360;
     return{heading:corrected,corrected:true};
   }
 
-// Rule: between two marks -> interpolate if both flanking sectors have data.
+// Rule: between two marks -> interpolate if both flanking sectors have enough data.
   const lowIdx=Math.floor((((rawHeading%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS;
   const highIdx=(lowIdx+1)%DEV_N_DIRS;
   const lowDev=avgs[lowIdx], highDev=avgs[highIdx];
-  if(lowDev!==null && highDev!==null){
+  if(lowDev!==null && highDev!==null && deviationTable[lowIdx].length>=ROSE_MIN_SAMPLES && deviationTable[highIdx].length>=ROSE_MIN_SAMPLES){
     const lowAng=lowIdx*DEV_DIR_STEP;
     const span=DEV_DIR_STEP;
     const fromLow=(((rawHeading%360)+360)%360 - lowAng + 360)%360;
@@ -1407,12 +1411,12 @@ function getCorrectedHeading(rawHeading){
     if(angDiff<=DEV_STEADY_TOL && steadyElapsed>=DEV_STEADY_SEC){
       // We have a confirmed steady run. Record into the nearest sector as a
       // provisional sample so future interpolation benefits too.
-      const sector=devSector(gh);
+const sector=devSector(gh);
       const dev=devAngDiff(rawHeading,gh);
       // Only push if this is genuinely new information (throttled by devTryRecord already
       // for on-mark cases, so guard here to avoid double-recording).
       const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
-      if(!onMark){
+      if(!onMark && Math.abs(dev)<=90){ // skip if compass/GPS disagree >90° (reversing/jitter)
         const now=Date.now();
         if(now-_devLastRecAt>=DEV_REC_THROTTLE_MS){
           _devLastRecAt=now;
