@@ -392,7 +392,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <span id="connStatus">Connecting…</span>
     <span id="delay"></span>
 <span id="zoneStatus">Loading zones…</span>
-    <span id="gpsStatus"></span>
+    
+<span id="gpsStatus"></span>
+    <span id="notifyStatus" style="font-size:10px;cursor:pointer;"></span>
     <span id="devStatus" style="color:#00ff96;font-size:10px;"></span>
     <div class="legend">
       <div class="leg-item"><div class="leg-dot" style="background:#ffffff;box-shadow:0 0 4px #fff;"></div> New</div>
@@ -689,10 +691,43 @@ let _proxVibratedKey=null;
 let _proxLastRenderedKey='';
 let _proxNotifiedKey=null; // tracks last state we already sent a notification for
 
-function requestNotifyPermission(){
-  if(!('Notification' in window)) return;
-  if(Notification.permission==='default') Notification.requestPermission();
+
+function updateNotifyStatusUI(){
+  const el=document.getElementById('notifyStatus');
+  if(!el) return;
+  if(!('Notification' in window)){
+    el.textContent='🔔 unsupported'; el.style.color='#666'; el.title='Notifications not supported on this browser/OS';
+    return;
+  }
+  const perm=Notification.permission;
+  if(perm==='granted'){ el.textContent='🔔 alerts on'; el.style.color='#00ff96'; el.title='Tap to test'; }
+  else if(perm==='denied'){ el.textContent='🔕 blocked'; el.style.color='#ff6666'; el.title='Notifications blocked — enable in browser/site settings'; }
+  else { el.textContent='🔔 tap to enable'; el.style.color='#ffaa00'; el.title='Tap GPS or here to request notification permission'; }
 }
+
+function requestNotifyPermission(){
+  if(!('Notification' in window)){ updateNotifyStatusUI(); return; }
+  if(Notification.permission==='default'){
+    Notification.requestPermission().then(()=>updateNotifyStatusUI());
+  } else {
+    updateNotifyStatusUI();
+  }
+}
+
+document.addEventListener('DOMContentLoaded',updateNotifyStatusUI);
+updateNotifyStatusUI();
+
+document.getElementById('notifyStatus')?.addEventListener('click', ()=>{
+  if(!('Notification' in window)) return;
+  if(Notification.permission==='default'){
+    requestNotifyPermission();
+  } else if(Notification.permission==='granted'){
+    sendProximityNotification(false,1,42.0); // quick test ping
+  } else {
+    alert('Notifications are blocked. Enable them in your browser/site settings to receive lightning alerts.');
+  }
+});
+</parameter>
 
 function sendProximityNotification(isWarning,count,closestKm){
   if(!('Notification' in window) || Notification.permission!=='granted') return;
