@@ -805,8 +805,7 @@ window._proxNearestLL = newestWarningLL || newestCautionLL;
 
 if(hasNewStrike){
     _proxLastStrikeTime = t||Date.now()/1000;
-    if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
-    _proxLastRenderedKey=''; // force re-render so the timer block below runs
+    if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; startProxCountdownFill(); }
   }
 if(count>0){
     // Determine warning vs caution first
