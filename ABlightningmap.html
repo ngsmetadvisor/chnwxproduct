@@ -430,7 +430,22 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ── Map ───────────────────────────────────────────────────────
+
 const map = L.map('map', { zoomControl:false, attributionControl:true, preferCanvas:true }).setView([55.0,-115.0],5);
+
+// ── Wake Lock (keep screen on) ──────────────────────────────────
+let wakeLock = null;
+async function requestWakeLock(){
+  if(!('wakeLock' in navigator)) return;
+  try{
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', ()=>{ wakeLock=null; });
+  }catch(e){ console.warn('[wakeLock]',e); }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && !wakeLock) requestWakeLock();
+});
+requestWakeLock();
 
 
 let stationLabelMarkers = [];
