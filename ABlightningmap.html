@@ -788,15 +788,15 @@ let closest=Infinity, count=0;
   let newestWarningLL=null, closestWarningDist=Infinity;
   let newestCautionLL=null, closestCautionDist=Infinity;
   strokes.forEach(m=>{
-    if((now-m._strokeTime)>60) return;
+    if((now-m._strokeTime)>10) return;
     const d=haversineKm(lat,lon,m._lat,m._lon);
     if(d<=PROX_RADIUS_KM){
       count++;
       if(d<closest) closest=d;
 if(d<=PROX_WARNING_KM){
         if(d<closestWarningDist){ closestWarningDist=d; newestWarningLL={lat:m._lat,lon:m._lon,key:'ws_'+m._strokeTime+'_'+m._lat+'_'+m._lon}; }
-      } else {
-        if(d<closestCautionDist){ closestCautionDist=d; newestCautionLL={lat:m._lat,lon:m._lon}; }
+} else {
+        if(d<closestCautionDist){ closestCautionDist=d; newestCautionLL={lat:m._lat,lon:m._lon,key:'cs_'+m._strokeTime+'_'+m._lat+'_'+m._lon}; }
       }
     }
   });
