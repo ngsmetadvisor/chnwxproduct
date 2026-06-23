@@ -718,8 +718,8 @@ let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity, _proxFadeTimer=null;
 let _proxVibratedKey=null;
 let _proxLastRenderedKey='';
-let _proxNotifiedKey=null; // tracks last state we already sent a notification for
-
+let _proxLastNearestKey='';
+let _proxNotifiedKey=null;
 
 function updateNotifyStatusUI(){
   const el=document.getElementById('notifyStatus');
@@ -801,11 +801,13 @@ if(d<=PROX_WARNING_KM){
     }
   });
 window._proxNearestLL = newestWarningLL || newestCautionLL;
-  const hasNewStrike = (newestWarningLL || newestCautionLL) ? true : false;
-
+  const _nearestKey = window._proxNearestLL ? (window._proxNearestLL.key || (window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4))) : '';
+  const hasNewStrike = _nearestKey !== '' && _nearestKey !== _proxLastNearestKey;
+  if(hasNewStrike) _proxLastNearestKey = _nearestKey;
 if(hasNewStrike){
     _proxLastStrikeTime = t||Date.now()/1000;
-    if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; startProxCountdownFill(); }
+    if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
+    startProxCountdownFill();
   }
 if(count>0){
     // Determine warning vs caution first
@@ -941,7 +943,7 @@ if(!_proxFadeTimer){
         if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._proxNearestLine=null; }
         if(window._proxDistLabel){ map.removeLayer(window._proxDistLabel); window._proxDistLabel=null; }
 proximityActive=false; _proxFadeTimer=null;
-        _proxLastRenderedKey=''; _proxNotifiedKey=null;
+        _proxLastRenderedKey=''; _proxLastNearestKey=''; _proxNotifiedKey=null;
       },PROX_FADE_DELAY_MS);
     }
   } else {
@@ -953,10 +955,11 @@ if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._p
     if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
 
 
-    _proxLastStrikeTime=-Infinity;
+_proxLastStrikeTime=-Infinity;
     _proxLastWasWarning=false;
     _proxLastRenderedKey='';
-    _proxNotifiedKey=null; // reset so re-entering CAUTION/WARNING later fires again
+    _proxLastNearestKey='';
+    _proxNotifiedKey=null;
     proximityActive=false;
   }
 }
