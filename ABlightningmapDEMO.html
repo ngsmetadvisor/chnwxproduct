@@ -159,6 +159,24 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 }
 #ctxECForecast:hover { background: rgba(100,180,255,0.1); }
 
+
+/* ── Deviation Rose Panel ── */
+#dev-rose-panel {
+  position: absolute; top: 200px; left: 10px; z-index: 1000;
+  background: rgba(8,8,18,0.92); border: 0.5px solid rgba(138,92,246,0.35);
+  border-radius: 14px; padding: 8px 10px; width: 180px;
+  backdrop-filter: blur(6px); font-size: 11px; color: #aaa;
+  display: none;
+}
+#dev-rose-panel .rose-title {
+  font-size: 10px; color: #8b5cf6; letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 5px; border-bottom: 0.5px solid rgba(138,92,246,0.25); padding-bottom: 4px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+#rose-canvas-ltg { display: block; width: 160px; height: 160px; cursor: pointer; }
+#dev-rose-meta { font-size: 9px; color: #666; text-align: center; margin-top: 4px; }
+
+  
 /* ── EC Forecast Modal ── */
 #ecForecastModal {
   display: none; position: fixed; top: 50%; left: 50%;
@@ -240,11 +258,13 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div class="sep"></div>
     <button id="basemap-btn" class="tb-btn">🌙 Dark</button>
     <div class="sep"></div>
-    <button id="gps-btn">⊕ GPS</button>
+<button id="gps-btn">⊕ GPS</button>
     <div class="sep"></div>
     <button id="ec-lightning-toggle" class="tb-btn">⚡ 3h</button>
     <div class="sep"></div>
     <button id="station-toggle" class="tb-btn active">📡 Stns</button>
+    <div class="sep"></div>
+    <button id="compass-menu-btn" class="tb-btn active">🧭 Compass</button>
   </div>
 
   <!-- Radar panel -->
@@ -336,6 +356,18 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <select id="stationSelect"><option value="">-- select --</option></select>
   </div>
 
+
+<!-- Deviation Rose -->
+  <div id="dev-rose-panel">
+<div class="rose-title">
+      <span>Compass Cal</span>
+      <span id="dev-rose-close" style="cursor:pointer;color:#8b5cf6;font-size:13px;opacity:0.7;padding:0 2px;" title="Close rose">✕</span>
+    </div>
+    <canvas id="rose-canvas-ltg" width="160" height="160"></canvas>
+    <div id="dev-rose-meta">0 samples · 0/16 dirs</div>
+  </div>
+
+  
   <!-- Alberta panel -->
   <div id="ab-panel" class="collapsed">
     <div class="title">Alberta Strikes
@@ -359,8 +391,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <span>AB: <span id="ab-count">0</span></span>
     <span id="connStatus">Connecting…</span>
     <span id="delay"></span>
-    <span id="zoneStatus">Loading zones…</span>
-    <span id="gpsStatus"></span>
+<span id="zoneStatus">Loading zones…</span>
+    
+<span id="gpsStatus"></span>
+    <span id="notifyStatus" style="font-size:10px;cursor:pointer;"></span>
+    <span id="devStatus" style="color:#00ff96;font-size:10px;"></span>
     <div class="legend">
       <div class="leg-item"><div class="leg-dot" style="background:#ffffff;box-shadow:0 0 4px #fff;"></div> New</div>
       <div class="leg-item"><div class="leg-dot" style="background:#ffee00;"></div> &lt;1m</div>
@@ -371,15 +406,51 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     </div>
   </div>
 
+<!-- Compass popup menu -->
+  <div id="compass-popup" style="display:none;position:absolute;z-index:2000;background:rgba(8,8,18,0.97);border:0.5px solid rgba(138,92,246,0.45);border-radius:14px;padding:6px;min-width:200px;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.7);">
+    <div id="cmp-toggle-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(138,92,246,0.12)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:12px;color:#c4b5fd;font-family:monospace;">Compass correction</span>
+      <span id="cmp-toggle-indicator" style="font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(0,255,150,0.15);border:0.5px solid #00ff96;color:#00ff96;">ON</span>
+    </div>
+    <div id="cmp-rose-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(138,92,246,0.12)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:12px;color:#c4b5fd;font-family:monospace;">Compass rose</span>
+      <span id="cmp-rose-indicator" style="font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(138,92,246,0.15);border:0.5px solid rgba(138,92,246,0.5);color:#a78bfa;">Show</span>
+    </div>
+    <div style="height:0.5px;background:rgba(138,92,246,0.2);margin:4px 8px;"></div>
+    <div id="cmp-reset-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(255,80,80,0.1)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:12px;color:#f87171;font-family:monospace;">Reset calibration</span>
+      <span style="font-size:10px;color:#f87171;opacity:0.6;">↺</span>
+    </div>
+    <div style="height:0.5px;background:rgba(255,255,255,0.07);margin:4px 8px;"></div>
+    <div id="cmp-cancel-row" style="display:flex;align-items:center;justify-content:center;padding:7px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:11px;color:#555;font-family:monospace;">Cancel</span>
+    </div>
+  </div>
+
 </div><!-- #wrap -->
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ── Map ───────────────────────────────────────────────────────
+
 const map = L.map('map', { zoomControl:false, attributionControl:true, preferCanvas:true }).setView([55.0,-115.0],5);
 
+// ── Wake Lock (keep screen on) ──────────────────────────────────
+let wakeLock = null;
+async function requestWakeLock(){
+  if(!('wakeLock' in navigator)) return;
+  try{
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', ()=>{ wakeLock=null; });
+  }catch(e){ console.warn('[wakeLock]',e); }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && !wakeLock) requestWakeLock();
+});
+requestWakeLock();
 
 
+let stationLabelMarkers = [];
 const BASEMAPS = {
   dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
@@ -612,11 +683,60 @@ const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
 const PROX_FADE_DELAY_MS = 30000;  // ms after last strike before warning clears
 
 
+
 let proximityRing=null, proximityWarning=null, proximityActive=false;
 let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity, _proxFadeTimer=null;
 let _proxVibratedKey=null;
 let _proxLastRenderedKey='';
+let _proxNotifiedKey=null; // tracks last state we already sent a notification for
+
+
+function updateNotifyStatusUI(){
+  const el=document.getElementById('notifyStatus');
+  if(!el) return;
+  if(!('Notification' in window)){
+    el.textContent='🔔 unsupported'; el.style.color='#666'; el.title='Notifications not supported on this browser/OS';
+    return;
+  }
+  const perm=Notification.permission;
+  if(perm==='granted'){ el.textContent='🔔 alerts on'; el.style.color='#00ff96'; el.title='Tap to test'; }
+  else if(perm==='denied'){ el.textContent='🔕 blocked'; el.style.color='#ff6666'; el.title='Notifications blocked — enable in browser/site settings'; }
+  else { el.textContent='🔔 tap to enable'; el.style.color='#ffaa00'; el.title='Tap GPS or here to request notification permission'; }
+}
+
+function requestNotifyPermission(){
+  if(!('Notification' in window)){ updateNotifyStatusUI(); return; }
+  if(Notification.permission==='default'){
+    Notification.requestPermission().then(()=>updateNotifyStatusUI());
+  } else {
+    updateNotifyStatusUI();
+  }
+}
+
+document.addEventListener('DOMContentLoaded',updateNotifyStatusUI);
+updateNotifyStatusUI();
+
+document.getElementById('notifyStatus')?.addEventListener('click', ()=>{
+  if(!('Notification' in window)) return;
+  if(Notification.permission==='default'){
+    requestNotifyPermission();
+  } else if(Notification.permission==='granted'){
+    sendProximityNotification(false,1,42.0); // quick test ping
+  } else {
+    alert('Notifications are blocked. Enable them in your browser/site settings to receive lightning alerts.');
+  }
+});
+
+function sendProximityNotification(isWarning,count,closestKm){
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const title = isWarning ? '⚡ LIGHTNING WARNING' : '⚡ LIGHTNING CAUTION';
+  const body = count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closestKm.toFixed(1)+' km';
+  try{
+    const n=new Notification(title,{body,tag:'ltg-proximity',renotify:true});
+    n.onclick=()=>{ window.focus(); n.close(); };
+  }catch(e){ console.warn('[notify]',e); }
+}
 
 function triggerProximityVibrate(){
   if(!navigator.vibrate) return;
@@ -664,7 +784,15 @@ const isWarning=closest<=PROX_WARNING_KM;
       triggerProximityVibrate();
       _proxVibratedKey=newestWarningLL.key;
     }
+
     _proxLastWasWarning=isWarning;
+
+    // Fire a notification only on a fresh entry into this severity level, not every tick.
+    const notifyKey=isWarning?'warning':'caution';
+    if(notifyKey!==_proxNotifiedKey){
+      _proxNotifiedKey=notifyKey;
+      sendProximityNotification(isWarning,count,closest);
+    }
 
     // Skip full re-render if nothing meaningful changed
     const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
@@ -780,9 +908,11 @@ if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._p
     if(window._proxDistLabel){ map.removeLayer(window._proxDistLabel); window._proxDistLabel=null; }
     if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
 
+
     _proxLastStrikeTime=-Infinity;
     _proxLastWasWarning=false;
     _proxLastRenderedKey='';
+    _proxNotifiedKey=null; // reset so re-entering CAUTION/WARNING later fires again
     proximityActive=false;
   }
 }
@@ -893,6 +1023,7 @@ document.getElementById('ab-collapse-btn').addEventListener('click',()=>{
 
 loadZones();
 
+  
 // ── GeoMet Radar ──────────────────────────────────────────────
 const GEOMET='https://geo.weather.gc.ca/geomet';
 let ANIM_STEPS=12;
@@ -1075,6 +1206,309 @@ let gpsMarker=null, gpsRing=null, gpsAccCircle=null, gpsHeadingLine=null, gpsCom
 let ecLightningLayers=[], ecLightningTimer=null, ecLightningEnabled=false;
 let _gpsPrev=null;
 let _gpsLastLL=null;
+let compassHeading=null;
+
+  
+// ── Compass Deviation Calibration (background) ─────────────────
+const DEV_DIR_NAMES=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+const DEV_N_DIRS=16, DEV_DIR_STEP=360/DEV_N_DIRS;
+const DEV_STEADY_SEC=5, DEV_STEADY_TOL=5, DEV_SPEED_MIN=3;
+const DEV_DIR_TOL=5;
+const DEV_STORAGE_KEY='compass_deviations_v1'; // match CDMVT's key
+const DEV_REC_THROTTLE_MS=2000;
+
+let deviationTable=Array.from({length:DEV_N_DIRS},()=>[]);
+let devManualRaw=false; // true = user forced "Raw" mode, ignore corrections
+let roseBlinkOn=true, roseBlinkTimer=null;
+let _roseActiveRecSector=null;
+let _devSteadyStart=null, _devSteadyAnchor=null, _devLastRecAt=0;
+let _devLastGpsHeading=null, _devLastGpsSpeedKmh=0;
+
+function devSaveTable(){ try{ localStorage.setItem(DEV_STORAGE_KEY, JSON.stringify(deviationTable)); }catch(e){} }
+function devLoadTable(){
+  try{
+    const raw=localStorage.getItem(DEV_STORAGE_KEY);
+    if(!raw) return;
+    const saved=JSON.parse(raw);
+    if(Array.isArray(saved)&&saved.length===DEV_N_DIRS) saved.forEach((arr,i)=>{ if(Array.isArray(arr)) deviationTable[i]=arr; });
+  }catch(e){}
+}
+devLoadTable();
+setTimeout(updateRosePanel, 0);
+
+function devAngDiff(a,b){ let d=((a-b)+360)%360; return d>180?d-360:d; }
+function devSector(h){ return Math.round((((h%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS; }
+function devNearestDirDiff(h){ return Math.abs(devAngDiff(h, devSector(h)*DEV_DIR_STEP)); }
+function devAvg(arr){ return arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null; }
+function devCapturedCount(){ return deviationTable.filter(arr=>arr.length>0).length; }
+
+function updateDevStatus(){
+  const el=document.getElementById('devStatus');
+  if(!el) return;
+  const n=devCapturedCount();
+  const total=deviationTable.reduce((s,a)=>s+a.length,0);
+  if(devManualRaw){
+    el.textContent='🧭 Raw (forced)';
+    el.style.color='#ffaa00';
+  } else if(n===0){
+    el.textContent='🧭 Uncalibrated';
+    el.style.color='#888';
+  } else {
+    el.textContent='🧭 '+n+'/16 dirs ('+total+' smp)';
+    el.style.color='#00ff96';
+  }
+}
+
+// Called on every GPS fix and every compass reading — passively accumulates deviation
+// samples when driving steady near a 16-point mark. No UI interruption.
+function devTryRecord(){
+  const now=Date.now();
+  const gh=_devLastGpsHeading, ch=compassHeading, spd=_devLastGpsSpeedKmh;
+
+  if(gh==null||ch==null||spd<DEV_SPEED_MIN){
+    _devSteadyStart=null; _devSteadyAnchor=null;
+    return;
+  }
+  if(_devSteadyStart===null||_devSteadyAnchor===null){
+    _devSteadyStart=now; _devSteadyAnchor=gh;
+    return;
+  }
+  const steady=Math.abs(devAngDiff(gh,_devSteadyAnchor))<=DEV_STEADY_TOL;
+  if(!steady){ _devSteadyStart=now; _devSteadyAnchor=gh; return; }
+
+const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+  if(!onMark) return;
+
+  const elapsed=(now-_devSteadyStart)/1000;
+  if(elapsed<DEV_STEADY_SEC) return;
+  if(now-_devLastRecAt<DEV_REC_THROTTLE_MS) return;
+
+  const dev=devAngDiff(ch,gh);
+  if(Math.abs(dev)>90) return; // compass vs GPS track disagree by >90° — likely reversing/jitter, don't contaminate
+
+_devLastRecAt=now;
+deviationTable[devSector(gh)].push(dev);
+  devSaveTable();
+  updateDevStatus();
+  setRoseActiveSector(devSector(gh));
+  updateRosePanel();
+}
+
+updateDevStatus(); // paint initial status on load now that all calibration state exists
+
+
+// ── Deviation Rose (inline compass calibration visual) ────────────────────
+const ROSE_MIN_SAMPLES = 3;
+function roseWedgeColor(count, blinkOn) {
+  if (count <= 0)               return blinkOn ? '#fde68a' : 'rgba(255,255,255,0.07)';
+  if (count < ROSE_MIN_SAMPLES) return blinkOn ? '#fbbf24' : (count < 2 ? '#fef08a88' : '#fde04788');
+  return blinkOn ? '#4ade80' : '#22c55e';
+}
+function drawDeviationRose() {
+  const canvas = document.getElementById('rose-canvas-ltg');
+  if (!canvas) return;
+  const DPR = window.devicePixelRatio || 1;
+  const W = 160, H = 160;
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+  ctx.clearRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H / 2;
+  const rOuter = W / 2 - 18;
+  const rInner = rOuter * 0.22;
+  const counts = deviationTable.map(a => a.length);
+
+  // Background rings
+  [0.33, 0.66, 1].forEach(f => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, rInner + (rOuter - rInner) * f, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  });
+
+  // 16 wedges
+  for (let i = 0; i < DEV_N_DIRS; i++) {
+    const midDeg = i * DEV_DIR_STEP;
+    const a0 = (midDeg - DEV_DIR_STEP / 2 - 90) * Math.PI / 180;
+    const a1 = (midDeg + DEV_DIR_STEP / 2 - 90) * Math.PI / 180;
+    const isActive = i === _roseActiveRecSector;
+    const col = roseWedgeColor(counts[i], isActive && roseBlinkOn);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, rOuter, a0, a1);
+    ctx.closePath();
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.strokeStyle = isActive ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = isActive ? 1.5 : 0.5;
+    ctx.stroke();
+  }
+
+  // Hub
+  ctx.beginPath();
+  ctx.arc(cx, cy, rInner, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(8,8,18,0.95)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Direction labels
+  const DIR_NAMES_ROSE = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  for (let i = 0; i < DEV_N_DIRS; i++) {
+    const ang = (i * DEV_DIR_STEP - 90) * Math.PI / 180;
+    const lx = cx + Math.cos(ang) * (rOuter + 10);
+    const ly = cy + Math.sin(ang) * (rOuter + 10);
+    const done = counts[i] >= ROSE_MIN_SAMPLES;
+    const partial = counts[i] > 0 && !done;
+    const major = i % 4 === 0;
+    ctx.fillStyle = done ? '#4ade80' : partial ? '#fde047' : 'rgba(255,255,255,0.3)';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = (major ? 'bold 8px' : '6.5px') + ' monospace';
+    ctx.fillText(DIR_NAMES_ROSE[i], lx, ly);
+  }
+
+  // Centre summary
+  const covered = counts.filter(c => c >= ROSE_MIN_SAMPLES).length;
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(covered + '/' + DEV_N_DIRS, cx, cy - 3);
+  ctx.font = '7px monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText('dirs', cx, cy + 7);
+
+  // Meta line below canvas
+  const total = deviationTable.reduce((s, a) => s + a.length, 0);
+  const metaEl = document.getElementById('dev-rose-meta');
+  if (metaEl) metaEl.textContent = total + ' sample' + (total !== 1 ? 's' : '') + ' · ' + covered + '/' + DEV_N_DIRS + ' dirs';
+}
+
+function roseStartBlink() {
+  if (roseBlinkTimer) return;
+  roseBlinkTimer = setInterval(() => {
+    roseBlinkOn = !roseBlinkOn;
+    drawDeviationRose();
+  }, 500);
+}
+roseStartBlink();
+
+// Show rose panel once GPS+compass are both active
+function updateRosePanel() {
+  const panel = document.getElementById('dev-rose-panel');
+  if (!panel) return;
+  if (panel.style.display !== 'none') drawDeviationRose();
+}
+
+// Collapse toggle
+document.getElementById('dev-rose-close').addEventListener('click', () => {
+  document.getElementById('dev-rose-panel').style.display = 'none';
+  const roseInd = document.getElementById('cmp-rose-indicator');
+  if(roseInd){
+    roseInd.textContent = 'Show';
+    roseInd.style.background = 'rgba(138,92,246,0.12)';
+  }
+});
+
+
+
+// Wire active recording sector into rose
+function setRoseActiveSector(sectorIdx) {
+  _roseActiveRecSector = sectorIdx;
+}
+
+// Tap a wedge to see its sample count (non-destructive, just a tooltip via status)
+document.getElementById('rose-canvas-ltg').addEventListener('click', e => {
+  const canvas = document.getElementById('rose-canvas-ltg');
+  const rect   = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const py = e.clientY - rect.top;
+  const W = 160, H = 160;
+  const cx = W / 2, cy = H / 2;
+  const rOuter = W / 2 - 18, rInner = rOuter * 0.22;
+  const dx = px - cx, dy = py - cy;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < rInner || dist > rOuter) return;
+  let deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+  deg = ((deg % 360) + 360) % 360;
+  const idx = Math.round(deg / DEV_DIR_STEP) % DEV_N_DIRS;
+  const n   = deviationTable[idx].length;
+  const DIR_NAMES_ROSE = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  const avg = n ? (deviationTable[idx].reduce((s,v)=>s+v,0)/n) : null;
+  document.getElementById('devStatus').textContent =
+    '🧭 ' + DIR_NAMES_ROSE[idx] + ': ' + n + ' smp' + (avg !== null ? ' · avg ' + (avg >= 0 ? '+' : '') + avg.toFixed(1) + '°' : ' · no data');
+});
+
+  
+// Returns {heading, corrected} — corrected:true means a deviation value was applied (green line),
+// corrected:false means raw heading is used as-is (yellow line).
+function getCorrectedHeading(rawHeading){
+  if(devManualRaw) return{heading:rawHeading,corrected:false};
+
+  const avgs=deviationTable.map(devAvg);
+  const onIdx=devSector(rawHeading);
+  const onMark=devNearestDirDiff(rawHeading)<=DEV_DIR_TOL;
+
+
+  // Rule: heading lands on a captured mark -> apply that mark's deviation directly, regardless of neighbors.
+  // Require ROSE_MIN_SAMPLES before trusting the average (matches rose's green threshold).
+  if(onMark && avgs[onIdx]!==null && deviationTable[onIdx].length>=ROSE_MIN_SAMPLES){
+    const corrected=((rawHeading-avgs[onIdx])+360)%360;
+    return{heading:corrected,corrected:true};
+  }
+
+// Rule: between two marks -> interpolate if both flanking sectors have enough data.
+  const lowIdx=Math.floor((((rawHeading%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS;
+  const highIdx=(lowIdx+1)%DEV_N_DIRS;
+  const lowDev=avgs[lowIdx], highDev=avgs[highIdx];
+  if(lowDev!==null && highDev!==null && deviationTable[lowIdx].length>=ROSE_MIN_SAMPLES && deviationTable[highIdx].length>=ROSE_MIN_SAMPLES){
+    const lowAng=lowIdx*DEV_DIR_STEP;
+    const span=DEV_DIR_STEP;
+    const fromLow=(((rawHeading%360)+360)%360 - lowAng + 360)%360;
+    const tt=fromLow/span;
+    const dev=lowDev+(highDev-lowDev)*tt;
+    const corrected=((rawHeading-dev)+360)%360;
+    return{heading:corrected,corrected:true};
+  }
+
+  // Rule: straight-line correction — if driving steady off a cardinal mark, record
+  // a direct sample at this exact heading and apply it immediately.
+  // Requires the same steady/speed conditions as devTryRecord(), checked here via
+  // the live state variables rather than re-running the full accumulator.
+  const gh=_devLastGpsHeading, spd=_devLastGpsSpeedKmh;
+  if(gh!==null && spd>=DEV_SPEED_MIN && compassHeading!==null){
+    const angDiff=Math.abs(devAngDiff(rawHeading,gh));
+    const steadyElapsed=_devSteadyStart!==null?(Date.now()-_devSteadyStart)/1000:0;
+    if(angDiff<=DEV_STEADY_TOL && steadyElapsed>=DEV_STEADY_SEC){
+      // We have a confirmed steady run. Record into the nearest sector as a
+      // provisional sample so future interpolation benefits too.
+const sector=devSector(gh);
+      const dev=devAngDiff(rawHeading,gh);
+      // Only push if this is genuinely new information (throttled by devTryRecord already
+      // for on-mark cases, so guard here to avoid double-recording).
+      const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+      if(!onMark && Math.abs(dev)<=90){ // skip if compass/GPS disagree >90° (reversing/jitter)
+        const now=Date.now();
+        if(now-_devLastRecAt>=DEV_REC_THROTTLE_MS){
+          _devLastRecAt=now;
+          deviationTable[sector].push(dev);
+          devSaveTable();
+          updateDevStatus();
+        }
+      }
+      const corrected=((rawHeading-dev)+360)%360;
+      return{heading:corrected,corrected:true};
+    }
+  }
+
+  // Otherwise: not enough data -> raw heading, uncorrected.
+  return{heading:rawHeading,corrected:false};
+}
 
 const gpsIcon=L.divIcon({className:'',html:'<div class="gps-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]});
 const gpsRingIcon=L.divIcon({className:'',html:'<div class="gps-ring"></div>',iconSize:[40,40],iconAnchor:[20,20]});
@@ -1107,6 +1541,11 @@ function onGPSSuccess(pos){
 
   document.getElementById('gpsStatus').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4)+' '+accStr+spdStr+bearStr;
   _gpsLastLL={lat,lon};
+  _devLastGpsHeading=bear;
+  _devLastGpsSpeedKmh=(speed!=null&&!isNaN(speed))?speed*3.6:0;
+  devTryRecord();
+
+  
   if(!gpsMarker){
     gpsRing=L.marker([lat,lon],{icon:gpsRingIcon,interactive:false,pane:'gps'}).addTo(map);
     gpsMarker=L.marker([lat,lon],{icon:gpsIcon,interactive:false,pane:'gps'}).addTo(map);
@@ -1155,7 +1594,9 @@ function onGPSError(err){
   document.getElementById('gpsStatus').style.color='#ff8844';
 }
 
+
 function toggleGPS(){
+  requestNotifyPermission();
   if(!gpsActive){
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
@@ -1167,6 +1608,7 @@ function toggleGPS(){
     document.getElementById('gpsStatus').style.color='#ffaa00';
     if(!navigator.geolocation){onGPSError({code:2});gpsActive=false;return;}
 gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHighAccuracy:true,maximumAge:10000,timeout:15000});
+updateRosePanel();
     if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
       DeviceOrientationEvent.requestPermission().then(state=>{
         if(state==='granted'){
@@ -1254,21 +1696,62 @@ function onCompass(e){
   if(e.webkitCompassHeading!=null) h=e.webkitCompassHeading;
   else if(e.absolute&&e.alpha!=null) h=(360-e.alpha)%360;
   if(h===null||!gpsMarker) return;
+  compassHeading=h;
+  devTryRecord();
+  const{heading:hCorr,corrected}=getCorrectedHeading(h);
+
+  // Charging indicator — blink yellow line while steady timer is accumulating
+  const gh=_devLastGpsHeading, spd=_devLastGpsSpeedKmh;
+  const steadyElapsed=_devSteadyStart!==null?(Date.now()-_devSteadyStart)/1000:0;
+  const isCharging=!corrected && gh!==null && spd>=DEV_SPEED_MIN &&
+    Math.abs(devAngDiff(h,gh))<=5 && steadyElapsed>0 && steadyElapsed<DEV_STEADY_SEC;
+  const progress=isCharging?Math.min(steadyElapsed/DEV_STEADY_SEC,1):0;
+
+  let lineColor;
+  if(corrected){
+    lineColor='#00ff96';
+  } else if(isCharging){
+    // Pulse faster as progress increases; interpolate yellow→green tint
+    const g=Math.round(221+34*progress); // #ffdd00 → #ffff22 hint
+    lineColor='#ff'+g.toString(16).padStart(2,'0')+'00';
+    const pulseMs=Math.round(800-500*progress); // 800ms→300ms
+    if(!gpsCompassLine._blinkTimer){
+      gpsCompassLine._blinkTimer=setInterval(()=>{
+        if(!gpsCompassLine) return;
+        const cur=gpsCompassLine.options.opacity;
+        gpsCompassLine.setStyle({opacity:cur>0.5?0.2:0.85});
+      }, pulseMs);
+    }
+  } else {
+    lineColor='#ffdd00';
+    if(gpsCompassLine&&gpsCompassLine._blinkTimer){
+      clearInterval(gpsCompassLine._blinkTimer);
+      gpsCompassLine._blinkTimer=null;
+      gpsCompassLine.setStyle({opacity:0.85});
+    }
+  }
+
+  // Clear blink timer when corrected
+  if(corrected&&gpsCompassLine&&gpsCompassLine._blinkTimer){
+    clearInterval(gpsCompassLine._blinkTimer);
+    gpsCompassLine._blinkTimer=null;
+    gpsCompassLine.setStyle({opacity:0.85});
+  }
   _hideCompassRings();
   const ll=gpsMarker.getLatLng();
   const lat=ll.lat, lon=ll.lng;
-  const tip=_destPoint(lat,lon,h,100);
-  if(!gpsCompassLine) gpsCompassLine=L.polyline([[lat,lon],tip],{color:'#00ff96',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
-  else gpsCompassLine.setLatLngs([[lat,lon],tip]);
+  const tip=_destPoint(lat,lon,hCorr,100);
+  if(!gpsCompassLine) gpsCompassLine=L.polyline([[lat,lon],tip],{color:lineColor,weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+  else{ gpsCompassLine.setLatLngs([[lat,lon],tip]); gpsCompassLine.setStyle({color:lineColor}); }
   gpsCompassTicks.forEach(t=>map.removeLayer(t));
   gpsCompassTicks=[];
-  const perp=(h+90)%360;
+  const perp=(hCorr+90)%360;
   [25,50,75,100].forEach(dist=>{
-    const mid=_destPoint(lat,lon,h,dist);
+    const mid=_destPoint(lat,lon,hCorr,dist);
     const a=_destPoint(mid[0],mid[1],perp,10);
     const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
-    gpsCompassTicks.push(L.polyline([a,b],{color:'#00ff96',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
-    if(dist===100) gpsCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#00ff96;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km Compass</span>',iconAnchor:[-4,12]})}).addTo(map));
+    gpsCompassTicks.push(L.polyline([a,b],{color:lineColor,weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+    if(dist===100) gpsCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:'+lineColor+';font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km Compass</span>',iconAnchor:[-4,12]})}).addTo(map));
   });
 }
 
@@ -1378,10 +1861,10 @@ function connect(){
   document.getElementById('connStatus').style.color='#ffaa00';
   try{ws=new WebSocket('wss://'+srv+':443/');}
   catch(e){document.getElementById('connStatus').textContent='WebSocket blocked';document.getElementById('connStatus').style.color='#ff4444';return;}
-  ws.onopen=()=>{
+ws.onopen=()=>{
     document.getElementById('connStatus').style.color='#00ff99';
     document.getElementById('connStatus').textContent='Live';
-    ws.send(JSON.stringify({v:24,i:{},s:false,x:0,w:0,tx:0,tw:0,a:4,z:map.getZoom(),b:true,h:'',l:0,t:0,from_lightningmaps_org:true,p:[90,180,-90,-180]}));
+    try{ ws.send(JSON.stringify({v:24,i:{},s:false,x:0,w:0,tx:0,tw:0,a:4,z:map.getZoom(),b:true,h:'',l:0,t:0,from_lightningmaps_org:true,p:[90,180,-90,-180]})); }catch(e){}
   };
 
   ws.onmessage=(event)=>{
@@ -1410,7 +1893,6 @@ setInterval(()=>{
   }
 },5000);
 
-connect();
 connect();
 (function initFakeGPS(){
   const fakeLL={lat:53.5461,lng:-113.4938}; // Edmonton fallback
@@ -1514,7 +1996,7 @@ map.on('mouseup touchend touchmove', () => { clearTimeout(_lpTimer); });
 
 // ── RAWS Stations ─────────────────────────────────────────────
 const stations = {};
-let stationLabelMarkers = [], stationLabelsVisible = true, stationFocusMarker = null;
+let stationLabelsVisible = true, stationFocusMarker = null;
 
 fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/stations.csv')
   .then(r => r.text())
@@ -1569,6 +2051,103 @@ document.getElementById('station-toggle').addEventListener('click', function(){
   });
   this.classList.toggle('active', stationLabelsVisible);
 });
+
+(function initCompassMenu(){
+  const btn      = document.getElementById('compass-menu-btn');
+  const popup    = document.getElementById('compass-popup');
+  const indicator= document.getElementById('cmp-toggle-indicator');
+  const roseInd  = document.getElementById('cmp-rose-indicator');
+
+  function syncIndicators(){
+    // Correction toggle
+    if(devManualRaw){
+      indicator.textContent='OFF';
+      indicator.style.background='rgba(255,100,100,0.12)';
+      indicator.style.borderColor='rgba(255,100,100,0.5)';
+      indicator.style.color='#f87171';
+      btn.classList.remove('active');
+      btn.style.borderColor='rgba(255,100,100,0.4)';
+      btn.style.color='#f87171';
+    } else {
+      indicator.textContent='ON';
+      indicator.style.background='rgba(0,255,150,0.15)';
+      indicator.style.borderColor='#00ff96';
+      indicator.style.color='#00ff96';
+      btn.classList.add('active');
+      btn.style.borderColor='';
+      btn.style.color='';
+    }
+    // Rose visibility
+    const rosePanel = document.getElementById('dev-rose-panel');
+    const roseOpen  = rosePanel && rosePanel.style.display !== 'none';
+    roseInd.textContent  = roseOpen ? 'Hide' : 'Show';
+    roseInd.style.background = roseOpen ? 'rgba(138,92,246,0.25)' : 'rgba(138,92,246,0.12)';
+  }
+
+  function positionPopup(){
+    const br = btn.getBoundingClientRect();
+    const pw = 210;
+    let left = br.right - pw;
+    if(left < 8) left = 8;
+    popup.style.left = left + 'px';
+    popup.style.top  = (br.bottom + 6) + 'px';
+  }
+
+  function openMenu(){
+    syncIndicators();
+    positionPopup();
+    popup.style.display = 'block';
+  }
+  function closeMenu(){ popup.style.display = 'none'; }
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    popup.style.display === 'none' ? openMenu() : closeMenu();
+  });
+
+  // Correction toggle
+  document.getElementById('cmp-toggle-row').addEventListener('click', () => {
+    devManualRaw = !devManualRaw;
+    updateDevStatus();
+    syncIndicators();
+    closeMenu();
+  });
+
+  // Rose toggle
+  document.getElementById('cmp-rose-row').addEventListener('click', () => {
+    const rosePanel = document.getElementById('dev-rose-panel');
+    if(!rosePanel) return;
+    const wasHidden = rosePanel.style.display === 'none' || rosePanel.style.display === '';
+    if(wasHidden){
+      rosePanel.style.display = 'block';
+      drawDeviationRose();
+    } else {
+      rosePanel.style.display = 'none';
+    }
+    syncIndicators();
+    closeMenu();
+  });
+
+  // Reset calibration
+  document.getElementById('cmp-reset-row').addEventListener('click', () => {
+    closeMenu();
+    if(!confirm('Reset compass deviation calibration? This deletes all '+deviationTable.reduce((s,a)=>s+a.length,0)+' collected samples.')) return;
+    deviationTable = Array.from({length:DEV_N_DIRS}, ()=>[]);
+    devSaveTable();
+    updateDevStatus();
+    drawDeviationRose();
+  });
+
+  // Cancel
+  document.getElementById('cmp-cancel-row').addEventListener('click', closeMenu);
+
+  // Close on outside click
+  document.addEventListener('click', e => {
+    if(!popup.contains(e.target) && e.target !== btn) closeMenu();
+  });
+
+  map.on('click', closeMenu);
+})();
 
 // ── EC Public Forecast Modal ──────────────────────────────────
 (function initECForecast() {
