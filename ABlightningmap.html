@@ -681,11 +681,28 @@ const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
 const PROX_FADE_DELAY_MS = 30000;  // ms after last strike before warning clears
 
 
+
 let proximityRing=null, proximityWarning=null, proximityActive=false;
 let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity, _proxFadeTimer=null;
 let _proxVibratedKey=null;
 let _proxLastRenderedKey='';
+let _proxNotifiedKey=null; // tracks last state we already sent a notification for
+
+function requestNotifyPermission(){
+  if(!('Notification' in window)) return;
+  if(Notification.permission==='default') Notification.requestPermission();
+}
+
+function sendProximityNotification(isWarning,count,closestKm){
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const title = isWarning ? '⚡ LIGHTNING WARNING' : '⚡ LIGHTNING CAUTION';
+  const body = count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closestKm.toFixed(1)+' km';
+  try{
+    const n=new Notification(title,{body,tag:'ltg-proximity',renotify:true});
+    n.onclick=()=>{ window.focus(); n.close(); };
+  }catch(e){ console.warn('[notify]',e); }
+}
 
 function triggerProximityVibrate(){
   if(!navigator.vibrate) return;
@@ -733,7 +750,15 @@ const isWarning=closest<=PROX_WARNING_KM;
       triggerProximityVibrate();
       _proxVibratedKey=newestWarningLL.key;
     }
+
     _proxLastWasWarning=isWarning;
+
+    // Fire a notification only on a fresh entry into this severity level, not every tick.
+    const notifyKey=isWarning?'warning':'caution';
+    if(notifyKey!==_proxNotifiedKey){
+      _proxNotifiedKey=notifyKey;
+      sendProximityNotification(isWarning,count,closest);
+    }
 
     // Skip full re-render if nothing meaningful changed
     const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
@@ -849,9 +874,11 @@ if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._p
     if(window._proxDistLabel){ map.removeLayer(window._proxDistLabel); window._proxDistLabel=null; }
     if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
 
+
     _proxLastStrikeTime=-Infinity;
     _proxLastWasWarning=false;
     _proxLastRenderedKey='';
+    _proxNotifiedKey=null; // reset so re-entering CAUTION/WARNING later fires again
     proximityActive=false;
   }
 }
@@ -1533,7 +1560,9 @@ function onGPSError(err){
   document.getElementById('gpsStatus').style.color='#ff8844';
 }
 
+
 function toggleGPS(){
+  requestNotifyPermission();
   if(!gpsActive){
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
