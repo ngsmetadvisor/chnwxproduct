@@ -212,6 +212,14 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 const map = L.map('map', { zoomControl:true, attributionControl:true, preferCanvas:true })
   .setView([22.3, 114.2], 8);
 
+let wakeLock=null;
+async function requestWakeLock(){
+  if(!('wakeLock' in navigator)) return;
+  try{ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{wakeLock=null;}); }catch(e){ console.warn('[wakeLock]',e); }
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&!wakeLock) requestWakeLock(); });
+requestWakeLock();
+
 const BASEMAPS = {
   dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
@@ -465,9 +473,27 @@ const PROX_WARNING_KM=PROX_RADIUS_KM*PROX_WARNING_PCT;
 const PROX_VIBRATE_MS=[200,100,200,100,200];
 let proximityRing=null,proximityWarning=null,proximityActive=false;
 let _proxLastWasWarning=false;
-let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null,_proxVibratedKey=null;
+let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxVibratedKey=null;
 let _proxLastRenderedKey='';
+let _proxLastNearestKey='';
+let _proxNotifiedKey=null;
 let _gpsLastLL=null;
+const PROX_FADE_DELAY_MS=10000;
+
+function startProxCountdownFill(){
+  const fill=document.getElementById('prox-countdown-fill');
+  if(!fill) return;
+  fill.style.transition='none'; fill.style.width='100%';
+  void fill.offsetWidth;
+  requestAnimationFrame(()=>{ fill.style.transition='width '+PROX_FADE_DELAY_MS+'ms linear'; fill.style.width='0%'; });
+}
+
+function sendProximityNotification(isWarning,count,closestKm){
+  if(!('Notification' in window)||Notification.permission!=='granted') return;
+  const title=isWarning?'⚡ LIGHTNING WARNING':'⚡ LIGHTNING CAUTION';
+  const body=count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closestKm.toFixed(1)+' km';
+  try{ const n=new Notification(title,{body,tag:'ltg-proximity',renotify:true}); n.onclick=()=>{window.focus();n.close();}; }catch(e){ console.warn('[notify]',e); }
+}
 
 
 
@@ -493,7 +519,7 @@ function checkLightningProximity(){
   let newestWarningLL=null,closestWarningDist=Infinity;
   let newestCautionLL=null,closestCautionDist=Infinity;
   strokes.forEach(m=>{
-    if((now-m._strokeTime)>60)return;
+    if((now-m._strokeTime)>10)return;
     const d=haversineKm(lat,lon,m._lat,m._lon);
     if(d<=PROX_RADIUS_KM){
       count++;if(d<closest)closest=d;
@@ -512,66 +538,73 @@ if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarni
       }
     });
   }
-  window._proxNearestLL=newestWarningLL||newestCautionLL;
-  const hasNewStrike=(newestWarningLL||newestCautionLL)?true:false;
-  if(hasNewStrike){_proxLastStrikeTime=t||Date.now()/1000;if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}}
-if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
-  const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
-  if(count>0 && _proxElapsed<10){
-const isWarning=closest<=PROX_WARNING_KM;
+window._proxNearestLL=newestWarningLL||newestCautionLL;
+  const _nearestKey=window._proxNearestLL?(window._proxNearestLL.key||(window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4))):'';
+  const hasNewStrike=_nearestKey!==''&&_nearestKey!==_proxLastNearestKey;
+  if(hasNewStrike){ _proxLastNearestKey=_nearestKey; _proxLastRenderedKey=''; }
+  if(hasNewStrike){
+    _proxLastStrikeTime=t||Date.now()/1000;
+    if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
+    startProxCountdownFill();
+  }
+  if(count>0){
+    const isWarning=closest<=PROX_WARNING_KM;
     if(isWarning&&newestWarningLL&&newestWarningLL.key&&newestWarningLL.key!==_proxVibratedKey){
-      triggerProximityVibrate();
-      _proxVibratedKey=newestWarningLL.key;
+      triggerProximityVibrate(); _proxVibratedKey=newestWarningLL.key;
     }
     _proxLastWasWarning=isWarning;
+    const notifyKey=isWarning?'warning':'caution';
+    if(notifyKey!==_proxNotifiedKey){ _proxNotifiedKey=notifyKey; sendProximityNotification(isWarning,count,closest); }
     const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
     if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
     _proxLastRenderedKey=renderKey;
     const lineColor=isWarning?'#ff4400':'#ffdd00';
     if(!window._proxNearestLine){
       window._proxNearestLine=L.polyline([[lat,lon],[window._proxNearestLL.lat,window._proxNearestLL.lon]],{color:lineColor,weight:2,opacity:0.85,dashArray:'6 5',interactive:false,pane:'gps'}).addTo(map);
-    }else{window._proxNearestLine.setLatLngs([[lat,lon],[window._proxNearestLL.lat,window._proxNearestLL.lon]]);window._proxNearestLine.setStyle({color:lineColor});}
+    }else{ window._proxNearestLine.setLatLngs([[lat,lon],[window._proxNearestLL.lat,window._proxNearestLL.lon]]); window._proxNearestLine.setStyle({color:lineColor}); }
     const midLat=(lat+window._proxNearestLL.lat)/2,midLon=(lon+window._proxNearestLL.lon)/2;
     const distLabel=closest>=100?Math.round(closest)+' km':closest.toFixed(1)+' km';
     if(!window._proxDistLabel){
       window._proxDistLabel=L.marker([midLat,midLon],{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<div id="prox-dist-label" style="color:'+lineColor+';font-size:11px;font-family:monospace;font-weight:700;white-space:nowrap;text-shadow:0 0 4px #000,0 0 4px #000;transform:translate(-50%,-50%);position:absolute;">'+distLabel+'</div>',iconSize:[0,0],iconAnchor:[0,0]})}).addTo(map);
-    }else{window._proxDistLabel.setLatLng([midLat,midLon]);const el=document.getElementById('prox-dist-label');if(el){el.textContent=distLabel;el.style.color=lineColor;}}
-    if(!proximityRing){proximityRing=L.circle([lat,lon],{radius:PROX_RADIUS_KM*1000,pane:'gps',color:'#ff4400',weight:2,opacity:0.7,fillColor:'#ff4400',fillOpacity:0.04,dashArray:'8 6',interactive:false}).addTo(map);}
+    }else{ window._proxDistLabel.setLatLng([midLat,midLon]); const el=document.getElementById('prox-dist-label'); if(el){el.textContent=distLabel;el.style.color=lineColor;} }
+    if(!proximityRing){ proximityRing=L.circle([lat,lon],{radius:PROX_RADIUS_KM*1000,pane:'gps',color:'#ff4400',weight:2,opacity:0.7,fillColor:'#ff4400',fillOpacity:0.04,dashArray:'8 6',interactive:false}).addTo(map); }
     else proximityRing.setLatLng([lat,lon]);
-    const color=isWarning?'#ff4400':'#ffdd00';
-    const colorBg=isWarning?'rgba(255,68,0,0.18)':'rgba(255,221,0,0.12)';
+    const color=isWarning?'#cc2200':'#a16207';
     const label=isWarning?'⚡ LIGHTNING WARNING':'⚡ LIGHTNING CAUTION';
     if(!proximityWarning){
-proximityWarning=document.createElement('div');
+      proximityWarning=document.createElement('div');
       proximityWarning.id='proximity-warning';
-      proximityWarning.style.cssText='position:absolute;bottom:0;left:50%;transform:translateX(-50%);z-index:1500;pointer-events:none;display:flex;flex-direction:column;align-items:center;min-width:260px;max-width:90vw;';
+      proximityWarning.style.cssText='position:fixed;bottom:36px;left:50%;transform:translateX(-50%);z-index:9000;pointer-events:none;display:flex;flex-direction:column;align-items:center;min-width:260px;max-width:90vw;';
       const sty=document.createElement('style');
-      sty.textContent='@keyframes proximityPulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes proximityFadeIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+      sty.textContent='@keyframes proximityFadeIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
       document.head.appendChild(sty);
-      proximityWarning.innerHTML='<div id="prox-banner" style="border-radius:10px;padding:8px 20px;text-align:center;font-family:\'Courier New\',monospace;background:rgba(8,8,18,0.95);backdrop-filter:blur(6px);border:1.5px solid;width:100%;box-sizing:border-box;"><div id="prox-label" style="font-size:13px;font-weight:700;letter-spacing:0.07em;"></div><div id="prox-detail" style="font-size:10px;margin-top:2px;opacity:0.9;"></div></div>';
+      proximityWarning.innerHTML='<div id="prox-banner" style="position:relative;border-radius:10px;padding:9px 20px;text-align:center;font-family:\'Courier New\',monospace;border:2px solid;width:100%;box-sizing:border-box;background:#e8e8e8;overflow:hidden;"><div id="prox-countdown-fill" style="position:absolute;inset:0;background:#ffffff;width:100%;border-radius:8px;pointer-events:none;"></div><div style="position:relative;"><div id="prox-label" style="font-size:14px;font-weight:800;letter-spacing:0.07em;"></div><div id="prox-detail" style="font-size:11px;font-weight:700;margin-top:3px;"></div><div id="prox-time" style="font-size:9px;font-weight:600;margin-top:2px;color:#555;"></div></div></div>';
       proximityWarning.style.animation='proximityFadeIn 0.3s ease';
-      document.getElementById('map').appendChild(proximityWarning);proximityActive=true;
+      document.body.appendChild(proximityWarning); proximityActive=true;
+      startProxCountdownFill();
     }
     const banner=document.getElementById('prox-banner');
-    banner.style.borderColor=color;
-    banner.style.animation=isWarning?'proximityPulse 1.2s ease-in-out infinite':'none';
-    document.getElementById('prox-label').style.color=color;document.getElementById('prox-label').textContent=label;
+    banner.style.background='#e8e8e8'; banner.style.borderColor=color; banner.style.animation='none';
+    document.getElementById('prox-label').style.color=color; document.getElementById('prox-label').textContent=label;
     document.getElementById('prox-detail').style.color=color;
     document.getElementById('prox-detail').textContent=count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closest.toFixed(1)+' km';
-    if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
-      if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
-      if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
-      if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
-      if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-      proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
-    },5000);}
+    const nowD=new Date(); document.getElementById('prox-time').textContent='Updated '+nowD.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Hong_Kong'})+' HKT';
+    if(!_proxFadeTimer){
+      _proxFadeTimer=setTimeout(()=>{
+        if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
+        if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
+        if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
+        if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
+        proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';_proxLastNearestKey='';_proxNotifiedKey=null;
+      },PROX_FADE_DELAY_MS);
+    }
   } else {
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
     if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
     if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
-    _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
+    if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
+    _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';_proxLastNearestKey='';_proxNotifiedKey=null;proximityActive=false;
   }
 }
 
@@ -809,6 +842,7 @@ function onCompass(e){
 }
 
 function toggleGPS(){
+  if(!('Notification' in window)||Notification.permission==='default') { try{Notification.requestPermission().then(()=>{});}catch(e){} }
   if(!gpsActive){
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeCompassLine){map.removeLayer(window._fakeCompassLine);window._fakeCompassLine=null;}
