@@ -693,7 +693,23 @@ const PROX_RADIUS_KM     = 10000  // total watch radius distance in km. 100km in
 const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
 const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
 const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
-const PROX_FADE_DELAY_MS = 30000;  // ms after last strike before warning clears
+
+const PROX_FADE_DELAY_MS = 10000;  // ms after last strike before warning clears — must match setTimeout below
+
+function startProxCountdownFill(){
+  const fill=document.getElementById('prox-countdown-fill');
+  if(!fill) return;
+  // Restart the CSS transition cleanly: snap to full width with no transition, then
+  // on next frame kick off the drain so the browser doesn't merge/skip the reset.
+  fill.style.transition='none';
+  fill.style.width='100%';
+  // Force reflow so the 100% width is committed before re-enabling the transition
+  void fill.offsetWidth;
+  requestAnimationFrame(()=>{
+    fill.style.transition='width '+PROX_FADE_DELAY_MS+'ms linear';
+    fill.style.width='0%';
+  });
+}
 
 
 
@@ -786,9 +802,10 @@ if(d<=PROX_WARNING_KM){
   });
 window._proxNearestLL = newestWarningLL || newestCautionLL;
   const hasNewStrike = (newestWarningLL || newestCautionLL) ? true : false;
+
   if(hasNewStrike){
     _proxLastStrikeTime = t||Date.now()/1000;
-    if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
+    if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; startProxCountdownFill(); }
   }
 if(count>0){
     // Determine warning vs caution first
@@ -877,16 +894,23 @@ style.textContent=`
       `;
       document.head.appendChild(style);
 
+
       proximityWarning.innerHTML=`
         <div id="prox-banner" style="
-          border-radius:10px;padding:9px 20px;text-align:center;
+          position:relative;border-radius:10px;padding:9px 20px;text-align:center;
           font-family:'Courier New',monospace;
           border:2px solid;width:100%;box-sizing:border-box;
-          background:#ffffff;
+          background:#e8e8e8;overflow:hidden;
         ">
-          <div id="prox-label" style="font-size:14px;font-weight:800;letter-spacing:0.07em;"></div>
-          <div id="prox-detail" style="font-size:11px;font-weight:700;margin-top:3px;"></div>
-          <div id="prox-time" style="font-size:9px;font-weight:600;margin-top:2px;color:#555;"></div>
+          <div id="prox-countdown-fill" style="
+            position:absolute;inset:0;background:#ffffff;
+            width:100%;border-radius:8px;
+          "></div>
+          <div style="position:relative;">
+            <div id="prox-label" style="font-size:14px;font-weight:800;letter-spacing:0.07em;"></div>
+            <div id="prox-detail" style="font-size:11px;font-weight:700;margin-top:3px;"></div>
+            <div id="prox-time" style="font-size:9px;font-weight:600;margin-top:2px;color:#555;"></div>
+          </div>
         </div>
       `;
       proximityWarning.style.animation='proximityFadeIn 0.3s ease';
@@ -907,7 +931,9 @@ count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+clo
     const nowD=new Date();
     document.getElementById('prox-time').textContent=
       'Updated '+nowD.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
     if(!_proxFadeTimer){
+      startProxCountdownFill();
       _proxFadeTimer=setTimeout(()=>{
         if(proximityRing){ map.removeLayer(proximityRing); proximityRing=null; }
         if(proximityWarning){ proximityWarning.remove(); proximityWarning=null; }
@@ -915,7 +941,7 @@ count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+clo
         if(window._proxDistLabel){ map.removeLayer(window._proxDistLabel); window._proxDistLabel=null; }
         proximityActive=false; _proxFadeTimer=null;
         _proxLastRenderedKey='';
-      },10000);
+      },PROX_FADE_DELAY_MS);
     }
   } else {
     // Clear
