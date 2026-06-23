@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head> 
 <meta charset="UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -806,6 +806,7 @@ window._proxNearestLL = newestWarningLL || newestCautionLL;
 if(hasNewStrike){
     _proxLastStrikeTime = t||Date.now()/1000;
     if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
+    _proxLastRenderedKey=''; // force re-render so the timer block below runs
   }
 if(count>0){
     // Determine warning vs caution first
@@ -939,8 +940,8 @@ count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+clo
         if(proximityWarning){ proximityWarning.remove(); proximityWarning=null; }
         if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._proxNearestLine=null; }
         if(window._proxDistLabel){ map.removeLayer(window._proxDistLabel); window._proxDistLabel=null; }
-        proximityActive=false; _proxFadeTimer=null;
-        _proxLastRenderedKey='';
+proximityActive=false; _proxFadeTimer=null;
+        _proxLastRenderedKey=''; _proxNotifiedKey=null;
       },PROX_FADE_DELAY_MS);
     }
   } else {
