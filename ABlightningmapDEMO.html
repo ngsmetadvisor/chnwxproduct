@@ -524,18 +524,31 @@ window.addEventListener('unhandledrejection', function(e){
   e.preventDefault();
 });
 
+
 map.on('click', function(e){
-  if(!strokes.length) return;
+  if(!strokes.length && !ecLightningPoints.length) return;
   const clickLL=e.latlng;
   const clickPx=map.latLngToContainerPoint(clickLL);
   const TOLERANCE=12; // px
-  let best=null, bestDist=Infinity;
+  let best=null, bestDist=Infinity, bestIsEc=false;
   strokes.forEach(m=>{
     const mPx=map.latLngToContainerPoint([m._lat,m._lon]);
     const dx=mPx.x-clickPx.x, dy=mPx.y-clickPx.y;
     const px=Math.sqrt(dx*dx+dy*dy);
-    if(px<TOLERANCE&&px<bestDist){bestDist=px;best=m;}
+    if(px<TOLERANCE&&px<bestDist){bestDist=px;best=m;bestIsEc=false;}
   });
+  if(ecLightningEnabled){
+    ecLightningPoints.forEach(p=>{
+      const pPx=map.latLngToContainerPoint([p.lat,p.lon]);
+      const dx=pPx.x-clickPx.x, dy=pPx.y-clickPx.y;
+      const px=Math.sqrt(dx*dx+dy*dy);
+      if(px<TOLERANCE&&px<bestDist){
+        bestDist=px;
+        best={_lat:p.lat,_lon:p.lon,_strokeTime:new Date(p.isoTime).getTime()/1000,_ecApprox:true};
+        bestIsEc=true;
+      }
+    });
+  }
   if(!best) return;
   const now=t||Date.now()/1000;
   const age=now-best._strokeTime;
@@ -568,8 +581,8 @@ map.on('click', function(e){
   }
   const popupContent=
     '<div style="font-family:monospace;font-size:11px;line-height:1.8;color:#ccc;min-width:160px;">'+
-    '<div style="font-size:12px;font-weight:700;color:#ffdd00;margin-bottom:4px;">⚡ Lightning Strike</div>'+
-    '<div>🕐 '+timeStr+'</div>'+
+    '<div style="font-size:12px;font-weight:700;color:#ffdd00;margin-bottom:4px;">⚡ '+(best._ecApprox?'EC Lightning (3h, ~10min bucket)':'Lightning Strike')+'</div>'+
+    '<div>🕐 '+(best._ecApprox?'~':'')+timeStr+'</div>'+
     '<div>📅 '+dateStr+' ('+ageStr+')</div>'+
     '<div>📍 '+best._lat.toFixed(4)+'°, '+best._lon.toFixed(4)+'°</div>'+
     (distStr?'<div>📏 '+distStr+' from you</div>':'')+
@@ -676,7 +689,7 @@ map.on('zoomanim zoom', function(){
   _zoomThrottle=setTimeout(()=>{_zoomThrottle=null;},100);
 });
 // ── Lightning Proximity Warning ───────────────────────────────
-const PROX_RADIUS_KM     = 10000  // total watch radius distance in km. 100km in default
+const PROX_RADIUS_KM     = 100  // total watch radius distance in km. 100km in default
 const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
 const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
 const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
@@ -846,10 +859,9 @@ const isWarning=closest<=PROX_WARNING_KM;
 
 
 
-    const color=isWarning?'#ff4400':'#ffdd00';
-    const colorBg=isWarning?'rgba(255,68,0,0.18)':'rgba(255,221,0,0.12)';
+ const color=isWarning?'#cc2200':'#a16207'; // darker shades for legible bold text on white
     const label=isWarning?'⚡ LIGHTNING WARNING':'⚡ LIGHTNING CAUTION';
-
+  
     if(!proximityWarning){
       proximityWarning=document.createElement('div');
       proximityWarning.id='proximity-warning';
@@ -860,19 +872,21 @@ const isWarning=closest<=PROX_WARNING_KM;
         min-width:260px;max-width:90vw;
       `;
       const style=document.createElement('style');
-      style.textContent=`
-        @keyframes proximityPulse{0%,100%{opacity:1}50%{opacity:0.5}}
+style.textContent=`
         @keyframes proximityFadeIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
       `;
       document.head.appendChild(style);
+
       proximityWarning.innerHTML=`
         <div id="prox-banner" style="
-          border-radius:10px;padding:8px 20px;text-align:center;
-          font-family:'Courier New',monospace;backdrop-filter:blur(6px);
-          border:1.5px solid;width:100%;box-sizing:border-box;
+          border-radius:10px;padding:9px 20px;text-align:center;
+          font-family:'Courier New',monospace;
+          border:2px solid;width:100%;box-sizing:border-box;
+          background:#ffffff;
         ">
-          <div id="prox-label" style="font-size:13px;font-weight:700;letter-spacing:0.07em;"></div>
-          <div id="prox-detail" style="font-size:10px;margin-top:2px;opacity:0.85;"></div>
+          <div id="prox-label" style="font-size:14px;font-weight:800;letter-spacing:0.07em;"></div>
+          <div id="prox-detail" style="font-size:11px;font-weight:700;margin-top:3px;"></div>
+          <div id="prox-time" style="font-size:9px;font-weight:600;margin-top:2px;color:#555;"></div>
         </div>
       `;
       proximityWarning.style.animation='proximityFadeIn 0.3s ease';
@@ -880,16 +894,19 @@ const isWarning=closest<=PROX_WARNING_KM;
       proximityActive=true;
     }
 
+
     const banner=document.getElementById('prox-banner');
-    const animClass=isWarning?'proximityPulse 1.2s ease-in-out infinite':'none';
-    banner.style.background=colorBg;
+    banner.style.background='#ffffff';
     banner.style.borderColor=color;
-    banner.style.animation=animClass;
+    banner.style.animation='none';
     document.getElementById('prox-label').style.color=color;
     document.getElementById('prox-label').textContent=label;
     document.getElementById('prox-detail').style.color=color;
 document.getElementById('prox-detail').textContent=
 count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closest.toFixed(1)+' km';
+    const nowD=new Date();
+    document.getElementById('prox-time').textContent=
+      'Updated '+nowD.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     if(!_proxFadeTimer){
       _proxFadeTimer=setTimeout(()=>{
         if(proximityRing){ map.removeLayer(proximityRing); proximityRing=null; }
@@ -1758,9 +1775,13 @@ function onCompass(e){
 document.getElementById('gps-btn').addEventListener('click',toggleGPS);
 
 // ── EC Past Lightning (GeoMet 3h) ─────────────────────────────
+
+let ecLightningPoints=[]; // {lat,lon,isoTime} detected from rendered tiles, for click hit-testing
+
 async function loadECLightning(){
   ecLightningLayers.forEach(l=>{try{map.removeLayer(l);}catch(e){}});
   ecLightningLayers=[];
+  ecLightningPoints=[]; // stale frames are gone — rebuild fresh as new tiles render
   let times=[];
   try{
     const res=await fetch('https://geo.weather.gc.ca/geomet?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities&LAYER=Lightning_2.5km_Density',{signal:AbortSignal.timeout(10000)});
@@ -1821,9 +1842,17 @@ async function loadECLightning(){
               visited[ny*256+nx]=1;stack.push([nx,ny]);
             }
           }
+
           const cx2=Math.round(sumX/count),cy2=Math.round(sumY/count);
           ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(cx2-5,cy2-5,11,11);
           ctx.fillText('⚡',cx2,cy2);
+          // Convert this symbol's pixel centre to lat/lon and remember it for click hit-testing
+          try{
+            const xMeter=nwM.x+(cx2/256)*(seM.x-nwM.x);
+            const yMeter=nwM.y-(cy2/256)*(nwM.y-seM.y);
+            const ll=L.CRS.EPSG3857.unproject(L.point(xMeter,yMeter));
+            ecLightningPoints.push({lat:ll.lat,lon:ll.lng,isoTime:this._isoTime});
+          }catch(ex){}
         }}
         done(null,tile);
       };
