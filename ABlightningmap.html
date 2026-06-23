@@ -2,7 +2,7 @@
 <html lang="en">
 <head> 
 <meta charset="UTF-8">
-
+ 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -903,9 +903,9 @@ style.textContent=`
           border:2px solid;width:100%;box-sizing:border-box;
           background:#e8e8e8;overflow:hidden;
         ">
-          <div id="prox-countdown-fill" style="
+<div id="prox-countdown-fill" style="
             position:absolute;inset:0;background:#ffffff;
-            width:100%;border-radius:8px;
+            width:100%;border-radius:8px;pointer-events:none;
           "></div>
           <div style="position:relative;">
             <div id="prox-label" style="font-size:14px;font-weight:800;letter-spacing:0.07em;"></div>
@@ -914,14 +914,15 @@ style.textContent=`
           </div>
         </div>
       `;
-      proximityWarning.style.animation='proximityFadeIn 0.3s ease';
+proximityWarning.style.animation='proximityFadeIn 0.3s ease';
       document.body.appendChild(proximityWarning);
       proximityActive=true;
+      startProxCountdownFill();
     }
 
 
-    const banner=document.getElementById('prox-banner');
-    banner.style.background='#ffffff';
+const banner=document.getElementById('prox-banner');
+    banner.style.background='#e8e8e8';
     banner.style.borderColor=color;
     banner.style.animation='none';
     document.getElementById('prox-label').style.color=color;
@@ -933,8 +934,8 @@ count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+clo
     document.getElementById('prox-time').textContent=
       'Updated '+nowD.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
-    if(!_proxFadeTimer){
-      startProxCountdownFill();
+if(!_proxFadeTimer){
+      if(proximityWarning) startProxCountdownFill();
       _proxFadeTimer=setTimeout(()=>{
         if(proximityRing){ map.removeLayer(proximityRing); proximityRing=null; }
         if(proximityWarning){ proximityWarning.remove(); proximityWarning=null; }
