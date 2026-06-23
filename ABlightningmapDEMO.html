@@ -795,8 +795,8 @@ let closest=Infinity, count=0;
       if(d<closest) closest=d;
 if(d<=PROX_WARNING_KM){
         if(d<closestWarningDist){ closestWarningDist=d; newestWarningLL={lat:m._lat,lon:m._lon,key:'ws_'+m._strokeTime+'_'+m._lat+'_'+m._lon}; }
-      } else {
-        if(d<closestCautionDist){ closestCautionDist=d; newestCautionLL={lat:m._lat,lon:m._lon}; }
+} else {
+        if(d<closestCautionDist){ closestCautionDist=d; newestCautionLL={lat:m._lat,lon:m._lon,key:'cs_'+m._strokeTime+'_'+m._lat+'_'+m._lon}; }
       }
     }
   });
