@@ -914,9 +914,10 @@ style.textContent=`
           </div>
         </div>
       `;
-      proximityWarning.style.animation='proximityFadeIn 0.3s ease';
+proximityWarning.style.animation='proximityFadeIn 0.3s ease';
       document.body.appendChild(proximityWarning);
       proximityActive=true;
+      startProxCountdownFill();
     }
 
 
@@ -933,8 +934,8 @@ count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+clo
     document.getElementById('prox-time').textContent=
       'Updated '+nowD.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
-    if(!_proxFadeTimer){
-      startProxCountdownFill();
+if(!_proxFadeTimer){
+      if(proximityWarning) startProxCountdownFill();
       _proxFadeTimer=setTimeout(()=>{
         if(proximityRing){ map.removeLayer(proximityRing); proximityRing=null; }
         if(proximityWarning){ proximityWarning.remove(); proximityWarning=null; }
