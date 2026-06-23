@@ -190,7 +190,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       <span>Strikes: <span id="counter">0</span></span>
       <span id="connStatus">Connecting…</span>
       <span id="delay"></span>
-      <span id="gpsStatus"></span>
+<span id="gpsStatus"></span>
+      <span id="devStatus" style="font-size:10px;color:#00ff96;cursor:pointer;" title="Tap to toggle raw/corrected"></span>
       <div class="legend">
         <div class="leg-item"><div id="leg-dot-new" class="leg-dot" style="background:#ffffff;box-shadow:0 0 4px #fff;"></div> New</div>
         <div class="leg-item"><div id="leg-dot-1m" class="leg-dot" style="background:#ffee00;"></div> &lt;1m</div>
@@ -733,6 +734,100 @@ enableRadar();
 // ── GPS ────────────────────────────────────────────────────────
 let gpsMarker=null,gpsRing=null,gpsAccCircle=null,gpsHeadingLine=null,gpsCompassLine=null,gpsCompassTicks=[],gpsActive=false,gpsWatchId=null;
 let _gpsPrev=null;
+let compassHeading=null;
+
+// ── Compass Deviation Calibration ─────────────────────────────
+const DEV_N_DIRS=16, DEV_DIR_STEP=360/DEV_N_DIRS;
+const DEV_STEADY_SEC=5, DEV_STEADY_TOL=5, DEV_SPEED_MIN=3, DEV_DIR_TOL=5;
+const DEV_STORAGE_KEY='compass_deviations_v1';
+const DEV_REC_THROTTLE_MS=2000;
+const ROSE_MIN_SAMPLES=3;
+let deviationTable=Array.from({length:DEV_N_DIRS},()=>[]);
+let devManualRaw=false;
+let _devSteadyStart=null, _devSteadyAnchor=null, _devLastRecAt=0;
+let _devLastGpsHeading=null, _devLastGpsSpeedKmh=0;
+
+function devSaveTable(){ try{ localStorage.setItem(DEV_STORAGE_KEY,JSON.stringify(deviationTable)); }catch(e){} }
+function devLoadTable(){
+  try{
+    const raw=localStorage.getItem(DEV_STORAGE_KEY);
+    if(!raw) return;
+    const saved=JSON.parse(raw);
+    if(Array.isArray(saved)&&saved.length===DEV_N_DIRS) saved.forEach((arr,i)=>{ if(Array.isArray(arr)) deviationTable[i]=arr; });
+  }catch(e){}
+}
+devLoadTable();
+
+function devAngDiff(a,b){ let d=((a-b)+360)%360; return d>180?d-360:d; }
+function devSector(h){ return Math.round((((h%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS; }
+function devNearestDirDiff(h){ return Math.abs(devAngDiff(h,devSector(h)*DEV_DIR_STEP)); }
+function devAvg(arr){ return arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null; }
+function devCapturedCount(){ return deviationTable.filter(arr=>arr.length>0).length; }
+
+function devTryRecord(){
+  const now=Date.now();
+  const gh=_devLastGpsHeading, ch=compassHeading, spd=_devLastGpsSpeedKmh;
+  if(gh==null||ch==null||spd<DEV_SPEED_MIN){ _devSteadyStart=null; _devSteadyAnchor=null; return; }
+  if(_devSteadyStart===null||_devSteadyAnchor===null){ _devSteadyStart=now; _devSteadyAnchor=gh; return; }
+  const steady=Math.abs(devAngDiff(gh,_devSteadyAnchor))<=DEV_STEADY_TOL;
+  if(!steady){ _devSteadyStart=now; _devSteadyAnchor=gh; return; }
+  const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+  if(!onMark) return;
+  const elapsed=(now-_devSteadyStart)/1000;
+  if(elapsed<DEV_STEADY_SEC) return;
+  if(now-_devLastRecAt<DEV_REC_THROTTLE_MS) return;
+  const dev=devAngDiff(ch,gh);
+  if(Math.abs(dev)>90) return;
+  _devLastRecAt=now;
+  deviationTable[devSector(gh)].push(dev);
+  devSaveTable();
+  updateDevStatus();
+}
+
+function getCorrectedHeading(rawHeading){
+  if(devManualRaw) return{heading:rawHeading,corrected:false};
+  const avgs=deviationTable.map(devAvg);
+  const onIdx=devSector(rawHeading);
+  const onMark=devNearestDirDiff(rawHeading)<=DEV_DIR_TOL;
+  if(onMark&&avgs[onIdx]!==null&&deviationTable[onIdx].length>=ROSE_MIN_SAMPLES){
+    return{heading:((rawHeading-avgs[onIdx])+360)%360,corrected:true};
+  }
+  const lowIdx=Math.floor((((rawHeading%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS;
+  const highIdx=(lowIdx+1)%DEV_N_DIRS;
+  const lowDev=avgs[lowIdx], highDev=avgs[highIdx];
+  if(lowDev!==null&&highDev!==null&&deviationTable[lowIdx].length>=ROSE_MIN_SAMPLES&&deviationTable[highIdx].length>=ROSE_MIN_SAMPLES){
+    const fromLow=(((rawHeading%360)+360)%360 - lowIdx*DEV_DIR_STEP + 360)%360;
+    const dev=lowDev+(highDev-lowDev)*(fromLow/DEV_DIR_STEP);
+    return{heading:((rawHeading-dev)+360)%360,corrected:true};
+  }
+  const gh=_devLastGpsHeading, spd=_devLastGpsSpeedKmh;
+  if(gh!==null&&spd>=DEV_SPEED_MIN&&compassHeading!==null){
+    const angDiff=Math.abs(devAngDiff(rawHeading,gh));
+    const steadyElapsed=_devSteadyStart!==null?(Date.now()-_devSteadyStart)/1000:0;
+    if(angDiff<=DEV_STEADY_TOL&&steadyElapsed>=DEV_STEADY_SEC){
+      const sector=devSector(gh);
+      const dev=devAngDiff(rawHeading,gh);
+      const onMarkGh=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+      if(!onMarkGh&&Math.abs(dev)<=90){
+        const now=Date.now();
+        if(now-_devLastRecAt>=DEV_REC_THROTTLE_MS){ _devLastRecAt=now; deviationTable[sector].push(dev); devSaveTable(); updateDevStatus(); }
+      }
+      return{heading:((rawHeading-dev)+360)%360,corrected:true};
+    }
+  }
+  return{heading:rawHeading,corrected:false};
+}
+
+function updateDevStatus(){
+  const el=document.getElementById('devStatus');
+  if(!el) return;
+  const n=devCapturedCount();
+  const total=deviationTable.reduce((s,a)=>s+a.length,0);
+  if(devManualRaw){ el.textContent='🧭 Raw'; el.style.color='#ffaa00'; }
+  else if(n===0){ el.textContent='🧭 Uncal'; el.style.color='#888'; }
+  else{ el.textContent='🧭 '+n+'/16 ('+total+')'; el.style.color='#00ff96'; }
+}
+
 const gpsIcon=L.divIcon({className:'',html:'<div class="gps-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]});
 const gpsRingIcon=L.divIcon({className:'',html:'<div class="gps-ring"></div>',iconSize:[40,40],iconAnchor:[20,20]});
 
@@ -752,11 +847,14 @@ function onGPSSuccess(pos){
   let bear=null;
   if(heading!==null&&!isNaN(heading)&&heading>=0)bear=heading;
   else if(_gpsPrev){const dLat=lat-_gpsPrev.lat,dLon=lon-_gpsPrev.lon;const dist=Math.sqrt(dLat*dLat+dLon*dLon);if(dist>0.00005)bear=(Math.atan2(dLon,dLat)*180/Math.PI+360)%360;}
-  _gpsPrev={lat,lon};
+_gpsPrev={lat,lon};
   const spdStr=speed!=null&&!isNaN(speed)?' '+(speed*3.6).toFixed(0)+'km/h':'';
   const bearStr=bear!=null?' '+Math.round(bear)+'°':'';
   document.getElementById('gpsStatus').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4)+' '+accStr+spdStr+bearStr;
   _gpsLastLL={lat,lon};
+  _devLastGpsHeading=bear;
+  _devLastGpsSpeedKmh=(speed!=null&&!isNaN(speed))?speed*3.6:0;
+  devTryRecord();
 if(!gpsMarker){
     _hideCompassRings();
     gpsRing=L.marker([lat,lon],{icon:gpsRingIcon,interactive:false,pane:'gps'}).addTo(map);
@@ -825,19 +923,26 @@ function onCompass(e){
   if(e.webkitCompassHeading!=null)h=e.webkitCompassHeading;
   else if(e.absolute&&e.alpha!=null)h=(360-e.alpha)%360;
   if(h===null||!gpsMarker)return;
+  compassHeading=h;
+  devTryRecord();
+  const{heading:hCorr,corrected}=getCorrectedHeading(h);
+  const lineColor=corrected?'#00ff96':'#ffdd00';
+  if(gpsCompassLine&&gpsCompassLine._blinkTimer){
+    clearInterval(gpsCompassLine._blinkTimer); gpsCompassLine._blinkTimer=null;
+  }
   _hideCompassRings();
   const ll=gpsMarker.getLatLng();
-  const tip=_destPoint(ll.lat,ll.lng,h,100);
-  if(!gpsCompassLine)gpsCompassLine=L.polyline([[ll.lat,ll.lng],tip],{color:'#00ff96',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
-  else gpsCompassLine.setLatLngs([[ll.lat,ll.lng],tip]);
-  gpsCompassTicks.forEach(tk=>map.removeLayer(tk));gpsCompassTicks=[];
-  const perp=(h+90)%360;
+  const tip=_destPoint(ll.lat,ll.lng,hCorr,100);
+  if(!gpsCompassLine) gpsCompassLine=L.polyline([[ll.lat,ll.lng],tip],{color:lineColor,weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+  else{ gpsCompassLine.setLatLngs([[ll.lat,ll.lng],tip]); gpsCompassLine.setStyle({color:lineColor}); }
+  gpsCompassTicks.forEach(tk=>map.removeLayer(tk)); gpsCompassTicks=[];
+  const perp=(hCorr+90)%360;
   [25,50,75,100].forEach(dist=>{
-    const mid=_destPoint(ll.lat,ll.lng,h,dist);
+    const mid=_destPoint(ll.lat,ll.lng,hCorr,dist);
     const a=_destPoint(mid[0],mid[1],perp,10);
     const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
-    gpsCompassTicks.push(L.polyline([a,b],{color:'#00ff96',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
-    if(dist===100)gpsCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#00ff96;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km Compass</span>',iconAnchor:[-4,12]})}).addTo(map));
+    gpsCompassTicks.push(L.polyline([a,b],{color:lineColor,weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+    if(dist===100) gpsCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:'+lineColor+';font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km Compass</span>',iconAnchor:[-4,12]})}).addTo(map));
   });
 }
 
@@ -899,6 +1004,10 @@ function toggleGPS(){
   }
 }
 document.getElementById('gps-btn').addEventListener('click',toggleGPS);
+document.getElementById('devStatus')?.addEventListener('click',()=>{
+  devManualRaw=!devManualRaw; updateDevStatus();
+});
+updateDevStatus();
   
   (function initFakeGPS(){
   const fakeLL={lat:22.3193,lng:114.1694};
