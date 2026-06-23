@@ -846,10 +846,9 @@ const isWarning=closest<=PROX_WARNING_KM;
 
 
 
-    const color=isWarning?'#ff4400':'#ffdd00';
-    const colorBg=isWarning?'rgba(255,68,0,0.18)':'rgba(255,221,0,0.12)';
+ const color=isWarning?'#cc2200':'#a16207'; // darker shades for legible bold text on white
     const label=isWarning?'⚡ LIGHTNING WARNING':'⚡ LIGHTNING CAUTION';
-
+  
     if(!proximityWarning){
       proximityWarning=document.createElement('div');
       proximityWarning.id='proximity-warning';
@@ -860,19 +859,21 @@ const isWarning=closest<=PROX_WARNING_KM;
         min-width:260px;max-width:90vw;
       `;
       const style=document.createElement('style');
-      style.textContent=`
-        @keyframes proximityPulse{0%,100%{opacity:1}50%{opacity:0.5}}
+style.textContent=`
         @keyframes proximityFadeIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
       `;
       document.head.appendChild(style);
+
       proximityWarning.innerHTML=`
         <div id="prox-banner" style="
-          border-radius:10px;padding:8px 20px;text-align:center;
-          font-family:'Courier New',monospace;backdrop-filter:blur(6px);
-          border:1.5px solid;width:100%;box-sizing:border-box;
+          border-radius:10px;padding:9px 20px;text-align:center;
+          font-family:'Courier New',monospace;
+          border:2px solid;width:100%;box-sizing:border-box;
+          background:#ffffff;
         ">
-          <div id="prox-label" style="font-size:13px;font-weight:700;letter-spacing:0.07em;"></div>
-          <div id="prox-detail" style="font-size:10px;margin-top:2px;opacity:0.85;"></div>
+          <div id="prox-label" style="font-size:14px;font-weight:800;letter-spacing:0.07em;"></div>
+          <div id="prox-detail" style="font-size:11px;font-weight:700;margin-top:3px;"></div>
+          <div id="prox-time" style="font-size:9px;font-weight:600;margin-top:2px;color:#555;"></div>
         </div>
       `;
       proximityWarning.style.animation='proximityFadeIn 0.3s ease';
@@ -880,16 +881,19 @@ const isWarning=closest<=PROX_WARNING_KM;
       proximityActive=true;
     }
 
+
     const banner=document.getElementById('prox-banner');
-    const animClass=isWarning?'proximityPulse 1.2s ease-in-out infinite':'none';
-    banner.style.background=colorBg;
+    banner.style.background='#ffffff';
     banner.style.borderColor=color;
-    banner.style.animation=animClass;
+    banner.style.animation='none';
     document.getElementById('prox-label').style.color=color;
     document.getElementById('prox-label').textContent=label;
     document.getElementById('prox-detail').style.color=color;
 document.getElementById('prox-detail').textContent=
 count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closest.toFixed(1)+' km';
+    const nowD=new Date();
+    document.getElementById('prox-time').textContent=
+      'Updated '+nowD.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     if(!_proxFadeTimer){
       _proxFadeTimer=setTimeout(()=>{
         if(proximityRing){ map.removeLayer(proximityRing); proximityRing=null; }
