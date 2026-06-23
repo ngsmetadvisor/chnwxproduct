@@ -727,7 +727,6 @@ document.getElementById('notifyStatus')?.addEventListener('click', ()=>{
     alert('Notifications are blocked. Enable them in your browser/site settings to receive lightning alerts.');
   }
 });
-</parameter>
 
 function sendProximityNotification(isWarning,count,closestKm){
   if(!('Notification' in window) || Notification.permission!=='granted') return;
