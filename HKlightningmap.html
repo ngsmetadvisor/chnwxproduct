@@ -149,7 +149,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
   <!-- Toolbar -->
 <div id="toolbar">
-    <button id="gps-btn">⊕ GPS</button>
+<button id="gps-btn">⊕ GPS</button>
+    <div class="sep"></div>
+    <button id="compass-menu-btn" class="tb-btn active">🧭 Compass</button>
     <div class="sep"></div>
     <button id="basemap-btn" class="tb-btn">🌙 Dark</button>
     <div class="sep"></div>
@@ -189,8 +191,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div id="status">
       <span>Strikes: <span id="counter">0</span></span>
       <span id="connStatus">Connecting…</span>
-      <span id="delay"></span>
+<span id="delay"></span>
       <span id="gpsStatus"></span>
+      <span id="devStatus" style="color:#00ff96;font-size:10px;"></span>
       <div class="legend">
         <div class="leg-item"><div id="leg-dot-new" class="leg-dot" style="background:#ffffff;box-shadow:0 0 4px #fff;"></div> New</div>
         <div class="leg-item"><div id="leg-dot-1m" class="leg-dot" style="background:#ffee00;"></div> &lt;1m</div>
@@ -203,6 +206,37 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     </div>
 
   </div><!-- #bottom-stack -->
+
+<!-- Deviation Rose -->
+  <div id="dev-rose-panel" style="position:absolute;top:200px;left:10px;z-index:1000;background:rgba(8,8,18,0.92);border:0.5px solid rgba(138,92,246,0.35);border-radius:14px;padding:8px 10px;width:180px;backdrop-filter:blur(6px);font-size:11px;color:#aaa;display:none;">
+    <div style="font-size:10px;color:#8b5cf6;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;border-bottom:0.5px solid rgba(138,92,246,0.25);padding-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+      <span>Compass Cal</span>
+      <span id="dev-rose-close" style="cursor:pointer;color:#8b5cf6;font-size:13px;opacity:0.7;padding:0 2px;">✕</span>
+    </div>
+    <canvas id="rose-canvas-ltg" width="160" height="160" style="display:block;width:160px;height:160px;cursor:pointer;"></canvas>
+    <div id="dev-rose-meta" style="font-size:9px;color:#666;text-align:center;margin-top:4px;">0 samples · 0/16 dirs</div>
+  </div>
+
+  <!-- Compass popup menu -->
+  <div id="compass-popup" style="display:none;position:absolute;z-index:2000;background:rgba(8,8,18,0.97);border:0.5px solid rgba(138,92,246,0.45);border-radius:14px;padding:6px;min-width:200px;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.7);">
+    <div id="cmp-toggle-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(138,92,246,0.12)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:12px;color:#c4b5fd;font-family:monospace;">Compass correction</span>
+      <span id="cmp-toggle-indicator" style="font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(0,255,150,0.15);border:0.5px solid #00ff96;color:#00ff96;">ON</span>
+    </div>
+    <div id="cmp-rose-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(138,92,246,0.12)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:12px;color:#c4b5fd;font-family:monospace;">Compass rose</span>
+      <span id="cmp-rose-indicator" style="font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(138,92,246,0.15);border:0.5px solid rgba(138,92,246,0.5);color:#a78bfa;">Show</span>
+    </div>
+    <div style="height:0.5px;background:rgba(138,92,246,0.2);margin:4px 8px;"></div>
+    <div id="cmp-reset-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(255,80,80,0.1)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:12px;color:#f87171;font-family:monospace;">Reset calibration</span>
+      <span style="font-size:10px;color:#f87171;opacity:0.6;">↺</span>
+    </div>
+    <div style="height:0.5px;background:rgba(255,255,255,0.07);margin:4px 8px;"></div>
+    <div id="cmp-cancel-row" style="display:flex;align-items:center;justify-content:center;padding:7px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:11px;color:#555;font-family:monospace;">Cancel</span>
+    </div>
+  </div>
 
 </div><!-- #wrap -->
 
@@ -712,6 +746,9 @@ function _destPoint(lat,lon,bearingDeg,distKm){
 
 function onGPSSuccess(pos){
   const{latitude:lat,longitude:lon,accuracy,heading,speed}=pos.coords;
+  _devLastGpsHeading=(heading!==null&&!isNaN(heading)&&heading>=0)?heading:null;
+  _devLastGpsSpeedKmh=(speed!=null&&!isNaN(speed))?speed*3.6:0;
+  devTryRecord();
   document.getElementById('gps-btn').classList.remove('searching');
   document.getElementById('gps-btn').classList.add('active');
   document.getElementById('gps-btn').textContent='⊕ GPS';
@@ -787,24 +824,327 @@ function _hideCompassRings(){
   _compassRings.forEach(r=>map.removeLayer(r));
   _compassRings=[];
 }
+// ── Compass Deviation Calibration ─────────────────────────────
+const DEV_N_DIRS=16, DEV_DIR_STEP=360/16;
+const DEV_STEADY_SEC=5, DEV_STEADY_TOL=5, DEV_SPEED_MIN=3, DEV_DIR_TOL=5;
+const DEV_REC_THROTTLE_MS=2000;
+const DEV_STORAGE_KEY='compass_deviations_v1';
+const ROSE_MIN_SAMPLES=3;
+
+let deviationTable=Array.from({length:DEV_N_DIRS},()=>[]);
+let devManualRaw=false;
+let roseBlinkOn=true, roseBlinkTimer=null;
+let _roseActiveRecSector=null;
+let _devSteadyStart=null, _devSteadyAnchor=null, _devLastRecAt=0;
+let _devLastGpsHeading=null, _devLastGpsSpeedKmh=0;
+let compassHeading=null;
+
+function devSaveTable(){ try{ localStorage.setItem(DEV_STORAGE_KEY,JSON.stringify(deviationTable)); }catch(e){} }
+function devLoadTable(){
+  try{
+    const raw=localStorage.getItem(DEV_STORAGE_KEY);
+    if(!raw) return;
+    const saved=JSON.parse(raw);
+    if(Array.isArray(saved)&&saved.length===DEV_N_DIRS) saved.forEach((arr,i)=>{ if(Array.isArray(arr)) deviationTable[i]=arr; });
+  }catch(e){}
+}
+devLoadTable();
+
+function devAngDiff(a,b){ let d=((a-b)+360)%360; return d>180?d-360:d; }
+function devSector(h){ return Math.round((((h%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS; }
+function devNearestDirDiff(h){ return Math.abs(devAngDiff(h,devSector(h)*DEV_DIR_STEP)); }
+function devAvg(arr){ return arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null; }
+function devCapturedCount(){ return deviationTable.filter(arr=>arr.length>0).length; }
+
+function updateDevStatus(){
+  const el=document.getElementById('devStatus');
+  if(!el) return;
+  const n=devCapturedCount();
+  const total=deviationTable.reduce((s,a)=>s+a.length,0);
+  if(devManualRaw){ el.textContent='🧭 Raw'; el.style.color='#ffaa00'; }
+  else if(n===0){ el.textContent='🧭 Uncalibrated'; el.style.color='#888'; }
+  else{ el.textContent='🧭 '+n+'/16 ('+total+' smp)'; el.style.color='#00ff96'; }
+}
+updateDevStatus();
+
+function devTryRecord(){
+  const now=Date.now();
+  const gh=_devLastGpsHeading, ch=compassHeading, spd=_devLastGpsSpeedKmh;
+  if(gh==null||ch==null||spd<DEV_SPEED_MIN){ _devSteadyStart=null; _devSteadyAnchor=null; return; }
+  if(_devSteadyStart===null||_devSteadyAnchor===null){ _devSteadyStart=now; _devSteadyAnchor=gh; return; }
+  const steady=Math.abs(devAngDiff(gh,_devSteadyAnchor))<=DEV_STEADY_TOL;
+  if(!steady){ _devSteadyStart=now; _devSteadyAnchor=gh; return; }
+  const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+  if(!onMark) return;
+  const elapsed=(now-_devSteadyStart)/1000;
+  if(elapsed<DEV_STEADY_SEC) return;
+  if(now-_devLastRecAt<DEV_REC_THROTTLE_MS) return;
+  const dev=devAngDiff(ch,gh);
+  if(Math.abs(dev)>90) return;
+  _devLastRecAt=now;
+  deviationTable[devSector(gh)].push(dev);
+  devSaveTable();
+  updateDevStatus();
+  _roseActiveRecSector=devSector(gh);
+  updateRosePanel();
+}
+
+function getCorrectedHeading(rawHeading){
+  if(devManualRaw) return{heading:rawHeading,corrected:false};
+  const avgs=deviationTable.map(devAvg);
+  const onIdx=devSector(rawHeading);
+  const onMark=devNearestDirDiff(rawHeading)<=DEV_DIR_TOL;
+  if(onMark&&avgs[onIdx]!==null&&deviationTable[onIdx].length>=ROSE_MIN_SAMPLES){
+    return{heading:((rawHeading-avgs[onIdx])+360)%360,corrected:true};
+  }
+  const lowIdx=Math.floor((((rawHeading%360)+360)%360)/DEV_DIR_STEP)%DEV_N_DIRS;
+  const highIdx=(lowIdx+1)%DEV_N_DIRS;
+  const lowDev=avgs[lowIdx], highDev=avgs[highIdx];
+  if(lowDev!==null&&highDev!==null&&deviationTable[lowIdx].length>=ROSE_MIN_SAMPLES&&deviationTable[highIdx].length>=ROSE_MIN_SAMPLES){
+    const lowAng=lowIdx*DEV_DIR_STEP;
+    const fromLow=(((rawHeading%360)+360)%360-lowAng+360)%360;
+    const dev=lowDev+(highDev-lowDev)*(fromLow/DEV_DIR_STEP);
+    return{heading:((rawHeading-dev)+360)%360,corrected:true};
+  }
+  const gh=_devLastGpsHeading, spd=_devLastGpsSpeedKmh;
+  if(gh!==null&&spd>=DEV_SPEED_MIN&&compassHeading!==null){
+    const angDiff=Math.abs(devAngDiff(rawHeading,gh));
+    const steadyElapsed=_devSteadyStart!==null?(Date.now()-_devSteadyStart)/1000:0;
+    if(angDiff<=DEV_STEADY_TOL&&steadyElapsed>=DEV_STEADY_SEC){
+      const sector=devSector(gh);
+      const dev=devAngDiff(rawHeading,gh);
+      const onMark2=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+      if(!onMark2&&Math.abs(dev)<=90){
+        const now=Date.now();
+        if(now-_devLastRecAt>=DEV_REC_THROTTLE_MS){
+          _devLastRecAt=now;
+          deviationTable[sector].push(dev);
+          devSaveTable();
+          updateDevStatus();
+        }
+      }
+      return{heading:((rawHeading-dev)+360)%360,corrected:true};
+    }
+  }
+  return{heading:rawHeading,corrected:false};
+}
+
+// ── Deviation Rose drawing ─────────────────────────────────────
+function roseWedgeColor(count,blinkOn){
+  if(count<=0) return blinkOn?'#fde68a':'rgba(255,255,255,0.07)';
+  if(count<ROSE_MIN_SAMPLES) return blinkOn?'#fbbf24':(count<2?'#fef08a88':'#fde04788');
+  return blinkOn?'#4ade80':'#22c55e';
+}
+
+function drawDeviationRose(){
+  const canvas=document.getElementById('rose-canvas-ltg');
+  if(!canvas) return;
+  const DPR=window.devicePixelRatio||1;
+  const W=160,H=160;
+  canvas.width=W*DPR; canvas.height=H*DPR;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');
+  ctx.scale(DPR,DPR);
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2,cy=H/2,rOuter=W/2-18,rInner=rOuter*0.22;
+  const counts=deviationTable.map(a=>a.length);
+  [0.33,0.66,1].forEach(f=>{
+    ctx.beginPath();ctx.arc(cx,cy,rInner+(rOuter-rInner)*f,0,Math.PI*2);
+    ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=0.5;ctx.stroke();
+  });
+  for(let i=0;i<DEV_N_DIRS;i++){
+    const midDeg=i*DEV_DIR_STEP;
+    const a0=(midDeg-DEV_DIR_STEP/2-90)*Math.PI/180;
+    const a1=(midDeg+DEV_DIR_STEP/2-90)*Math.PI/180;
+    const isActive=i===_roseActiveRecSector;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,rOuter,a0,a1);ctx.closePath();
+    ctx.fillStyle=roseWedgeColor(counts[i],isActive&&roseBlinkOn);ctx.fill();
+    ctx.strokeStyle=isActive?'rgba(255,255,255,0.5)':'rgba(255,255,255,0.08)';
+    ctx.lineWidth=isActive?1.5:0.5;ctx.stroke();
+  }
+  ctx.beginPath();ctx.arc(cx,cy,rInner,0,Math.PI*2);
+  ctx.fillStyle='rgba(8,8,18,0.95)';ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.1)';ctx.lineWidth=1;ctx.stroke();
+  const DIR_NAMES_ROSE=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  for(let i=0;i<DEV_N_DIRS;i++){
+    const ang=(i*DEV_DIR_STEP-90)*Math.PI/180;
+    const lx=cx+Math.cos(ang)*(rOuter+10);
+    const ly=cy+Math.sin(ang)*(rOuter+10);
+    const done=counts[i]>=ROSE_MIN_SAMPLES;
+    const partial=counts[i]>0&&!done;
+    const major=i%4===0;
+    ctx.fillStyle=done?'#4ade80':partial?'#fde047':'rgba(255,255,255,0.3)';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=(major?'bold 8px':'6.5px')+' monospace';
+    ctx.fillText(DIR_NAMES_ROSE[i],lx,ly);
+  }
+  const covered=counts.filter(c=>c>=ROSE_MIN_SAMPLES).length;
+  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='bold 11px monospace';ctx.fillText(covered+'/'+DEV_N_DIRS,cx,cy-3);
+  ctx.font='7px monospace';ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fillText('dirs',cx,cy+7);
+  const total=deviationTable.reduce((s,a)=>s+a.length,0);
+  const metaEl=document.getElementById('dev-rose-meta');
+  if(metaEl) metaEl.textContent=total+' sample'+(total!==1?'s':'')+' · '+covered+'/'+DEV_N_DIRS+' dirs';
+}
+
+function updateRosePanel(){
+  const panel=document.getElementById('dev-rose-panel');
+  if(!panel) return;
+  if(panel.style.display!=='none') drawDeviationRose();
+}
+
+roseBlinkTimer=setInterval(()=>{ roseBlinkOn=!roseBlinkOn; drawDeviationRose(); },500);
+
+document.getElementById('dev-rose-close').addEventListener('click',()=>{
+  document.getElementById('dev-rose-panel').style.display='none';
+  const roseInd=document.getElementById('cmp-rose-indicator');
+  if(roseInd){ roseInd.textContent='Show'; roseInd.style.background='rgba(138,92,246,0.12)'; }
+});
+
+document.getElementById('rose-canvas-ltg').addEventListener('click',e=>{
+  const canvas=document.getElementById('rose-canvas-ltg');
+  const rect=canvas.getBoundingClientRect();
+  const px=e.clientX-rect.left, py=e.clientY-rect.top;
+  const cx=80,cy=80,rOuter=62,rInner=rOuter*0.22;
+  const dx=px-cx,dy=py-cy,dist=Math.sqrt(dx*dx+dy*dy);
+  if(dist<rInner||dist>rOuter) return;
+  let deg=Math.atan2(dy,dx)*180/Math.PI+90;
+  deg=((deg%360)+360)%360;
+  const idx=Math.round(deg/DEV_DIR_STEP)%DEV_N_DIRS;
+  const n=deviationTable[idx].length;
+  const DIR_NAMES_ROSE=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  const avg=n?(deviationTable[idx].reduce((s,v)=>s+v,0)/n):null;
+  document.getElementById('devStatus').textContent=
+    '🧭 '+DIR_NAMES_ROSE[idx]+': '+n+' smp'+(avg!==null?' · avg '+(avg>=0?'+':'')+avg.toFixed(1)+'°':' · no data');
+});
+
+// ── Compass menu ───────────────────────────────────────────────
+(function initCompassMenu(){
+  const btn=document.getElementById('compass-menu-btn');
+  const popup=document.getElementById('compass-popup');
+  const indicator=document.getElementById('cmp-toggle-indicator');
+  const roseInd=document.getElementById('cmp-rose-indicator');
+
+  function syncIndicators(){
+    if(devManualRaw){
+      indicator.textContent='OFF';
+      indicator.style.background='rgba(255,100,100,0.12)';
+      indicator.style.borderColor='rgba(255,100,100,0.5)';
+      indicator.style.color='#f87171';
+      btn.classList.remove('active');
+    } else {
+      indicator.textContent='ON';
+      indicator.style.background='rgba(0,255,150,0.15)';
+      indicator.style.borderColor='#00ff96';
+      indicator.style.color='#00ff96';
+      btn.classList.add('active');
+    }
+    const rosePanel=document.getElementById('dev-rose-panel');
+    const roseOpen=rosePanel&&rosePanel.style.display!=='none';
+    roseInd.textContent=roseOpen?'Hide':'Show';
+    roseInd.style.background=roseOpen?'rgba(138,92,246,0.25)':'rgba(138,92,246,0.12)';
+  }
+
+  function positionPopup(){
+    const br=btn.getBoundingClientRect();
+    const pw=210;
+    let left=br.right-pw;
+    if(left<8) left=8;
+    popup.style.left=left+'px';
+    popup.style.top=(br.bottom+6)+'px';
+  }
+
+  btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    if(popup.style.display==='none'||popup.style.display===''){
+      syncIndicators(); positionPopup(); popup.style.display='block';
+    } else {
+      popup.style.display='none';
+    }
+  });
+
+  document.getElementById('cmp-toggle-row').addEventListener('click',()=>{
+    devManualRaw=!devManualRaw;
+    updateDevStatus(); syncIndicators();
+    popup.style.display='none';
+  });
+
+  document.getElementById('cmp-rose-row').addEventListener('click',()=>{
+    const rosePanel=document.getElementById('dev-rose-panel');
+    if(!rosePanel) return;
+    const wasHidden=rosePanel.style.display==='none'||rosePanel.style.display==='';
+    rosePanel.style.display=wasHidden?'block':'none';
+    if(wasHidden) drawDeviationRose();
+    syncIndicators();
+    popup.style.display='none';
+  });
+
+  document.getElementById('cmp-reset-row').addEventListener('click',()=>{
+    popup.style.display='none';
+    const total=deviationTable.reduce((s,a)=>s+a.length,0);
+    if(!confirm('Reset compass calibration? This deletes all '+total+' collected samples.')) return;
+    deviationTable=Array.from({length:DEV_N_DIRS},()=>[]);
+    devSaveTable(); updateDevStatus(); drawDeviationRose();
+  });
+
+  document.getElementById('cmp-cancel-row').addEventListener('click',()=>{ popup.style.display='none'; });
+  document.addEventListener('click',e=>{ if(!popup.contains(e.target)&&e.target!==btn) popup.style.display='none'; });
+  map.on('click',()=>{ popup.style.display='none'; });
+})();
+
+// ── onCompass (corrected) ──────────────────────────────────────
 function onCompass(e){
   let h=null;
-  if(e.webkitCompassHeading!=null)h=e.webkitCompassHeading;
-  else if(e.absolute&&e.alpha!=null)h=(360-e.alpha)%360;
-  if(h===null||!gpsMarker)return;
+  if(e.webkitCompassHeading!=null) h=e.webkitCompassHeading;
+  else if(e.absolute&&e.alpha!=null) h=(360-e.alpha)%360;
+  if(h===null||!gpsMarker) return;
+  compassHeading=h;
+  devTryRecord();
+  const{heading:hCorr,corrected}=getCorrectedHeading(h);
+
+  const gh=_devLastGpsHeading, spd=_devLastGpsSpeedKmh;
+  const steadyElapsed=_devSteadyStart!==null?(Date.now()-_devSteadyStart)/1000:0;
+  const isCharging=!corrected&&gh!==null&&spd>=DEV_SPEED_MIN&&
+    Math.abs(devAngDiff(h,gh))<=5&&steadyElapsed>0&&steadyElapsed<DEV_STEADY_SEC;
+
+  let lineColor;
+  if(corrected){
+    lineColor='#00ff96';
+    if(gpsCompassLine&&gpsCompassLine._blinkTimer){
+      clearInterval(gpsCompassLine._blinkTimer);
+      gpsCompassLine._blinkTimer=null;
+      gpsCompassLine.setStyle({opacity:0.85});
+    }
+  } else if(isCharging){
+    lineColor='#ffdd00';
+    if(gpsCompassLine&&!gpsCompassLine._blinkTimer){
+      gpsCompassLine._blinkTimer=setInterval(()=>{
+        if(!gpsCompassLine) return;
+        gpsCompassLine.setStyle({opacity:gpsCompassLine.options.opacity>0.5?0.2:0.85});
+      },600);
+    }
+  } else {
+    lineColor='#ffdd00';
+    if(gpsCompassLine&&gpsCompassLine._blinkTimer){
+      clearInterval(gpsCompassLine._blinkTimer);
+      gpsCompassLine._blinkTimer=null;
+      gpsCompassLine.setStyle({opacity:0.85});
+    }
+  }
+
   _hideCompassRings();
   const ll=gpsMarker.getLatLng();
-  const tip=_destPoint(ll.lat,ll.lng,h,100);
-  if(!gpsCompassLine)gpsCompassLine=L.polyline([[ll.lat,ll.lng],tip],{color:'#00ff96',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
-  else gpsCompassLine.setLatLngs([[ll.lat,ll.lng],tip]);
+  const tip=_destPoint(ll.lat,ll.lng,hCorr,100);
+  if(!gpsCompassLine) gpsCompassLine=L.polyline([[ll.lat,ll.lng],tip],{color:lineColor,weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+  else{ gpsCompassLine.setLatLngs([[ll.lat,ll.lng],tip]); gpsCompassLine.setStyle({color:lineColor}); }
   gpsCompassTicks.forEach(tk=>map.removeLayer(tk));gpsCompassTicks=[];
-  const perp=(h+90)%360;
+  const perp=(hCorr+90)%360;
   [25,50,75,100].forEach(dist=>{
-    const mid=_destPoint(ll.lat,ll.lng,h,dist);
+    const mid=_destPoint(ll.lat,ll.lng,hCorr,dist);
     const a=_destPoint(mid[0],mid[1],perp,10);
     const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
-    gpsCompassTicks.push(L.polyline([a,b],{color:'#00ff96',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
-    if(dist===100)gpsCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#00ff96;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km Compass</span>',iconAnchor:[-4,12]})}).addTo(map));
+    gpsCompassTicks.push(L.polyline([a,b],{color:lineColor,weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+    if(dist===100) gpsCompassTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:'+lineColor+';font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km Compass</span>',iconAnchor:[-4,12]})}).addTo(map));
   });
 }
 
