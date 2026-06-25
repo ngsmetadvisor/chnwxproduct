@@ -556,12 +556,15 @@ if(!best){
             .setContent(
               '<div style="font-family:monospace;min-width:170px;line-height:1.6;">'+
               '<div style="color:#ff8c00;font-size:12px;font-weight:700;margin-bottom:3px;white-space:nowrap;">'+z.label+'</div>'+
-              '<div style="color:#ffdd00;font-size:13px;margin-bottom:5px;">'+(z._count||0)+' strikes</div>'+
-              '<div style="color:#888;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">EC Lightning</div>'+
-              '<table style="border-collapse:collapse;font-size:11px;color:#ffaa00;">'+
-              '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="color:#888;">3h</td></tr>'+
-              '<tr><td style="padding-right:10px;">'+ec1+'</td><td style="padding-right:10px;">'+ec2+'</td><td>'+ec3+'</td></tr>'+
-              '</table></div>'
+    '<div style="color:#ffdd00;font-size:13px;margin-bottom:5px;">'+(z._count||0)+' strikes</div>'+
+          '<div style="color:#888;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">EC Lightning</div>'+
+          (!ecLightningEnabled
+            ? '<div style="color:#ffaa00;font-size:9px;margin-bottom:4px;">⚡ Tap <b>3h</b> in toolbar to enable</div>'
+            : '')+
+          '<table style="border-collapse:collapse;font-size:11px;color:#ffaa00;">'+
+          '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="color:#888;">3h</td></tr>'+
+          '<tr><td style="padding-right:10px;">'+ec1+'</td><td style="padding-right:10px;">'+ec2+'</td><td>'+ec3+'</td></tr>'+
+          '</table></div>'
             ).openOn(map);
           break;
         }
