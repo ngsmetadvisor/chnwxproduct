@@ -491,8 +491,9 @@ document.getElementById('basemap-btn').addEventListener('click',cycleBasemap);
 
 map.createPane('radar');        map.getPane('radar').style.zIndex        = 350;
 map.createPane('zones');        map.getPane('zones').style.zIndex        = 400;
-map.createPane('stations');     map.getPane('stations').style.zIndex     = 500;
 map.createPane('gps');          map.getPane('gps').style.zIndex          = 600;
+map.getPane('gps').style.pointerEvents = 'none';
+map.createPane('stations');     map.getPane('stations').style.zIndex     = 660;
 map.createPane('strikes');      map.getPane('strikes').style.zIndex      = 650;
 map.getPane('strikes').style.pointerEvents = 'none';
 map.createPane('ecLightningPane'); map.getPane('ecLightningPane').style.zIndex = 640;
@@ -996,8 +997,25 @@ function loadZones(){
       zoneLayer=L.layerGroup();
       features.forEach(f=>{
         const poly=L.polygon(f.latlngs,{pane:'zones',color:'#ff8c00',weight:1.5,opacity:0.75,fillColor:'#ff8c00',fillOpacity:0.06});
-        poly.bindPopup('<span style="font-family:monospace;color:#ff8c00;font-size:12px;">'+f.label+'<br><span id="popup-cnt-'+f.shortId+'" style="color:#ffdd00;">– strikes</span></span>',{maxWidth:200});
-poly.on('click',(e)=>{console.log('[zone poly click]', f.shortId, 'propagating up');setTimeout(()=>{const el=document.getElementById('popup-cnt-'+f.shortId);if(el)el.textContent=(zonePolygons.find(z=>z.shortId===f.shortId)?._count||0)+' strikes';},50);});
+        poly.bindPopup('<div style="font-family:monospace;min-width:170px;line-height:1.6;">'+
+  '<div style="color:#ff8c00;font-size:12px;font-weight:700;margin-bottom:3px;white-space:nowrap;">'+f.label+'</div>'+
+  '<div id="popup-cnt-'+f.shortId+'" style="color:#ffdd00;font-size:13px;margin-bottom:5px;">– strikes</div>'+
+  '<div style="color:#888;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">EC Lightning</div>'+
+  '<table id="popup-ec-'+f.shortId+'" style="border-collapse:collapse;font-size:11px;color:#ffaa00;">'+
+  '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="color:#888;">3h</td></tr>'+
+  '<tr><td id="ec1-'+f.shortId+'" style="padding-right:10px;">–</td><td id="ec2-'+f.shortId+'" style="padding-right:10px;">–</td><td id="ec3-'+f.shortId+'">–</td></tr>'+
+  '</table></div>',{maxWidth:240,className:'strike-popup'});
+poly.on('click',(e)=>{console.log('[zone poly click]', f.shortId, 'propagating up');setTimeout(()=>{
+  const z=zonePolygons.find(z=>z.shortId===f.shortId);
+  const el=document.getElementById('popup-cnt-'+f.shortId);
+  if(el)el.textContent=(z?._count||0)+' strikes';
+  const e1=document.getElementById('ec1-'+f.shortId);
+  const e2=document.getElementById('ec2-'+f.shortId);
+  const e3=document.getElementById('ec3-'+f.shortId);
+  if(e1)e1.textContent=z?._ec1||0;
+  if(e2)e2.textContent=z?._ec2||0;
+  if(e3)e3.textContent=z?._ec3||0;
+},50);});
         poly.addTo(zoneLayer);
         zonePolygons.push({...f,polygon:poly});
       });
@@ -1022,11 +1040,26 @@ function buildZoneListUI(){
 function rebuildZoneCounts(){
   if(!zonePolygons.length)return;
   const now=t||Date.now()/1000;
-  zonePolygons.forEach(z=>{z._count=0;});
+  zonePolygons.forEach(z=>{z._count=0;z._ec1=0;z._ec2=0;z._ec3=0;});
   strokes.forEach(m=>{
     if(!m._inAB||(now-m._strokeTime)>windowSec)return;
     for(const z of zonePolygons){if(pip(m._lat,m._lon,z.latlngs)){z._count++;break;}}
   });
+  if(ecLightningEnabled && ecLightningPoints.length){
+    const nowMs=Date.now();
+    ecLightningPoints.forEach(p=>{
+      const ageH=(nowMs-new Date(p.isoTime).getTime())/3600000;
+      if(ageH>3) return;
+      for(const z of zonePolygons){
+        if(pip(p.lat,p.lon,z.latlngs)){
+          if(ageH<=1) z._ec1++;
+          else if(ageH<=2) z._ec2++;
+          else z._ec3++;
+          break;
+        }
+      }
+    });
+  }
   let max=0;
   zonePolygons.forEach(z=>{if(z._count>max)max=z._count;});
   zonePolygons.forEach(z=>{
@@ -1073,7 +1106,7 @@ function rebuildStationIcons(){
   const color = isLight ? '#333' : '#aaa';
   const shadow = isLight ? '#fff' : '#000';
   // Update CSS only — no DOM mutation on any marker
-  _stnStyle.textContent = '.stn-label{color:'+color+';font-size:11px;font-family:monospace;white-space:nowrap;cursor:pointer;padding:6px 6px;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';}';
+  _stnStyle.textContent = '.stn-label { color:'+color+';font-size:11px;font-family:monospace;white-space:nowrap;cursor:pointer;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';display:flex;align-items:center;justify-content:center;width:100%;height:100%;box-sizing:border-box; }';
 }
 
 loadZones();
@@ -1832,10 +1865,31 @@ document.getElementById('gps-btn').addEventListener('click',toggleGPS);
 
 let ecLightningPoints=[]; // {lat,lon,isoTime} detected from rendered tiles, for click hit-testing
 
+function setECLoadProgress(pct){
+  let bar=document.getElementById('ec-load-bar');
+  if(!bar){
+    const wrap=document.createElement('div');
+    wrap.id='ec-load-bar-wrap';
+    wrap.style.cssText='position:absolute;bottom:3px;left:0;right:0;z-index:1003;height:3px;pointer-events:none;';
+    bar=document.createElement('div');
+    bar.id='ec-load-bar';
+    bar.style.cssText='height:3px;width:0%;background:linear-gradient(90deg,#ffaa00,#ffdd00);transition:width 0.2s ease;';
+    wrap.appendChild(bar);
+    document.getElementById('wrap').appendChild(wrap);
+  }
+  const wrap=document.getElementById('ec-load-bar-wrap');
+  wrap.style.opacity='1';
+  bar.style.width=pct+'%';
+  if(pct>=100){
+    setTimeout(()=>{ wrap.style.transition='opacity 0.4s'; wrap.style.opacity='0'; setTimeout(()=>{ bar.style.width='0%'; wrap.style.transition=''; },400); },600);
+  }
+}
+
 async function loadECLightning(){
   ecLightningLayers.forEach(l=>{try{map.removeLayer(l);}catch(e){}});
   ecLightningLayers=[];
   ecLightningPoints=[]; // stale frames are gone — rebuild fresh as new tiles render
+  setECLoadProgress(5);
   let times=[];
   try{
     const res=await fetch('https://geo.weather.gc.ca/geomet?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities&LAYER=Lightning_2.5km_Density',{signal:AbortSignal.timeout(10000)});
@@ -1857,8 +1911,9 @@ async function loadECLightning(){
         break;
       }
     }
-  }catch(e){console.warn('[ECLightning]',e);return;}
-  if(!times.length) return;
+}catch(e){console.warn('[ECLightning]',e);setECLoadProgress(0);return;}
+  if(!times.length){setECLoadProgress(0);return;}
+  setECLoadProgress(20);
   const now=Date.now();
   const window3h=times.filter(tt=>{const ms=new Date(tt).getTime();return ms<=now&&ms>=now-3*3600000;});
   if(!window3h.length) return;
@@ -1899,12 +1954,28 @@ async function loadECLightning(){
 
           const cx2=Math.round(sumX/count),cy2=Math.round(sumY/count);
 const ageH=this._ageH||0;
-          const bg=ageH<1?'rgba(0,0,0,0.75)':ageH<2?'rgba(0,0,0,0.45)':'rgba(0,0,0,0.2)';
-          const alpha=ageH<1?1.0:ageH<2?0.6:0.3;
-          ctx.globalAlpha=alpha;
-          ctx.fillStyle=bg;ctx.fillRect(cx2-5,cy2-5,11,11);
-          ctx.fillText('⚡',cx2,cy2);
-          ctx.globalAlpha=1.0;
+          if(ageH<1){
+            // Original style for recent strikes
+            ctx.fillStyle='rgba(0,0,0,0.75)';
+            ctx.fillRect(cx2-5,cy2-5,11,11);
+            ctx.font='bold 13px sans-serif';
+            ctx.fillText('⚡',cx2,cy2);
+          } else {
+            // Color-coded box for older strikes matching live scale
+            const boxColor=ageH<2?'#882200':'#551100';
+            const boxSize=ageH<2?11:9;
+            const boxAlpha=ageH<2?0.75:0.55;
+            ctx.globalAlpha=boxAlpha;
+            ctx.fillStyle=boxColor;
+            ctx.beginPath();
+            ctx.roundRect(cx2-boxSize/2,cy2-boxSize/2,boxSize,boxSize,2);
+            ctx.fill();
+            ctx.globalAlpha=ageH<2?0.85:0.65;
+            ctx.font='bold '+(ageH<2?9:8)+'px sans-serif';
+            ctx.fillStyle='#fff';
+            ctx.fillText('⚡',cx2,cy2);
+            ctx.globalAlpha=1.0;
+          }
           // Convert this symbol's pixel centre to lat/lon and remember it for click hit-testing
           try{
             const xMeter=nwM.x+(cx2/256)*(seM.x-nwM.x);
@@ -1920,15 +1991,26 @@ const ageH=this._ageH||0;
   });
 
 const now3=Date.now();
+  let ecTilesTotal=0, ecTilesLoaded=0;
   window3h.forEach(tt=>{
     const ageMs=now3-new Date(tt).getTime();
     const ageH=ageMs/3600000;
-    // Fade: <1h=full, 1-2h=medium, 2-3h=dim
     const opacity=ageH<1?1.0:ageH<2?0.55:0.25;
     const l=new SymbolLayer(tt,{pane:'ecLightningPane',tileSize:256,opacity,attribution:'⚡ © ECCC GeoMet (3h)'});
     l._ageH=ageH;
+    l.on('load',()=>{
+      ecTilesLoaded++;
+      setECLoadProgress(20+Math.round(ecTilesLoaded/Math.max(ecTilesTotal,1)*80));
+    });
+    l.on('tileload',()=>{
+      ecTilesTotal=Math.max(ecTilesTotal, ecLightningLayers.length*4); // estimate
+      ecTilesLoaded++;
+      setECLoadProgress(20+Math.min(Math.round(ecTilesLoaded/Math.max(ecTilesTotal,1)*80),79));
+    });
     l.addTo(map);ecLightningLayers.push(l);
   });
+  // Mark complete after a short settle time
+  setTimeout(()=>setECLoadProgress(100), 3000);
 }
 
 function enableECLightning(){
@@ -1936,6 +2018,22 @@ function enableECLightning(){
   document.getElementById('ec-lightning-toggle').classList.add('active');
   loadECLightning();
   if(!ecLightningTimer) ecLightningTimer=setInterval(loadECLightning,10*60*1000);
+  // Show age legend
+  let leg=document.getElementById('ec-ltg-legend');
+  if(!leg){
+    leg=document.createElement('div');
+    leg.id='ec-ltg-legend';
+    leg.style.cssText='position:absolute;bottom:36px;right:10px;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,220,0,0.25);border-radius:8px;padding:5px 8px;font-family:monospace;font-size:10px;color:#aaa;backdrop-filter:blur(4px);';
+    leg.innerHTML=
+'<div style="font-size:9px;color:#ffdd00;letter-spacing:0.06em;margin-bottom:3px;">EC LIGHTNING AGE</div>'+
+      '<div style="display:flex;flex-direction:column;gap:2px;">'+
+      '<div><span style="display:inline-block;width:11px;height:11px;background:rgba(0,0,0,0.75);border-radius:2px;vertical-align:middle;margin-right:5px;text-align:center;font-size:9px;line-height:11px;">⚡</span>&lt; 1h</div>'+
+      '<div><span style="display:inline-block;width:11px;height:11px;background:#882200;border-radius:2px;vertical-align:middle;margin-right:5px;opacity:0.75;text-align:center;font-size:8px;line-height:11px;">⚡</span>1 – 2h</div>'+
+      '<div><span style="display:inline-block;width:9px;height:9px;background:#551100;border-radius:2px;vertical-align:middle;margin-right:5px;opacity:0.55;text-align:center;font-size:7px;line-height:9px;">⚡</span>2 – 3h</div>'+
+      '</div>';
+    document.getElementById('wrap').appendChild(leg);
+  }
+  leg.style.display='block';
 }
 function disableECLightning(){
   ecLightningEnabled=false;
@@ -1943,7 +2041,10 @@ function disableECLightning(){
   ecLightningLayers.forEach(l=>{try{map.removeLayer(l);}catch(e){}});
   ecLightningLayers=[];
   if(ecLightningTimer){clearInterval(ecLightningTimer);ecLightningTimer=null;}
+  const leg=document.getElementById('ec-ltg-legend');
+  if(leg) leg.style.display='none';
 }
+
 document.getElementById('ec-lightning-toggle').addEventListener('click',()=>{
   if(ecLightningEnabled) disableECLightning(); else enableECLightning();
 });
@@ -1989,6 +2090,8 @@ setInterval(()=>{
 
 connect();
 document.getElementById('map').addEventListener('click', function(e){
+  const stack = document.elementsFromPoint(e.clientX, e.clientY);
+  console.log('[map div click]', e.clientX, e.clientY, 'stack:', stack.slice(0,6).map(el => el.className || el.tagName).join(' | '));
 }, true); // capture phase — fires before Leaflet
 (function initFakeGPS(){
   const fakeLL={lat:53.5461,lng:-113.4938}; // Edmonton fallback
@@ -2080,6 +2183,8 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') ctxMenu.style.d
 
 let _lpTimer = null;
 map.on('mousedown touchstart', e => {
+  const _lpTarget = e.originalEvent.target;
+  if (_lpTarget && _lpTarget.closest && _lpTarget.closest('.stn-label')) return;
   _lpTimer = setTimeout(() => {
     const orig = e.originalEvent.touches ? e.originalEvent.touches[0] : e.originalEvent;
     window._ecFcLatLng = e.latlng;
@@ -2118,7 +2223,9 @@ const charW = 6.6, padX = 6, padY = 6;
       });
 const m = L.marker([lat, lon], {icon, interactive: true, pane: 'stations'}).addTo(map);
       m._stationId = id;
-      m.on('click', function(e){
+      console.log('[station marker added]', id, lat, lon);
+m.on('click', function(e){
+        console.log('[station click]', id);
         L.DomEvent.stopPropagation(e);
         const s = stations[id];
         const elevStr = (s.elev !== null && !isNaN(s.elev)) ? s.elev.toFixed(1) + ' m' : '—';
