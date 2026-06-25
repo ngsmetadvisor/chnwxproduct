@@ -24,14 +24,14 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   border-radius: 20px; padding: 5px 10px; align-items: center;
   backdrop-filter: blur(6px); max-width: calc(100vw - 20px);
 }
-.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 .tb-btn.active { background: rgba(255,220,0,0.2); border-color: #ffdd00; color: #ffdd00; }
 .tb-btn:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
 .sep { width: 1px; height: 16px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
-#zone-toggle { background: transparent; border: 0.5px solid rgba(255,140,0,0.5); color: #ff8c00; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+#zone-toggle { background: transparent; border: 0.5px solid rgba(255,140,0,0.5); color: #ff8c00; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 #zone-toggle.active { background: rgba(255,140,0,0.2); }
 #zone-toggle:hover { background: rgba(255,140,0,0.15); }
-#gps-btn { background: transparent; border: 0.5px solid rgba(0,255,150,0.4); color: #00ff96; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+#gps-btn { background: transparent; border: 0.5px solid rgba(0,255,150,0.4); color: #00ff96; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 #gps-btn.active { background: rgba(0,255,150,0.15); border-color: #00ff96; }
 #gps-btn.searching { border-color: #ffaa00; color: #ffaa00; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
@@ -70,7 +70,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 #status {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
   display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
-  font-size: 11px; padding: 5px 10px;
+  font-size: var(--ui-font-sm, 11px); padding: 5px 10px;
   background: rgba(8,8,18,0.88); border-top: 0.5px solid rgba(255,255,255,0.08);
   color: #aaa; backdrop-filter: blur(4px);
 }
@@ -123,8 +123,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   backdrop-filter: blur(6px); font-size: 10px; color: #aaa; display: none;
 }
 #precip-legend.visible { display: block; }
-#precip-legend .pl-title { font-size: 9px; color: #88ccff; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; border-bottom: 0.5px solid rgba(100,180,255,0.2); padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-#precip-legend .pl-title span { font-size: 10px; color: rgba(136,204,255,0.5); }
+#precip-legend .pl-title { font-size: 9px; color: #88ccff; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; border-bottom: 0.5px solid rgba(100,180,255,0.2); padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; cursor: default; }
 
 /* ── GPS marker ── */
 .gps-dot { width:14px; height:14px; border-radius:50%; background:#00ff96; border:2px solid #fff; box-shadow:0 0 10px #00ff96; }
@@ -277,15 +276,16 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       <div id="radar-panel-row">
         <button id="anim-play-btn">▶</button>
         <select id="radar-type">
-          <option value="RADAR_1KM_RRAI">Rain</option>
+          <option value="RADAR_1KM_RRAI" selected>Rain</option>
           <option value="RADAR_1KM_RSNO">Snow</option>
-          <option value="Radar_1km_SfcPrecipType" selected>Precip Type</option>
+          <option value="Radar_1km_SfcPrecipType">Precip Type</option>
         </select>
         <input id="radar-opacity" type="range" min="10" max="90" value="80" title="Opacity">
-        <div id="frame-count-wrap">
+<div id="frame-count-wrap">
           <button class="fc-btn" data-frames="6">6f</button>
           <button class="fc-btn active" data-frames="12">12f</button>
         </div>
+        <button id="legend-toggle-btn" title="Toggle precip legend" style="display:none;background:transparent;border:0.5px solid rgba(100,180,255,0.3);color:rgba(136,204,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">🗂 Legend</button>
         <input id="anim-scrub" type="range" min="0" max="11" value="11" step="1" style="width:45px;">
         <span id="anim-time-label">--:--</span>
         <button id="anim-speed-btn">1×</button>
@@ -298,7 +298,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
   <!-- Precip legend -->
   <div id="precip-legend">
-    <div class="pl-title" id="legend-title-bar">Precip Type <span id="legend-hide-btn">✕</span></div>
+<div class="pl-title">Precip Type</div>
     <div id="legend-body">
       <img id="precip-legend-img"
         src="https://geo.weather.gc.ca/geomet?version=1.3.0&service=WMS&request=GetLegendGraphic&sld_version=1.1.0&layer=Radar_1km_SfcPrecipType&format=image/png&STYLE=SfcPrecipType_Dis"
@@ -481,10 +481,13 @@ function setBasemap(name){
   stationLabelMarkers.forEach(m=>{
     const id=m._stationId;
     if(!id)return;
-    m.setIcon(L.divIcon({
+const charW2 = 6, padX2 = 6, padY2 = 8;
+      const iw2 = id.length * charW2 + padX2 * 2;
+      const ih2 = 10 + padY2 * 2;
+      m.setIcon(L.divIcon({
       className:'',
-      html:'<div style="position:absolute;transform:translate(-50%,-50%);color:'+(isLight?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';">'+id+'</div>',
-      iconSize:[0,0],iconAnchor:[0,0]
+html:'<div style="color:'+(isLight?'#333':'#aaa')+';font-size:var(--ui-font-sm,10px);font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:'+padY2+'px '+padX2+'px;line-height:1;">'+id+'</div>',
+      iconSize:[iw2,ih2],iconAnchor:[iw2/2,ih2/2]
     }));
   });
 }
@@ -500,6 +503,7 @@ map.createPane('radar');        map.getPane('radar').style.zIndex        = 350;
 map.createPane('zones');        map.getPane('zones').style.zIndex        = 400;
 map.createPane('gps');          map.getPane('gps').style.zIndex          = 600;
 map.createPane('strikes');      map.getPane('strikes').style.zIndex      = 650;
+map.getPane('strikes').style.pointerEvents = 'none';
 map.createPane('ecLightningPane'); map.getPane('ecLightningPane').style.zIndex = 640;
 
 
@@ -508,7 +512,6 @@ const canvasRenderer = L.canvas({ pane:'strikes', tolerance:5 });
 
 // Global error handler — catch canvas/WebGL crashes and recover
 window.addEventListener('error', function(e){
-  console.warn('[crash guard]', e.message);
   try {
     // Re-add canvas renderer pane if lost
     const sp = map.getPane('strikes');
@@ -520,7 +523,6 @@ window.addEventListener('error', function(e){
 
 
 window.addEventListener('unhandledrejection', function(e){
-  console.warn('[unhandled promise]', e.reason);
   e.preventDefault();
 });
 
@@ -1001,7 +1003,7 @@ function loadZones(){
       features.forEach(f=>{
         const poly=L.polygon(f.latlngs,{pane:'zones',color:'#ff8c00',weight:1.5,opacity:0.75,fillColor:'#ff8c00',fillOpacity:0.06});
         poly.bindPopup('<span style="font-family:monospace;color:#ff8c00;font-size:12px;">'+f.label+'<br><span id="popup-cnt-'+f.shortId+'" style="color:#ffdd00;">– strikes</span></span>',{maxWidth:200});
-        poly.on('click',()=>{setTimeout(()=>{const el=document.getElementById('popup-cnt-'+f.shortId);if(el)el.textContent=(zonePolygons.find(z=>z.shortId===f.shortId)?._count||0)+' strikes';},50);});
+poly.on('click',(e)=>{console.log('[zone poly click]', f.shortId, 'propagating up');setTimeout(()=>{const el=document.getElementById('popup-cnt-'+f.shortId);if(el)el.textContent=(zonePolygons.find(z=>z.shortId===f.shortId)?._count||0)+' strikes';},50);});
         poly.addTo(zoneLayer);
         zonePolygons.push({...f,polygon:poly});
       });
@@ -1066,6 +1068,26 @@ document.getElementById('ab-collapse-btn').addEventListener('click',()=>{
   panel.classList.toggle('collapsed');
   btn.textContent=panel.classList.contains('collapsed')?'▼':'▲';
 });
+
+function rebuildStationIcons(){
+  const isLight = currentBasemap === 'street';
+  const rawVal = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-sm').trim();
+  const fsPx = parseInt(rawVal) || 10;
+  const charW = fsPx * 0.6;
+  const padX = 6, padY = 6;
+  stationLabelMarkers.forEach(m => {
+    const id = m._stationId;
+    if(!id) return;
+    const iw = id.length * charW + padX * 2;
+    const ih = fsPx + padY * 2;
+    m.setIcon(L.divIcon({
+      className: '',
+      html: '<div style="color:'+(isLight?'#333':'#aaa')+';font-size:'+fsPx+'px;font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:'+padY+'px '+padX+'px;line-height:1;">'+id+'</div>',
+      iconSize: [iw, ih],
+      iconAnchor: [iw/2, ih/2]
+    }));
+  });
+}
 
 loadZones();
 
@@ -1229,14 +1251,28 @@ document.getElementById('radar-toggle').addEventListener('click',()=>{if(radarVi
 
 function updateLegendVisibility(){
   const isPT=document.getElementById('radar-type').value==='Radar_1km_SfcPrecipType';
-  document.getElementById('precip-legend').classList.toggle('visible',isPT&&radarVisible);
+  const legendBtn=document.getElementById('legend-toggle-btn');
+  // Show the legend toggle button only when precip type radar is active
+  if(legendBtn) legendBtn.style.display=(isPT&&radarVisible)?'inline-block':'none';
+  // Only auto-show legend if it hasn't been manually hidden by the user
+  const legend=document.getElementById('precip-legend');
+  if(isPT&&radarVisible){
+    if(!legend._userHidden) legend.classList.add('visible');
+  } else {
+    legend.classList.remove('visible');
+  }
 }
-document.getElementById('legend-title-bar').addEventListener('click',()=>{
-  const body=document.getElementById('legend-body');
-  const btn=document.getElementById('legend-hide-btn');
-  const col=body.style.display==='none';
-  body.style.display=col?'':'none'; btn.textContent=col?'✕':'▼';
+document.getElementById('legend-toggle-btn').addEventListener('click',()=>{
+  const legend=document.getElementById('precip-legend');
+  const btn=document.getElementById('legend-toggle-btn');
+  const isVisible=legend.classList.contains('visible');
+  legend.classList.toggle('visible',!isVisible);
+  legend._userHidden=isVisible; // track manual hide so updateLegendVisibility doesn't re-open it
+  btn.style.background=isVisible?'transparent':'rgba(100,180,255,0.15)';
+  btn.style.borderColor=isVisible?'rgba(100,180,255,0.3)':'#88ccff';
+  btn.style.color=isVisible?'rgba(136,204,255,0.6)':'#88ccff';
 });
+// legend title bar click removed — toolbar Legend button handles show/hide
 
 (function(){
   const savedType=localStorage.getItem('radar_type');
@@ -1952,6 +1988,8 @@ setInterval(()=>{
 },5000);
 
 connect();
+document.getElementById('map').addEventListener('click', function(e){
+}, true); // capture phase — fires before Leaflet
 (function initFakeGPS(){
   const fakeLL={lat:53.5461,lng:-113.4938}; // Edmonton fallback
   _gpsLastLL={lat:53.5461,lon:-113.4938};
@@ -2065,20 +2103,46 @@ fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/st
       const lat = +p[1];
       const lon = +p[2];
       const name = p[3] ? p[3].trim() : id;
+      const type = p[4] ? p[4].trim() : '';
+      const elev = p[5] ? parseFloat(p[5].trim()) : null;
       if(isNaN(lat)||isNaN(lon)) return;
-      stations[id] = {lat, lon, name};
-      const icon = L.divIcon({
-        className: '',
-        html: '<div style="position:absolute;transform:translate(-50%,-50%);color:'+(currentBasemap==='street'?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+',0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+';">' + id + '</div>',
-        iconSize: [0, 0], iconAnchor: [0, 0]
-      });
-      const m = L.marker([lat, lon], {icon, interactive: false}).addTo(map);
+      stations[id] = {lat, lon, name, type, elev};
+const icon = L.divIcon({ className: '', html: '', iconSize: [0,0], iconAnchor: [0,0] });
+const m = L.marker([lat, lon], {icon, interactive: true, pane: 'gps'}).addTo(map);
       m._stationId = id;
-      stationLabelMarkers.push(m);
+      m.on('click', function(e){
+        L.DomEvent.stopPropagation(e);
+        const s = stations[id];
+        const elevStr = (s.elev !== null && !isNaN(s.elev)) ? s.elev.toFixed(1) + ' m' : '—';
+        const typeStr = s.type || '—';
+const src = gpsMarker ? gpsMarker.getLatLng() : _gpsLastLL;
+        let distStr = '';
+        if (src) {
+          const slat = src.lat, slon = src.lng ?? src.lon;
+          const km = haversineKm(slat, slon, s.lat, s.lon);
+          distStr = km < 1 ? (km * 1000).toFixed(0) + ' m' : km.toFixed(1) + ' km';
+        }
+        const popupHtml =
+          '<div style="font-family:monospace;font-size:11px;line-height:2;color:#ccc;min-width:180px;">' +
+          '<div style="font-size:13px;font-weight:700;color:#00ff96;margin-bottom:4px;">📡 ' + id + '</div>' +
+          '<div><span style="color:#666;">Name&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.name + '</div>' +
+          '<div><span style="color:#666;">Type&nbsp;&nbsp;&nbsp;&nbsp;</span>' + typeStr + '</div>' +
+          '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
+          '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lat.toFixed(4) + '°</div>' +
+          '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lon.toFixed(4) + '°</div>' +
+          (distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
+          '</div>';
+        L.popup({closeButton:true, className:'strike-popup', maxWidth:240})
+          .setLatLng([s.lat, s.lon])
+          .setContent(popupHtml)
+          .openOn(map);
+      });
+stationLabelMarkers.push(m);
     });
     buildStationDropdown();
+    rebuildStationIcons(); // apply correct font size for current zoom
   });
-
+  
 function buildStationDropdown(){
   const sel = document.getElementById('stationSelect');
   sel.innerHTML = '<option value="">-- select --</option>';
@@ -2206,6 +2270,32 @@ document.getElementById('station-toggle').addEventListener('click', function(){
 
   map.on('click', closeMenu);
 })();
+
+// ── Zoom-responsive UI font scaling ──────────────────────────
+(function initZoomFontScale(){
+const SCALE = [
+    // [minZoom, sm,   xs,   md  ]
+    [12,         18,   14,   20  ],
+    [10,         15,   12,   18  ],
+    [8,          13,   11,   16  ],
+    [6,          11,   10,   14  ],
+    [0,           9,    8,   12  ],
+  ];
+  function applyFontScale(zoom){
+    const row = SCALE.find(r => zoom >= r[0]) || SCALE[SCALE.length - 1];
+    const root = document.documentElement;
+    root.style.setProperty('--ui-font-sm', row[1] + 'px');
+    root.style.setProperty('--ui-font-xs', row[2] + 'px');
+    root.style.setProperty('--ui-font-md', row[3] + 'px');
+  }
+map.on('zoomend', () => {
+    const z = map.getZoom();
+    applyFontScale(z);
+    rebuildStationIcons();
+  });
+  applyFontScale(map.getZoom());
+})();
+
 
 // ── EC Public Forecast Modal ──────────────────────────────────
 (function initECForecast() {
