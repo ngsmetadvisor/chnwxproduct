@@ -2085,15 +2085,36 @@ fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/st
       const lat = +p[1];
       const lon = +p[2];
       const name = p[3] ? p[3].trim() : id;
+      const type = p[4] ? p[4].trim() : '';
+      const elev = p[5] ? parseFloat(p[5].trim()) : null;
       if(isNaN(lat)||isNaN(lon)) return;
-      stations[id] = {lat, lon, name};
+      stations[id] = {lat, lon, name, type, elev};
       const icon = L.divIcon({
         className: '',
         html: '<div style="position:absolute;transform:translate(-50%,-50%);color:'+(currentBasemap==='street'?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+',0 0 3px '+(currentBasemap==='street'?'#fff':'#000')+';">' + id + '</div>',
         iconSize: [0, 0], iconAnchor: [0, 0]
       });
-      const m = L.marker([lat, lon], {icon, interactive: false}).addTo(map);
+const m = L.marker([lat, lon], {icon, interactive: true}).addTo(map);
       m._stationId = id;
+      m.on('click', function(e){
+        L.DomEvent.stopPropagation(e);
+        const s = stations[id];
+        const elevStr = (s.elev !== null && !isNaN(s.elev)) ? s.elev.toFixed(1) + ' m' : '—';
+        const typeStr = s.type || '—';
+        const popupHtml =
+          '<div style="font-family:monospace;font-size:11px;line-height:2;color:#ccc;min-width:180px;">' +
+          '<div style="font-size:13px;font-weight:700;color:#00ff96;margin-bottom:4px;">📡 ' + id + '</div>' +
+          '<div><span style="color:#666;">Name&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.name + '</div>' +
+          '<div><span style="color:#666;">Type&nbsp;&nbsp;&nbsp;&nbsp;</span>' + typeStr + '</div>' +
+          '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
+          '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lat.toFixed(4) + '°</div>' +
+          '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lon.toFixed(4) + '°</div>' +
+          '</div>';
+        L.popup({closeButton:true, className:'strike-popup', maxWidth:240})
+          .setLatLng([s.lat, s.lon])
+          .setContent(popupHtml)
+          .openOn(map);
+      });
       stationLabelMarkers.push(m);
     });
     buildStationDropdown();
