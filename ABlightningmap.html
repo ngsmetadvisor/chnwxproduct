@@ -24,14 +24,14 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   border-radius: 20px; padding: 5px 10px; align-items: center;
   backdrop-filter: blur(6px); max-width: calc(100vw - 20px);
 }
-.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 .tb-btn.active { background: rgba(255,220,0,0.2); border-color: #ffdd00; color: #ffdd00; }
 .tb-btn:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
 .sep { width: 1px; height: 16px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
-#zone-toggle { background: transparent; border: 0.5px solid rgba(255,140,0,0.5); color: #ff8c00; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+#zone-toggle { background: transparent; border: 0.5px solid rgba(255,140,0,0.5); color: #ff8c00; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 #zone-toggle.active { background: rgba(255,140,0,0.2); }
 #zone-toggle:hover { background: rgba(255,140,0,0.15); }
-#gps-btn { background: transparent; border: 0.5px solid rgba(0,255,150,0.4); color: #00ff96; font-size: 11px; padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+#gps-btn { background: transparent; border: 0.5px solid rgba(0,255,150,0.4); color: #00ff96; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 #gps-btn.active { background: rgba(0,255,150,0.15); border-color: #00ff96; }
 #gps-btn.searching { border-color: #ffaa00; color: #ffaa00; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
@@ -70,7 +70,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 #status {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
   display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
-  font-size: 11px; padding: 5px 10px;
+  font-size: var(--ui-font-sm, 11px); padding: 5px 10px;
   background: rgba(8,8,18,0.88); border-top: 0.5px solid rgba(255,255,255,0.08);
   color: #aaa; backdrop-filter: blur(4px);
 }
@@ -2205,6 +2205,33 @@ document.getElementById('station-toggle').addEventListener('click', function(){
   });
 
   map.on('click', closeMenu);
+})();
+
+// ── Zoom-responsive UI font scaling ──────────────────────────
+(function initZoomFontScale(){
+  // Map zoom → CSS custom property values
+  // --ui-font-sm:  status bar / toolbar button text
+  // --ui-font-xs:  small labels (zone counts, radar status, etc.)
+  // --ui-font-md:  panel titles, counters
+  const SCALE = [
+    // [minZoom, sm,   xs,   md  ]
+    [12,         14,   12,   17  ],
+    [10,         13,   11,   16  ],
+    [8,          12,   10,   15  ],
+    [6,          11,   10,   14  ],
+    [0,          10,    9,   13  ],
+  ];
+
+  function applyFontScale(zoom){
+    const row = SCALE.find(r => zoom >= r[0]) || SCALE[SCALE.length - 1];
+    const root = document.documentElement;
+    root.style.setProperty('--ui-font-sm', row[1] + 'px');
+    root.style.setProperty('--ui-font-xs', row[2] + 'px');
+    root.style.setProperty('--ui-font-md', row[3] + 'px');
+  }
+
+  map.on('zoomend', () => applyFontScale(map.getZoom()));
+  applyFontScale(map.getZoom()); // apply on load
 })();
 
 // ── EC Public Forecast Modal ──────────────────────────────────
