@@ -1909,8 +1909,13 @@ async function loadECLightning(){
           }
 
           const cx2=Math.round(sumX/count),cy2=Math.round(sumY/count);
-          ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(cx2-5,cy2-5,11,11);
+const ageH=this._ageH||0;
+          const bg=ageH<1?'rgba(0,0,0,0.75)':ageH<2?'rgba(0,0,0,0.45)':'rgba(0,0,0,0.2)';
+          const alpha=ageH<1?1.0:ageH<2?0.6:0.3;
+          ctx.globalAlpha=alpha;
+          ctx.fillStyle=bg;ctx.fillRect(cx2-5,cy2-5,11,11);
           ctx.fillText('⚡',cx2,cy2);
+          ctx.globalAlpha=1.0;
           // Convert this symbol's pixel centre to lat/lon and remember it for click hit-testing
           try{
             const xMeter=nwM.x+(cx2/256)*(seM.x-nwM.x);
@@ -1925,8 +1930,14 @@ async function loadECLightning(){
     }
   });
 
+const now3=Date.now();
   window3h.forEach(tt=>{
-    const l=new SymbolLayer(tt,{pane:'ecLightningPane',tileSize:256,opacity:1.0,attribution:'⚡ © ECCC GeoMet (3h)'});
+    const ageMs=now3-new Date(tt).getTime();
+    const ageH=ageMs/3600000;
+    // Fade: <1h=full, 1-2h=medium, 2-3h=dim
+    const opacity=ageH<1?1.0:ageH<2?0.55:0.25;
+    const l=new SymbolLayer(tt,{pane:'ecLightningPane',tileSize:256,opacity,attribution:'⚡ © ECCC GeoMet (3h)'});
+    l._ageH=ageH;
     l.addTo(map);ecLightningLayers.push(l);
   });
 }
