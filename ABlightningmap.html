@@ -481,10 +481,13 @@ function setBasemap(name){
   stationLabelMarkers.forEach(m=>{
     const id=m._stationId;
     if(!id)return;
-m.setIcon(L.divIcon({
+const charW2 = 6, padX2 = 6, padY2 = 8;
+      const iw2 = id.length * charW2 + padX2 * 2;
+      const ih2 = 10 + padY2 * 2;
+      m.setIcon(L.divIcon({
       className:'',
-      html:'<div style="transform:translate(-50%,-50%);color:'+(isLight?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:8px 6px;min-width:36px;text-align:center;">'+id+'</div>',
-      iconSize:[60,28],iconAnchor:[30,14]
+html:'<div style="color:'+(isLight?'#333':'#aaa')+';font-size:var(--ui-font-sm,10px);font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:'+padY2+'px '+padX2+'px;line-height:1;">'+id+'</div>',
+      iconSize:[iw2,ih2],iconAnchor:[iw2/2,ih2/2]
     }));
   });
 }
@@ -500,6 +503,7 @@ map.createPane('radar');        map.getPane('radar').style.zIndex        = 350;
 map.createPane('zones');        map.getPane('zones').style.zIndex        = 400;
 map.createPane('gps');          map.getPane('gps').style.zIndex          = 600;
 map.createPane('strikes');      map.getPane('strikes').style.zIndex      = 650;
+map.getPane('strikes').style.pointerEvents = 'none';
 map.createPane('ecLightningPane'); map.getPane('ecLightningPane').style.zIndex = 640;
 
 
@@ -508,7 +512,6 @@ const canvasRenderer = L.canvas({ pane:'strikes', tolerance:5 });
 
 // Global error handler — catch canvas/WebGL crashes and recover
 window.addEventListener('error', function(e){
-  console.warn('[crash guard]', e.message);
   try {
     // Re-add canvas renderer pane if lost
     const sp = map.getPane('strikes');
@@ -520,7 +523,6 @@ window.addEventListener('error', function(e){
 
 
 window.addEventListener('unhandledrejection', function(e){
-  console.warn('[unhandled promise]', e.reason);
   e.preventDefault();
 });
 
@@ -1001,7 +1003,7 @@ function loadZones(){
       features.forEach(f=>{
         const poly=L.polygon(f.latlngs,{pane:'zones',color:'#ff8c00',weight:1.5,opacity:0.75,fillColor:'#ff8c00',fillOpacity:0.06});
         poly.bindPopup('<span style="font-family:monospace;color:#ff8c00;font-size:12px;">'+f.label+'<br><span id="popup-cnt-'+f.shortId+'" style="color:#ffdd00;">– strikes</span></span>',{maxWidth:200});
-        poly.on('click',()=>{setTimeout(()=>{const el=document.getElementById('popup-cnt-'+f.shortId);if(el)el.textContent=(zonePolygons.find(z=>z.shortId===f.shortId)?._count||0)+' strikes';},50);});
+poly.on('click',(e)=>{console.log('[zone poly click]', f.shortId, 'propagating up');setTimeout(()=>{const el=document.getElementById('popup-cnt-'+f.shortId);if(el)el.textContent=(zonePolygons.find(z=>z.shortId===f.shortId)?._count||0)+' strikes';},50);});
         poly.addTo(zoneLayer);
         zonePolygons.push({...f,polygon:poly});
       });
@@ -1066,6 +1068,26 @@ document.getElementById('ab-collapse-btn').addEventListener('click',()=>{
   panel.classList.toggle('collapsed');
   btn.textContent=panel.classList.contains('collapsed')?'▼':'▲';
 });
+
+function rebuildStationIcons(){
+  const isLight = currentBasemap === 'street';
+  const rawVal = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-sm').trim();
+  const fsPx = parseInt(rawVal) || 10;
+  const charW = fsPx * 0.6;
+  const padX = 6, padY = 6;
+  stationLabelMarkers.forEach(m => {
+    const id = m._stationId;
+    if(!id) return;
+    const iw = id.length * charW + padX * 2;
+    const ih = fsPx + padY * 2;
+    m.setIcon(L.divIcon({
+      className: '',
+      html: '<div style="color:'+(isLight?'#333':'#aaa')+';font-size:'+fsPx+'px;font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:'+padY+'px '+padX+'px;line-height:1;">'+id+'</div>',
+      iconSize: [iw, ih],
+      iconAnchor: [iw/2, ih/2]
+    }));
+  });
+}
 
 loadZones();
 
@@ -1966,6 +1988,8 @@ setInterval(()=>{
 },5000);
 
 connect();
+document.getElementById('map').addEventListener('click', function(e){
+}, true); // capture phase — fires before Leaflet
 (function initFakeGPS(){
   const fakeLL={lat:53.5461,lng:-113.4938}; // Edmonton fallback
   _gpsLastLL={lat:53.5461,lon:-113.4938};
@@ -2083,19 +2107,21 @@ fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/st
       const elev = p[5] ? parseFloat(p[5].trim()) : null;
       if(isNaN(lat)||isNaN(lon)) return;
       stations[id] = {lat, lon, name, type, elev};
-const isLight = currentBasemap==='street';
-const icon = L.divIcon({
-        className: '',
-        html: '<div style="transform:translate(-50%,-50%);color:'+(isLight?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:8px 6px;min-width:36px;text-align:center;">' + id + '</div>',
-        iconSize: [60, 28], iconAnchor: [30, 14]
-      });
-const m = L.marker([lat, lon], {icon, interactive: true}).addTo(map);
+const icon = L.divIcon({ className: '', html: '', iconSize: [0,0], iconAnchor: [0,0] });
+const m = L.marker([lat, lon], {icon, interactive: true, pane: 'gps'}).addTo(map);
       m._stationId = id;
       m.on('click', function(e){
         L.DomEvent.stopPropagation(e);
         const s = stations[id];
         const elevStr = (s.elev !== null && !isNaN(s.elev)) ? s.elev.toFixed(1) + ' m' : '—';
         const typeStr = s.type || '—';
+const src = gpsMarker ? gpsMarker.getLatLng() : _gpsLastLL;
+        let distStr = '';
+        if (src) {
+          const slat = src.lat, slon = src.lng ?? src.lon;
+          const km = haversineKm(slat, slon, s.lat, s.lon);
+          distStr = km < 1 ? (km * 1000).toFixed(0) + ' m' : km.toFixed(1) + ' km';
+        }
         const popupHtml =
           '<div style="font-family:monospace;font-size:11px;line-height:2;color:#ccc;min-width:180px;">' +
           '<div style="font-size:13px;font-weight:700;color:#00ff96;margin-bottom:4px;">📡 ' + id + '</div>' +
@@ -2104,17 +2130,19 @@ const m = L.marker([lat, lon], {icon, interactive: true}).addTo(map);
           '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
           '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lat.toFixed(4) + '°</div>' +
           '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lon.toFixed(4) + '°</div>' +
+          (distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
           '</div>';
         L.popup({closeButton:true, className:'strike-popup', maxWidth:240})
           .setLatLng([s.lat, s.lon])
           .setContent(popupHtml)
           .openOn(map);
       });
-      stationLabelMarkers.push(m);
+stationLabelMarkers.push(m);
     });
     buildStationDropdown();
+    rebuildStationIcons(); // apply correct font size for current zoom
   });
-
+  
 function buildStationDropdown(){
   const sel = document.getElementById('stationSelect');
   sel.innerHTML = '<option value="">-- select --</option>';
@@ -2245,40 +2273,13 @@ document.getElementById('station-toggle').addEventListener('click', function(){
 
 // ── Zoom-responsive UI font scaling ──────────────────────────
 (function initZoomFontScale(){
-  // Map zoom → CSS custom property values
-  // --ui-font-sm:  status bar / toolbar button text
-  // --ui-font-xs:  small labels (zone counts, radar status, etc.)
-  // --ui-font-md:  panel titles, counters
-  const SCALE = [
+const SCALE = [
     // [minZoom, sm,   xs,   md  ]
-    [12,         14,   12,   17  ],
-    [10,         13,   11,   16  ],
-    [8,          12,   10,   15  ],
+    [12,         18,   14,   20  ],
+    [10,         15,   12,   18  ],
+    [8,          13,   11,   16  ],
     [6,          11,   10,   14  ],
-    [0,          10,    9,   13  ],
-  ];
-
-  function applyFontScale(zoom){
-    const row = SCALE.find(r => zoom >= r[0]) || SCALE[SCALE.length - 1];
-    const root = document.documentElement;
-    root.style.setProperty('--ui-font-sm', row[1] + 'px');
-    root.style.setProperty('--ui-font-xs', row[2] + 'px');
-    root.style.setProperty('--ui-font-md', row[3] + 'px');
-  }
-
-  map.on('zoomend', () => applyFontScale(map.getZoom()));
-  applyFontScale(map.getZoom()); // apply on load
-})();
-
-// ── Zoom-responsive UI font scaling ──────────────────────────
-(function initZoomFontScale(){
-  const SCALE = [
-    // [minZoom, sm,   xs,   md  ]
-    [12,         14,   12,   17  ],
-    [10,         13,   11,   16  ],
-    [8,          12,   10,   15  ],
-    [6,          11,   10,   14  ],
-    [0,          10,    9,   13  ],
+    [0,           9,    8,   12  ],
   ];
   function applyFontScale(zoom){
     const row = SCALE.find(r => zoom >= r[0]) || SCALE[SCALE.length - 1];
@@ -2287,9 +2288,14 @@ document.getElementById('station-toggle').addEventListener('click', function(){
     root.style.setProperty('--ui-font-xs', row[2] + 'px');
     root.style.setProperty('--ui-font-md', row[3] + 'px');
   }
-  map.on('zoomend', () => applyFontScale(map.getZoom()));
+map.on('zoomend', () => {
+    const z = map.getZoom();
+    applyFontScale(z);
+    rebuildStationIcons();
+  });
   applyFontScale(map.getZoom());
 })();
+
 
 // ── EC Public Forecast Modal ──────────────────────────────────
 (function initECForecast() {
