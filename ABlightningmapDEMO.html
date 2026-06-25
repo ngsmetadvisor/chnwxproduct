@@ -248,6 +248,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 </style>
 </head>
 <body>
+<div id="debug-log" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;max-height:40vh;overflow-y:auto;background:rgba(0,0,0,0.92);font-family:monospace;font-size:10px;color:#0f0;padding:4px;pointer-events:auto;"></div>
 <div id="wrap">
 
   <!-- Toolbar -->
@@ -478,18 +479,7 @@ function setBasemap(name){
   document.getElementById('basemap-btn').textContent=BASEMAP_LABELS[name];
   // Rebuild station labels with correct shadow
   const isLight=currentBasemap==='street';
-  stationLabelMarkers.forEach(m=>{
-    const id=m._stationId;
-    if(!id)return;
-const charW2 = 6, padX2 = 6, padY2 = 8;
-      const iw2 = id.length * charW2 + padX2 * 2;
-      const ih2 = 10 + padY2 * 2;
-      m.setIcon(L.divIcon({
-      className:'',
-html:'<div style="color:'+(isLight?'#333':'#aaa')+';font-size:var(--ui-font-sm,10px);font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:'+padY2+'px '+padX2+'px;line-height:1;">'+id+'</div>',
-      iconSize:[iw2,ih2],iconAnchor:[iw2/2,ih2/2]
-    }));
-  });
+rebuildStationIcons(); // just updates the CSS rule, no marker DOM changes
 }
 
 function cycleBasemap(){
@@ -501,6 +491,7 @@ document.getElementById('basemap-btn').addEventListener('click',cycleBasemap);
 
 map.createPane('radar');        map.getPane('radar').style.zIndex        = 350;
 map.createPane('zones');        map.getPane('zones').style.zIndex        = 400;
+map.createPane('stations');     map.getPane('stations').style.zIndex     = 500;
 map.createPane('gps');          map.getPane('gps').style.zIndex          = 600;
 map.createPane('strikes');      map.getPane('strikes').style.zIndex      = 650;
 map.getPane('strikes').style.pointerEvents = 'none';
@@ -684,11 +675,14 @@ setInterval(()=>{
   try{checkLightningProximity();}catch(e){console.warn('[checkLightningProximity]',e);}
 },2000);
 
-// Throttle map redraws during pinch-zoom on iOS
-let _zoomThrottle=null;
-map.on('zoomanim zoom', function(){
-  if(_zoomThrottle) return;
-  _zoomThrottle=setTimeout(()=>{_zoomThrottle=null;},100);
+// Freeze stations pane during zoom to prevent iOS compositor overload
+map.on('zoomstart', function(){
+  const p = map.getPane('stations');
+  if(p) p.style.visibility='hidden';
+});
+map.on('zoomend', function(){
+  const p = map.getPane('stations');
+  if(p) setTimeout(()=>{ p.style.visibility=''; }, 250);
 });
 // ── Lightning Proximity Warning ───────────────────────────────
 const PROX_RADIUS_KM     = 1000  // total watch radius distance in km. 100km in default
@@ -1069,24 +1063,17 @@ document.getElementById('ab-collapse-btn').addEventListener('click',()=>{
   btn.textContent=panel.classList.contains('collapsed')?'▼':'▲';
 });
 
+// Inject a single stylesheet for station labels — update this instead of touching markers
+const _stnStyle = document.createElement('style');
+_stnStyle.id = 'stn-label-style';
+document.head.appendChild(_stnStyle);
+
 function rebuildStationIcons(){
   const isLight = currentBasemap === 'street';
-  const rawVal = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-sm').trim();
-  const fsPx = parseInt(rawVal) || 10;
-  const charW = fsPx * 0.6;
-  const padX = 6, padY = 6;
-  stationLabelMarkers.forEach(m => {
-    const id = m._stationId;
-    if(!id) return;
-    const iw = id.length * charW + padX * 2;
-    const ih = fsPx + padY * 2;
-    m.setIcon(L.divIcon({
-      className: '',
-      html: '<div style="color:'+(isLight?'#333':'#aaa')+';font-size:'+fsPx+'px;font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:'+padY+'px '+padX+'px;line-height:1;">'+id+'</div>',
-      iconSize: [iw, ih],
-      iconAnchor: [iw/2, ih/2]
-    }));
-  });
+  const color = isLight ? '#333' : '#aaa';
+  const shadow = isLight ? '#fff' : '#000';
+  // Update CSS only — no DOM mutation on any marker
+  _stnStyle.textContent = '.stn-label{color:'+color+';font-size:11px;font-family:monospace;white-space:nowrap;cursor:pointer;padding:6px 6px;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';}';
 }
 
 loadZones();
@@ -1628,7 +1615,8 @@ function onGPSSuccess(pos){
   devTryRecord();
 
   
-  if(!gpsMarker){
+if(!gpsMarker){
+    console.log('[GPS] creating markers at', lat, lon, 'gps pane zIndex:', map.getPane('gps')?.style.zIndex, 'visibility:', map.getPane('gps')?.style.visibility);
     gpsRing=L.marker([lat,lon],{icon:gpsRingIcon,interactive:false,pane:'gps'}).addTo(map);
     gpsMarker=L.marker([lat,lon],{icon:gpsIcon,interactive:false,pane:'gps'}).addTo(map);
     gpsAccCircle=L.circle([lat,lon],{radius:accuracy,pane:'gps',color:'#00ff96',fillColor:'#00ff96',fillOpacity:0.04,weight:1,opacity:0.3,interactive:false}).addTo(map);
@@ -1679,7 +1667,8 @@ function onGPSError(err){
 
 function toggleGPS(){
   requestNotifyPermission();
-  if(!gpsActive){
+if(!gpsActive){
+    console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarker);
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
     if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
@@ -2118,8 +2107,16 @@ fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/st
       const elev = p[5] ? parseFloat(p[5].trim()) : null;
       if(isNaN(lat)||isNaN(lon)) return;
       stations[id] = {lat, lon, name, type, elev};
-const icon = L.divIcon({ className: '', html: '', iconSize: [0,0], iconAnchor: [0,0] });
-const m = L.marker([lat, lon], {icon, interactive: true, pane: 'gps'}).addTo(map);
+const charW = 6.6, padX = 6, padY = 6;
+      const iw = id.length * charW + padX * 2;
+      const ih = 11 + padY * 2;
+      const icon = L.divIcon({
+        className: '',
+        html: '<div class="stn-label">'+id+'</div>',
+        iconSize: [iw, ih],
+        iconAnchor: [iw/2, ih/2]
+      });
+const m = L.marker([lat, lon], {icon, interactive: true, pane: 'stations'}).addTo(map);
       m._stationId = id;
       m.on('click', function(e){
         L.DomEvent.stopPropagation(e);
@@ -2170,9 +2167,9 @@ document.getElementById('stationSelect').addEventListener('change', function(){
   if(!this.value) return;
   const s = stations[this.value];
   if(!s) return;
-  stationFocusMarker = L.circleMarker([s.lat, s.lon], {
+stationFocusMarker = L.circleMarker([s.lat, s.lon], {
     radius: 6, color: '#00ff96', weight: 2, fill: false,
-    interactive: false, pane: 'gps'
+    interactive: false, pane: 'stations'
   }).addTo(map);
   map.setView([s.lat, s.lon], Math.max(map.getZoom(), 10));
 });
@@ -2300,8 +2297,7 @@ const SCALE = [
     root.style.setProperty('--ui-font-md', row[3] + 'px');
   }
 map.on('zoomend', () => {
-    const z = map.getZoom();
-    applyFontScale(z);
+    applyFontScale(map.getZoom());
     rebuildStationIcons();
   });
   applyFontScale(map.getZoom());
@@ -2478,6 +2474,41 @@ map.on('zoomend', () => {
   map.on('contextmenu', e => { window._ecFcLatLng = e.latlng; });
 })();
 
+// ── On-screen debug log (tap status bar 5× to show/hide) ─────
+(function(){
+  const panel = document.getElementById('debug-log');
+  const _origLog = console.log.bind(console);
+  const _origWarn = console.warn.bind(console);
+  const _origError = console.error.bind(console);
+  function addLine(prefix, color, args){
+    const line = document.createElement('div');
+    line.style.borderBottom = '0.5px solid #1a1a1a';
+    line.style.color = color;
+    line.style.padding = '1px 2px';
+    line.textContent = prefix + args.map(a => {
+      try{ return typeof a === 'object' ? JSON.stringify(a) : String(a); }catch(e){ return '[obj]'; }
+    }).join(' ');
+    panel.appendChild(line);
+    // Keep max 80 lines
+    while(panel.children.length > 80) panel.removeChild(panel.firstChild);
+    panel.scrollTop = panel.scrollHeight;
+    _origLog(...args);
+  }
+  console.log   = (...a) => addLine('', '#0f0', a);
+  console.warn  = (...a) => addLine('⚠ ', '#ffaa00', a);
+  console.error = (...a) => addLine('✖ ', '#ff4444', a);
+  // Tap the status bar 5 times to toggle
+  let _tapCount = 0, _tapTimer = null;
+  document.getElementById('status').addEventListener('click', ()=>{
+    _tapCount++;
+    if(_tapTimer) clearTimeout(_tapTimer);
+    _tapTimer = setTimeout(()=>{ _tapCount=0; }, 800);
+    if(_tapCount >= 5){
+      _tapCount = 0;
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+  });
+})();
 </script>
 </body>
 </html>
