@@ -1105,10 +1105,10 @@ function rebuildStationIcons(){
   const isLight = currentBasemap === 'street';
   const color = isLight ? '#333' : '#aaa';
   const shadow = isLight ? '#fff' : '#000';
+  const fontSize = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-sm').trim() || '11px';
   // Update CSS only — no DOM mutation on any marker
-  _stnStyle.textContent = '.stn-label { color:'+color+';font-size:11px;font-family:monospace;white-space:nowrap;cursor:pointer;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';display:flex;align-items:center;justify-content:center;width:100%;height:100%;box-sizing:border-box; }';
+  _stnStyle.textContent = '.stn-label{color:'+color+';font-size:'+fontSize+';font-family:monospace;white-space:nowrap;cursor:pointer;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';display:flex;align-items:center;justify-content:center;width:100%;height:100%;box-sizing:border-box;}';
 }
-
 loadZones();
 
   
