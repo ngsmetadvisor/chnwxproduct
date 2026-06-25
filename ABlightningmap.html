@@ -544,7 +544,31 @@ map.on('click', function(e){
       }
     });
   }
-  if(!best) return;
+if(!best){
+    // No strike nearby — check if click is inside a zone
+    if(zonesVisible && zonePolygons.length){
+      const clickLat=e.latlng.lat, clickLon=e.latlng.lng;
+      for(const z of zonePolygons){
+        if(pip(clickLat,clickLon,z.latlngs)){
+          const ec1=z._ec1||0, ec2=z._ec2||0, ec3=z._ec3||0;
+          L.popup({closeButton:true,className:'strike-popup',maxWidth:240})
+            .setLatLng(e.latlng)
+            .setContent(
+              '<div style="font-family:monospace;min-width:170px;line-height:1.6;">'+
+              '<div style="color:#ff8c00;font-size:12px;font-weight:700;margin-bottom:3px;white-space:nowrap;">'+z.label+'</div>'+
+              '<div style="color:#ffdd00;font-size:13px;margin-bottom:5px;">'+(z._count||0)+' strikes</div>'+
+              '<div style="color:#888;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">EC Lightning</div>'+
+              '<table style="border-collapse:collapse;font-size:11px;color:#ffaa00;">'+
+              '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="color:#888;">3h</td></tr>'+
+              '<tr><td style="padding-right:10px;">'+ec1+'</td><td style="padding-right:10px;">'+ec2+'</td><td>'+ec3+'</td></tr>'+
+              '</table></div>'
+            ).openOn(map);
+          break;
+        }
+      }
+    }
+    return;
+  }
   const now=t||Date.now()/1000;
   const age=now-best._strokeTime;
   // Format time
@@ -586,31 +610,7 @@ map.on('click', function(e){
 L.popup({closeButton:true,className:'strike-popup'})
     .setLatLng([best._lat,best._lon])
     .setContent(popupContent)
-    .openOn(map);
-  return;
-}
-// No strike nearby — check if click is inside a zone
-if(zonesVisible && zonePolygons.length){
-  const clickLat=e.latlng.lat, clickLon=e.latlng.lng;
-  for(const z of zonePolygons){
-    if(pip(clickLat,clickLon,z.latlngs)){
-      const ec1=z._ec1||0, ec2=z._ec2||0, ec3=z._ec3||0;
-      L.popup({closeButton:true,className:'strike-popup',maxWidth:240})
-        .setLatLng(e.latlng)
-        .setContent(
-          '<div style="font-family:monospace;min-width:170px;line-height:1.6;">'+
-          '<div style="color:#ff8c00;font-size:12px;font-weight:700;margin-bottom:3px;white-space:nowrap;">'+z.label+'</div>'+
-          '<div style="color:#ffdd00;font-size:13px;margin-bottom:5px;">'+(z._count||0)+' strikes</div>'+
-          '<div style="color:#888;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">EC Lightning</div>'+
-          '<table style="border-collapse:collapse;font-size:11px;color:#ffaa00;">'+
-          '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="color:#888;">3h</td></tr>'+
-          '<tr><td style="padding-right:10px;">'+ec1+'</td><td style="padding-right:10px;">'+ec2+'</td><td>'+ec3+'</td></tr>'+
-          '</table></div>'
-        ).openOn(map);
-      break;
-    }
-  }
-}
+  .openOn(map);
 });
 // ── Alberta bbox ──────────────────────────────────────────────
 const AB = { latMin:49, latMax:60, lonMin:-120, lonMax:-110 };
