@@ -483,8 +483,8 @@ function setBasemap(name){
     if(!id)return;
 m.setIcon(L.divIcon({
       className:'',
-      html:'<div style="position:absolute;transform:translate(-50%,-50%);color:'+(isLight?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:6px 4px;">'+id+'</div>',
-      iconSize:[40,20],iconAnchor:[20,10]
+      html:'<div style="transform:translate(-50%,-50%);color:'+(isLight?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:8px 6px;min-width:36px;text-align:center;">'+id+'</div>',
+      iconSize:[60,28],iconAnchor:[30,14]
     }));
   });
 }
@@ -2084,10 +2084,10 @@ fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/st
       if(isNaN(lat)||isNaN(lon)) return;
       stations[id] = {lat, lon, name, type, elev};
 const isLight = currentBasemap==='street';
-      const icon = L.divIcon({
+const icon = L.divIcon({
         className: '',
-        html: '<div style="position:absolute;transform:translate(-50%,-50%);color:'+(isLight?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:6px 4px;">' + id + '</div>',
-        iconSize: [40, 20], iconAnchor: [20, 10]
+        html: '<div style="transform:translate(-50%,-50%);color:'+(isLight?'#333':'#aaa')+';font-size:10px;font-family:monospace;white-space:nowrap;cursor:pointer;text-shadow:0 0 3px '+(isLight?'#fff':'#000')+',0 0 3px '+(isLight?'#fff':'#000')+';padding:8px 6px;min-width:36px;text-align:center;">' + id + '</div>',
+        iconSize: [60, 28], iconAnchor: [30, 14]
       });
 const m = L.marker([lat, lon], {icon, interactive: true}).addTo(map);
       m._stationId = id;
