@@ -2263,7 +2263,8 @@ const src = gpsMarker ? gpsMarker.getLatLng() : _gpsLastLL;
           '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
           '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lat.toFixed(4) + '°</div>' +
           '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lon.toFixed(4) + '°</div>' +
-          (distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
+(distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
+          '<div style="margin-top:6px;"><a href="https://www.google.com/maps?q=' + s.lat.toFixed(5) + ',' + s.lon.toFixed(5) + '" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>' +
           '</div>';
         L.popup({closeButton:true, className:'strike-popup', maxWidth:240})
           .setLatLng([s.lat, s.lon])
