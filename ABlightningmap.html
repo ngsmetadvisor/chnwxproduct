@@ -2831,7 +2831,21 @@ function drawWindArrows(labels, ws, wd, xScale) {
   ctx2.font = '9px Courier New';
   ctx2.textAlign = 'left';
   ctx2.fillStyle = '#556';
-  ctx2.fillText('Wind (' + unitLabel + ')
+ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
+
+  const cols = ['#44ff99','#ffdd00','#ff8800','#ff3300'];
+  const lbls = window._wxKnots ? ['<8kt','<16kt','<27kt','>27kt'] : ['<15','<30','<50','>50'];
+  let cx = 4;
+  lbls.forEach((l, i) => {
+    ctx2.fillStyle = cols[i];
+    ctx2.fillRect(cx, 88, 8, 8);
+    ctx2.fillStyle = '#778';
+    ctx2.fillText(l, cx+10, 96);
+    cx += 42;
+  });
+}
+
+// ── On-screen debug log (tap status bar 5× to show/hide) ─────
 (function(){
   const panel = document.getElementById('debug-log');
   const _origLog = console.log.bind(console);
