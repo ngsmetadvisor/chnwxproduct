@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>* { -webkit-tap-highlight-color: transparent; }</style>
-<title>Lightning Map – Alberta - DEMO 1000km</title>
+<title>Lightning Map – Alberta - Live</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -157,7 +157,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   cursor: pointer; transition: background 0.1s;
 }
 #ctxECForecast:hover { background: rgba(100,180,255,0.1); }
-
+#ctxWxChart {
+  padding: 8px 14px; font-size: 12px; color: #88ffcc;
+  cursor: pointer; transition: background 0.1s;
+}
+#ctxWxChart:hover { background: rgba(100,255,180,0.1); }
 
 /* ── Deviation Rose Panel ── */
 #dev-rose-panel {
@@ -245,6 +249,12 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 }
 .strike-popup .leaflet-popup-tip { background: rgba(8,8,18,0.95); }
 .strike-popup .leaflet-popup-close-button { color: #666; }
+
+/* ── WX Popup ── */
+#wx-popup-overlay {
+  position:fixed;inset:0;z-index:19000;background:rgba(0,0,0,0.6);
+  display:flex;align-items:center;justify-content:center;padding:12px;
+}
 </style>
 </head>
 <body>
@@ -313,6 +323,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <!-- Context menu -->
   <div id="mapContextMenu">
     <div id="ctxECForecast">⛅ Public forecast from EC</div>
+  <div id="ctxWxChart">📈 ECMWF forecast chart</div>
   </div>
 
   <!-- EC Forecast Modal -->
@@ -491,6 +502,7 @@ document.getElementById('basemap-btn').addEventListener('click',cycleBasemap);
 
 map.createPane('radar');        map.getPane('radar').style.zIndex        = 350;
 map.createPane('zones');        map.getPane('zones').style.zIndex        = 400;
+map.getPane('zones').style.pointerEvents = 'none';
 map.createPane('gps');          map.getPane('gps').style.zIndex          = 600;
 map.getPane('gps').style.pointerEvents = 'none';
 map.createPane('stations');     map.getPane('stations').style.zIndex     = 660;
@@ -520,7 +532,7 @@ window.addEventListener('unhandledrejection', function(e){
 
 
 map.on('click', function(e){
-  if(!strokes.length && !ecLightningPoints.length) return;
+  if(!strokes.length && !ecLightningPoints.length && (!zonesVisible || !zonePolygons.length)) return;
   const clickLL=e.latlng;
   const clickPx=map.latLngToContainerPoint(clickLL);
   const TOLERANCE=12; // px
@@ -543,7 +555,34 @@ map.on('click', function(e){
       }
     });
   }
-  if(!best) return;
+if(!best){
+    // No strike nearby — check if click is inside a zone
+    if(zonesVisible && zonePolygons.length){
+      const clickLat=e.latlng.lat, clickLon=e.latlng.lng;
+      for(const z of zonePolygons){
+        if(pip(clickLat,clickLon,z.latlngs)){
+          const ec1=z._ec1||0, ec2=z._ec2||0, ec3=z._ec3||0;
+          L.popup({closeButton:true,className:'strike-popup',maxWidth:240})
+            .setLatLng(e.latlng)
+            .setContent(
+              '<div style="font-family:monospace;min-width:170px;line-height:1.6;">'+
+              '<div style="color:#ff8c00;font-size:12px;font-weight:700;margin-bottom:3px;white-space:nowrap;">'+z.label+'</div>'+
+    '<div style="color:#ffdd00;font-size:13px;margin-bottom:5px;">'+(z._count||0)+' strikes</div>'+
+          '<div style="color:#888;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">EC Lightning</div>'+
+          (!ecLightningEnabled
+            ? '<div style="color:#ffaa00;font-size:9px;margin-bottom:4px;">Tap <b>⚡ 3h</b> in toolbar to enable</div>'
+            : '')+
+          '<table style="border-collapse:collapse;font-size:11px;color:#ffaa00;">'+
+          '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="color:#888;">3h</td></tr>'+
+          '<tr><td style="padding-right:10px;">'+ec1+'</td><td style="padding-right:10px;">'+ec2+'</td><td>'+ec3+'</td></tr>'+
+          '</table></div>'
+            ).openOn(map);
+          break;
+        }
+      }
+    }
+    return;
+  }
   const now=t||Date.now()/1000;
   const age=now-best._strokeTime;
   // Format time
@@ -582,12 +621,11 @@ map.on('click', function(e){
     (distStr?'<div>📏 '+distStr+' from you</div>':'')+
     (bearStr?'<div>🧭 '+bearStr+'</div>':'')+
     '</div>';
-  L.popup({closeButton:true,className:'strike-popup'})
+L.popup({closeButton:true,className:'strike-popup'})
     .setLatLng([best._lat,best._lon])
     .setContent(popupContent)
-    .openOn(map);
+  .openOn(map);
 });
-
 // ── Alberta bbox ──────────────────────────────────────────────
 const AB = { latMin:49, latMax:60, lonMin:-120, lonMax:-110 };
 function inAB(lat,lon){ return lat>=AB.latMin&&lat<=AB.latMax&&lon>=AB.lonMin&&lon<=AB.lonMax; }
@@ -1005,17 +1043,8 @@ function loadZones(){
   '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="color:#888;">3h</td></tr>'+
   '<tr><td id="ec1-'+f.shortId+'" style="padding-right:10px;">–</td><td id="ec2-'+f.shortId+'" style="padding-right:10px;">–</td><td id="ec3-'+f.shortId+'">–</td></tr>'+
   '</table></div>',{maxWidth:240,className:'strike-popup'});
-poly.on('click',(e)=>{console.log('[zone poly click]', f.shortId, 'propagating up');setTimeout(()=>{
-  const z=zonePolygons.find(z=>z.shortId===f.shortId);
-  const el=document.getElementById('popup-cnt-'+f.shortId);
-  if(el)el.textContent=(z?._count||0)+' strikes';
-  const e1=document.getElementById('ec1-'+f.shortId);
-  const e2=document.getElementById('ec2-'+f.shortId);
-  const e3=document.getElementById('ec3-'+f.shortId);
-  if(e1)e1.textContent=z?._ec1||0;
-  if(e2)e2.textContent=z?._ec2||0;
-  if(e3)e3.textContent=z?._ec3||0;
-},50);});
+// Zone popup is now triggered from the map click handler below (zones pane has no pointer events)
+
         poly.addTo(zoneLayer);
         zonePolygons.push({...f,polygon:poly});
       });
@@ -2059,7 +2088,7 @@ function connect(){
 ws.onopen=()=>{
     document.getElementById('connStatus').style.color='#00ff99';
     document.getElementById('connStatus').textContent='Live';
-    try{ ws.send(JSON.stringify({v:24,i:{},s:false,x:0,w:0,tx:0,tw:0,a:4,z:map.getZoom(),b:true,h:'',l:0,t:0,from_lightningmaps_org:true,p:[90,180,-90,-180]})); }catch(e){}
+    try{ ws.send(JSON.stringify({v:24,i:{},s:false,x:0,w:0,tx:0,tw:0,a:4,z:map.getZoom(),b:true,h:'',l:0,t:0,from_lightningmaps_org:true,p:[72,-170,25,-50]})); }catch(e){}
   };
 
   ws.onmessage=(event)=>{
@@ -2245,7 +2274,8 @@ const src = gpsMarker ? gpsMarker.getLatLng() : _gpsLastLL;
           '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
           '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lat.toFixed(4) + '°</div>' +
           '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lon.toFixed(4) + '°</div>' +
-          (distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
+(distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
+          '<div style="margin-top:6px;"><a href="https://www.google.com/maps?q=' + s.lat.toFixed(5) + ',' + s.lon.toFixed(5) + '" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>' +
           '</div>';
         L.popup({closeButton:true, className:'strike-popup', maxWidth:240})
           .setLatLng([s.lat, s.lon])
@@ -2580,6 +2610,240 @@ map.on('zoomend', () => {
 
   map.on('contextmenu', e => { window._ecFcLatLng = e.latlng; });
 })();
+
+// ── WX Popup (ECMWF via open-meteo) ──────────────────────────
+document.getElementById('ctxWxChart').addEventListener('click', () => {
+  const pos = window._ecFcLatLng;
+  if (!pos) return;
+  document.getElementById('mapContextMenu').style.display = 'none';
+  openWeatherPopup(pos.lat, pos.lng);
+});
+
+function openWeatherPopup(lat, lon) {
+  const existing = document.getElementById('wx-popup-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'wx-popup-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:19000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:12px;';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#0d0f1a;border:0.5px solid rgba(100,180,255,0.3);border-radius:14px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;padding:16px;font-family:\'Courier New\',monospace;position:relative;';
+
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div>
+        <div style="font-size:13px;color:#88ccff;font-weight:700;">📍 ${lat.toFixed(4)}°N, ${Math.abs(lon).toFixed(4)}°W</div>
+        <div id="wx-subtitle" style="font-size:10px;color:#556;margin-top:2px;">Loading ECMWF forecast…</div>
+      </div>
+      <button id="wx-close-btn" style="background:transparent;border:0.5px solid rgba(100,180,255,0.3);color:#88ccff;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+    <div id="wx-legend" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;font-size:10px;color:#777;"></div>
+    <div style="position:relative;width:100%;height:340px;"><canvas id="wx-chart" role="img" aria-label="5-day ECMWF weather forecast"></canvas></div>
+    <div style="position:relative;width:100%;height:120px;margin-top:8px;"><canvas id="wx-wind-chart" role="img" aria-label="Wind direction arrows"></canvas></div>
+    <div id="wx-error" style="display:none;color:#ff6644;font-size:11px;margin-top:8px;text-align:center;"></div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  document.getElementById('wx-close-btn').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  fetchAndDrawWeather(lat, lon);
+}
+
+async function fetchAndDrawWeather(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&hourly=temperature_2m,relative_humidity_2m,windspeed_10m,winddirection_10m,precipitation,cloudcover` +
+    `&models=ecmwf_ifs025` +
+    `&forecast_days=5&timezone=America%2FEdmonton`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(data.reason || 'API error');
+    const h = data.hourly;
+    const times=[], temp=[], rh=[], ws=[], wd=[], precip=[], cloud=[];
+    for (let i = 0; i < h.time.length; i += 3) {
+      times.push(h.time[i]);
+      temp.push(h.temperature_2m[i]);
+      rh.push(h.relative_humidity_2m[i]);
+      ws.push(h.windspeed_10m[i]);
+      wd.push(h.winddirection_10m[i]);
+      let p = 0;
+      for (let j = i; j < Math.min(i+3, h.precipitation.length); j++) p += (h.precipitation[j] || 0);
+      precip.push(parseFloat(p.toFixed(2)));
+      cloud.push(h.cloudcover[i]);
+    }
+    const labels = times.map(t => {
+      const d = new Date(t);
+      const dd = String(d.getDate()).padStart(2,'0');
+      const hh = String(d.getHours()).padStart(2,'0');
+      return dd + '/' + hh;
+    });
+    document.getElementById('wx-subtitle').textContent =
+      `ECMWF · 5-day · 3-hr · MDT · ${data.hourly_units?.temperature_2m || '°C'}`;
+    drawWeatherChart(labels, times, temp, rh, ws, precip, cloud, wd);
+  } catch(e) {
+    const errEl = document.getElementById('wx-error');
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Failed to load: ' + e.message; }
+    const sub = document.getElementById('wx-subtitle');
+    if (sub) sub.textContent = 'Error loading forecast';
+  }
+}
+
+function drawWeatherChart(labels, times, temp, rh, ws, precip, cloud, wd) {
+  if (!window.Chart) {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
+    s.onload = () => _renderChart(labels, times, temp, rh, ws, precip, cloud, wd);
+    document.head.appendChild(s);
+  } else {
+    _renderChart(labels, times, temp, rh, ws, precip, cloud, wd);
+  }
+}
+
+function _renderChart(labels, times, temp, rh, ws, precip, cloud, wd) {
+  const ctx = document.getElementById('wx-chart');
+  if (!ctx) return;
+  if (ctx._chartInst) ctx._chartInst.destroy();
+
+  window._wxKnots = window._wxKnots || false;
+  const legend = document.getElementById('wx-legend');
+  if (legend) legend.innerHTML = `
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#ff6b35;display:inline-block;"></span>Temp (°C)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#00ccff;display:inline-block;"></span>RH (%)</span>
+<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#ffdd00;display:inline-block;"></span>Wind</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(0,200,80,0.45);display:inline-block;border-radius:2px;"></span>Precip 3h (mm)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(180,180,200,0.25);display:inline-block;border-radius:2px;"></span>Cloud (%)</span>
+    <button id="wx-wind-unit-btn" style="margin-left:6px;background:transparent;border:0.5px solid rgba(100,180,255,0.4);color:#88ccff;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;">${window._wxKnots ? 'kt → km/h' : 'km/h → kt'}</button>
+  `;
+  document.getElementById('wx-wind-unit-btn').addEventListener('click', () => {
+    window._wxKnots = !window._wxKnots;
+    _renderChart(labels, times, temp, rh, ws, precip, cloud, wd);
+  });
+
+  ctx._chartInst = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {type:'line', label:'Temp (°C)', data:temp, yAxisID:'yT', borderColor:'#ff6b35', backgroundColor:'transparent', borderWidth:2, pointRadius:0, tension:0.3, order:1},
+        {type:'line', label:'RH (%)', data:rh, yAxisID:'yRH', borderColor:'#00ccff', backgroundColor:'transparent', borderWidth:1.5, borderDash:[6,3], pointRadius:0, tension:0.3, order:2},
+{type:'line', label:'Wind', data:window._wxKnots ? ws.map(v => parseFloat((v*0.539957).toFixed(1))) : ws, yAxisID:'yW', borderColor:'#ffdd00', backgroundColor:'transparent', borderWidth:1.5, borderDash:[2,2], pointRadius:0, tension:0.3, order:3},
+        {type:'bar', label:'Precip 3h (mm)', data:precip, yAxisID:'yP', backgroundColor:'rgba(0,200,80,0.45)', order:4},
+        {type:'bar', label:'Cloud (%)', data:cloud, yAxisID:'yC', backgroundColor:'rgba(180,180,200,0.25)', order:5},
+      ]
+    },
+    plugins: [{
+      id: 'windArrowSync',
+      afterLayout: (chart) => drawWindArrows(labels, ws, wd, chart.scales.x)
+    }],
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction: {mode:'index', intersect:false},
+      plugins: {
+        legend: {display:false},
+        tooltip: {
+          backgroundColor:'rgba(8,10,24,0.95)', titleColor:'#88ccff', bodyColor:'#ccc',
+          titleFont:{family:'Courier New', size:11}, bodyFont:{family:'Courier New', size:11},
+          callbacks: {title: items => '🕐 ' + items[0].label + ' MDT'}
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: (ctx) => { const l = labels[ctx.index]||''; return l.endsWith('/00') ? '#ffffff' : '#556'; },
+            font:  (ctx) => { const l = labels[ctx.index]||''; return {size:9, weight: l.endsWith('/00') ? 'bold' : 'normal'}; },
+            maxRotation:45, autoSkip:false,
+            callback: (val, idx) => {
+              const l = labels[idx]||'';
+              const hh = l.slice(-2);
+              if (!['00','06','12','18'].includes(hh)) return null;
+              if (hh === '00') {
+                const d = new Date(times[idx]);
+                return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+              }
+              return hh + 'h';
+            }
+          },
+          grid: {
+            color: (ctx) => { const l = labels[ctx.index]||''; return l.endsWith('/00') ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.04)'; },
+            lineWidth: (ctx) => { const l = labels[ctx.index]||''; return l.endsWith('/00') ? 1.5 : 0.5; }
+          }
+        },
+        yT:  {position:'left',  min:-40, max:40,  title:{display:true,text:'°C',   color:'#ff6b35',font:{size:10}}, ticks:{color:'#ff6b35',font:{size:9}}, grid:{color:'rgba(255,255,255,0.06)'}},
+        yRH: {position:'right', min:0,   max:100, title:{display:true,text:'RH%',  color:'#00ccff',font:{size:10}}, ticks:{color:'#00ccff',font:{size:9},stepSize:20}, grid:{display:false}},
+yW:  {position:'right', min:0,   max:window._wxKnots?60:110, title:{display:true,text:window._wxKnots?'kt':'km/h', color:'#ffdd00',font:{size:10}}, ticks:{color:'#ffdd00',font:{size:9}}, grid:{display:false}, offset:true},
+        yP:  {position:'left',  min:0,   max:50,  title:{display:true,text:'mm',   color:'rgba(0,200,80,0.8)',font:{size:10}}, ticks:{color:'rgba(0,200,80,0.8)',font:{size:9}}, grid:{display:false}, offset:true},
+        yC:  {display:false, min:0, max:100},
+      }
+    }
+  });
+}
+
+function drawWindArrows(labels, ws, wd, xScale) {
+  const canvas = document.getElementById('wx-wind-chart');
+  if (!canvas) return;
+  const W = (xScale && xScale.chart && xScale.chart.width) || canvas.offsetWidth || 640;
+  canvas.width = W; canvas.height = 100;
+  const ctx2 = canvas.getContext('2d');
+  ctx2.clearRect(0, 0, W, 100);
+  const n = labels.length;
+  const step = W / n;
+  const getX = i => xScale ? xScale.getPixelForValue(i) : (step*i + step/2);
+  const unitLabel = window._wxKnots ? 'kt' : 'km/h';
+  const thresholds = window._wxKnots ? [8,16,27,34] : [15,30,50,63];
+
+  ctx2.font = '8px Courier New';
+  ctx2.textAlign = 'center';
+
+  for (let i = 0; i < n; i++) {
+    const x = getX(i);
+    const y = 44;
+    const spdKmh = ws[i] || 0;
+    const spd = window._wxKnots ? spdKmh * 0.539957 : spdKmh;
+    const dir = ((wd[i] || 0) + 180) * Math.PI / 180;
+    const len = Math.min(10 + spd * 0.5, 28);
+    const col = spd < thresholds[0] ? '#44ff99' : spd < thresholds[1] ? '#ffdd00' : spd < thresholds[2] ? '#ff8800' : '#ff3300';
+
+    const lbl = labels[i] || '';
+    const hh = lbl.slice(-2);
+    if (['00','06','12','18'].includes(hh)) {
+      ctx2.strokeStyle = lbl.endsWith('/00') ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)';
+      ctx2.lineWidth = lbl.endsWith('/00') ? 1.5 : 0.5;
+      ctx2.beginPath(); ctx2.moveTo(x, 0); ctx2.lineTo(x, 100); ctx2.stroke();
+    }
+
+    ctx2.save();
+    ctx2.translate(x, y);
+    ctx2.rotate(dir);
+    ctx2.strokeStyle = col;
+    ctx2.lineWidth = 1.5;
+    ctx2.beginPath(); ctx2.moveTo(0, len/2); ctx2.lineTo(0, -len/2); ctx2.stroke();
+    ctx2.beginPath(); ctx2.moveTo(0, -len/2); ctx2.lineTo(-3.5, -len/2+6); ctx2.stroke();
+    ctx2.beginPath(); ctx2.moveTo(0, -len/2); ctx2.lineTo(3.5, -len/2+6); ctx2.stroke();
+    ctx2.restore();
+
+    ctx2.fillStyle = col;
+    ctx2.fillText(Math.round(spd), x, y+18);
+  }
+
+  ctx2.font = '9px Courier New';
+  ctx2.textAlign = 'left';
+  ctx2.fillStyle = '#556';
+ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
+
+  const cols = ['#44ff99','#ffdd00','#ff8800','#ff3300'];
+  const lbls = window._wxKnots ? ['<8kt','<16kt','<27kt','>27kt'] : ['<15','<30','<50','>50'];
+  let cx = 4;
+  lbls.forEach((l, i) => {
+    ctx2.fillStyle = cols[i];
+    ctx2.fillRect(cx, 88, 8, 8);
+    ctx2.fillStyle = '#778';
+    ctx2.fillText(l, cx+10, 96);
+    cx += 42;
+  });
+}
 
 // ── On-screen debug log (tap status bar 5× to show/hide) ─────
 (function(){
