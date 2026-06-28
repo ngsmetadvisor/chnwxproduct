@@ -494,13 +494,14 @@ map.on('zoomanim zoom', function(){
 map.on('moveend zoomend', updateRegionCount);
 
 // ── Lightning Proximity Warning ────────────────────────────────
-const PROX_RADIUS_KM=10000, PROX_WARNING_PCT=0.25;   //100km default, 10000km DEMO
+const PROX_RADIUS_KM=1000, PROX_WARNING_PCT=0.25;   //100km default, 10000km DEMO
 const PROX_WARNING_KM=PROX_RADIUS_KM*PROX_WARNING_PCT;
 const PROX_VIBRATE_MS=[200,100,200,100,200];
 let proximityRing=null,proximityWarning=null,proximityActive=false;
 let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null,_proxVibratedKey=null;
 let _proxLastRenderedKey='';
+const _proxWarnedKeys=new Set(); // keys shown this warning cycle; cleared only when all strikes leave
 let _gpsLastLL=null;
 
 
@@ -566,13 +567,18 @@ if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
   if(count>0 && _proxElapsed<10){
 const isWarning=closest<=PROX_WARNING_KM;
-    if(isWarning&&newestWarningLL&&newestWarningLL.key&&newestWarningLL.key!==_proxVibratedKey){
+if(isWarning&&newestWarningLL&&newestWarningLL.key&&!_proxWarnedKeys.has(newestWarningLL.key)){
       triggerProximityVibrate();
       _proxVibratedKey=newestWarningLL.key;
+      _proxWarnedKeys.add(newestWarningLL.key);
     }
     _proxLastWasWarning=isWarning;
-    const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
+const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
+    // Suppress re-display if the closest warning key was already shown this cycle
+    const suppressKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?'cau_'+newestCautionLL.lat.toFixed(4)+'_'+newestCautionLL.lon.toFixed(4):null);
     if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
+    if(suppressKey&&_proxWarnedKeys.has(suppressKey)&&proximityWarning)return;
+    if(suppressKey) _proxWarnedKeys.add(suppressKey);
     _proxLastRenderedKey=renderKey;
     const lineColor=isWarning?'#ff4400':'#ffdd00';
     if(!window._proxNearestLine){
@@ -615,7 +621,8 @@ if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
       if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
       if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
       if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-      proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
+  proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
+    // Do NOT clear _proxWarnedKeys here — keeps suppression active until strikes age out
     },PROX_FADE_DELAY_MS);}
   } else {
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
@@ -624,6 +631,7 @@ if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
 if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
     _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
+    _proxWarnedKeys.clear(); // all strikes gone — reset suppression for next event
   }
 }
 
@@ -1563,7 +1571,7 @@ function _renderChart(labels,times,temp,rh,ws,precip,cloud,wd){
   if(legend) legend.innerHTML=`
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#ff6b35;display:inline-block;"></span>Temp (°C)</span>
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#00ccff;display:inline-block;"></span>RH (%)</span>
-    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#44aaff;display:inline-block;"></span>Wind</span>
+<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#ffdd00;display:inline-block;"></span>Wind</span>
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(0,150,255,0.45);display:inline-block;border-radius:2px;"></span>Precip 3h (mm)</span>
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(180,180,200,0.25);display:inline-block;border-radius:2px;"></span>Cloud (%)</span>
     <button id="wx-wind-unit-btn" style="margin-left:6px;background:transparent;border:0.5px solid rgba(100,180,255,0.4);color:#88ccff;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;">${window._wxKnots?'kt → km/h':'km/h → kt'}</button>
@@ -1579,8 +1587,8 @@ window._wxKnots=!window._wxKnots;
       datasets:[
         {type:'line',label:'Temp (°C)',data:temp,yAxisID:'yT',borderColor:'#ff6b35',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:0.3,order:1},
         {type:'line',label:'RH (%)',data:rh,yAxisID:'yRH',borderColor:'#00ccff',backgroundColor:'transparent',borderWidth:1.5,borderDash:[6,3],pointRadius:0,tension:0.3,order:2},
-{type:'line',label:'Wind',data:window._wxKnots?ws.map(v=>parseFloat((v*0.539957).toFixed(1))):ws,yAxisID:'yW',borderColor:'#44aaff',backgroundColor:'transparent',borderWidth:1.5,borderDash:[2,2],pointRadius:0,tension:0.3,order:3},
-        {type:'bar',label:'Precip 3h (mm)',data:precip,yAxisID:'yP',backgroundColor:'rgba(0,150,255,0.45)',order:4},
+{type:'line',label:'Wind',data:window._wxKnots?ws.map(v=>parseFloat((v*0.539957).toFixed(1))):ws,yAxisID:'yW',borderColor:'#ffdd00',backgroundColor:'transparent',borderWidth:1.5,borderDash:[2,2],pointRadius:0,tension:0.3,order:3},
+        {type:'bar',label:'Precip 3h (mm)',data:precip,yAxisID:'yP',backgroundColor:'rgba(0,200,80,0.45)',order:4},
 {type:'bar',label:'Cloud (%)',data:cloud,yAxisID:'yC',backgroundColor:'rgba(180,180,200,0.25)',order:5},
       ]
     },
@@ -1633,8 +1641,8 @@ window._wxKnots=!window._wxKnots;
         },
         yT:{position:'left',min:0,max:40,title:{display:true,text:'°C',color:'#ff6b35',font:{size:10}},ticks:{color:'#ff6b35',font:{size:9}},grid:{color:'rgba(255,255,255,0.06)'}},
         yRH:{position:'right',min:0,max:100,title:{display:true,text:'RH%',color:'#00ccff',font:{size:10}},ticks:{color:'#00ccff',font:{size:9},stepSize:20},grid:{display:false}},
-        yW:{position:'right',min:0,max:window._wxKnots?40:74,title:{display:true,text:window._wxKnots?'kt':'km/h',color:'#44aaff',font:{size:10}},ticks:{color:'#44aaff',font:{size:9}},grid:{display:false},offset:true},
-        yP:{position:'left',min:0,max:50,title:{display:true,text:'mm',color:'rgba(0,150,255,0.8)',font:{size:10}},ticks:{color:'rgba(0,150,255,0.8)',font:{size:9}},grid:{display:false},offset:true},
+yW:{position:'right',min:0,max:window._wxKnots?40:74,title:{display:true,text:window._wxKnots?'kt':'km/h',color:'#ffdd00',font:{size:10}},ticks:{color:'#ffdd00',font:{size:9}},grid:{display:false},offset:true},
+        yP:{position:'left',min:0,max:50,title:{display:true,text:'mm',color:'rgba(0,200,80,0.8)',font:{size:10}},ticks:{color:'rgba(0,200,80,0.8)',font:{size:9}},grid:{display:false},offset:true},
         yC:{display:false,min:0,max:100},
       }
     }
