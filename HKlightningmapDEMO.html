@@ -623,8 +623,8 @@ if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
       if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
       if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
       if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-  proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
-    // Do NOT clear _proxWarnedKeys here — keeps suppression active until strikes age out
+      proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
+      _proxDisplayStart=null; // reset so elapsed gate doesn't expire and trigger else-branch clear
     },PROX_FADE_DELAY_MS);}
   } else {
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
@@ -633,8 +633,9 @@ if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
 if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
     _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
-_proxWarnedKeys.clear();   // all strikes gone — reset suppression for next event
+_proxWarnedKeys.clear();   // strikes truly gone — reset for next event
     _proxVibratedKeys.clear();
+    _proxDisplayStart=null;
   }
 }
 
