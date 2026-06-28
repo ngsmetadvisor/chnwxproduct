@@ -501,9 +501,8 @@ let proximityRing=null,proximityWarning=null,proximityActive=false;
 let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null,_proxVibratedKey=null;
 let _proxLastRenderedKey='';
-const _proxWarnedKeys=new Set();   // banner shown this cycle; cleared only when all strikes leave
-const _proxVibratedKeys=new Set(); // vibrated this cycle; cleared only when all strikes leave
 let _gpsLastLL=null;
+const _hkoSeenKeys=new Set(); // HKO strikes already warned; never cleared (page lifetime)
 
 
 
@@ -518,7 +517,7 @@ function haversineKm(lat1,lon1,lat2,lon2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-const PROX_FADE_DELAY_MS=5000;
+const PROX_FADE_DELAY_MS=15000;
 function startProxCountdownFill(){
   const fill=document.getElementById('prox-countdown-fill');
   if(!fill) return;
@@ -550,16 +549,35 @@ if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarni
       else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon};}}
     }
   });
-  if(hkoEnabled){
+if(hkoEnabled){
+    // First pass: find the single closest unseen HKO strike within range
+    let _hkoClosestDist=Infinity, _hkoClosestMarker=null, _hkoClosestKey=null;
     hkoMarkers.forEach(m=>{
       if((nowSec-m._hkoBinEnd)>600)return;
+      const hkoKey='hko_'+m._hkoBinEnd+'_'+m._lat.toFixed(4)+'_'+m._lon.toFixed(4);
+      if(_hkoSeenKeys.has(hkoKey))return;
       const d=haversineKm(lat,lon,m._lat,m._lon);
-      if(d<=PROX_RADIUS_KM){
-        count++;if(d<closest)closest=d;
-if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon,key:'hko_'+m._hkoBinEnd+'_'+m._lat+'_'+m._lon};}}
-        else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon};}}
+      if(d<=PROX_RADIUS_KM&&d<_hkoClosestDist){
+        _hkoClosestDist=d; _hkoClosestMarker=m; _hkoClosestKey=hkoKey;
       }
     });
+// Second pass: count ALL unseen in-range HKO strikes for the banner count,
+    // and mark them ALL as seen together so they don't trickle in one-by-one on later ticks
+    hkoMarkers.forEach(m=>{
+      if((nowSec-m._hkoBinEnd)>600)return;
+      const hkoKey='hko_'+m._hkoBinEnd+'_'+m._lat.toFixed(4)+'_'+m._lon.toFixed(4);
+      if(_hkoSeenKeys.has(hkoKey))return;
+      const d=haversineKm(lat,lon,m._lat,m._lon);
+      if(d<=PROX_RADIUS_KM){ count++; if(d<closest)closest=d; _hkoSeenKeys.add(hkoKey); }
+    });
+    // Only the single closest unseen strike sets the warning/caution target
+    if(_hkoClosestMarker){
+      if(_hkoClosestDist<=PROX_WARNING_KM){
+        if(_hkoClosestDist<closestWarningDist){closestWarningDist=_hkoClosestDist;newestWarningLL={lat:_hkoClosestMarker._lat,lon:_hkoClosestMarker._lon,key:_hkoClosestKey};}
+      } else {
+        if(_hkoClosestDist<closestCautionDist){closestCautionDist=_hkoClosestDist;newestCautionLL={lat:_hkoClosestMarker._lat,lon:_hkoClosestMarker._lon,key:_hkoClosestKey};}
+      }
+    }
   }
   window._proxNearestLL=newestWarningLL||newestCautionLL;
   const hasNewStrike=(newestWarningLL||newestCautionLL)?true:false;
@@ -568,19 +586,15 @@ if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
   if(count>0 && _proxElapsed<10){
 const isWarning=closest<=PROX_WARNING_KM;
-const vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?'cau_'+newestCautionLL.lat.toFixed(4)+'_'+newestCautionLL.lon.toFixed(4):null);
-    if(vibrateKey&&!_proxVibratedKeys.has(vibrateKey)){
+const _vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?newestCautionLL.key:null);
+    if(_vibrateKey&&_vibrateKey!==_proxVibratedKey){
       if(isWarning) triggerProximityVibrate();
-      _proxVibratedKey=vibrateKey;
-      _proxVibratedKeys.add(vibrateKey);
+      _proxVibratedKey=_vibrateKey;
+      if(_vibrateKey.startsWith('hko_')) _hkoSeenKeys.add(_vibrateKey);
     }
     _proxLastWasWarning=isWarning;
-const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
-    // Suppress re-display if the closest warning key was already shown this cycle
-    const suppressKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?'cau_'+newestCautionLL.lat.toFixed(4)+'_'+newestCautionLL.lon.toFixed(4):null);
-if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
-    if(suppressKey&&_proxWarnedKeys.has(suppressKey))return;
-    if(suppressKey) _proxWarnedKeys.add(suppressKey);
+    const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
+    if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
     _proxLastRenderedKey=renderKey;
     const lineColor=isWarning?'#ff4400':'#ffdd00';
     if(!window._proxNearestLine){
@@ -591,8 +605,9 @@ if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
     if(!window._proxDistLabel){
       window._proxDistLabel=L.marker([midLat,midLon],{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<div id="prox-dist-label" style="color:'+lineColor+';font-size:11px;font-family:monospace;font-weight:700;white-space:nowrap;text-shadow:0 0 4px #000,0 0 4px #000;transform:translate(-50%,-50%);position:absolute;">'+distLabel+'</div>',iconSize:[0,0],iconAnchor:[0,0]})}).addTo(map);
     }else{window._proxDistLabel.setLatLng([midLat,midLon]);const el=document.getElementById('prox-dist-label');if(el){el.textContent=distLabel;el.style.color=lineColor;}}
-    if(!proximityRing){proximityRing=L.circle([lat,lon],{radius:PROX_RADIUS_KM*1000,pane:'gps',color:'#ff4400',weight:2,opacity:0.7,fillColor:'#ff4400',fillOpacity:0.04,dashArray:'8 6',interactive:false}).addTo(map);}
-    else proximityRing.setLatLng([lat,lon]);
+    const ringColor=isWarning?'#ff4400':'#ffdd00';
+    if(!proximityRing){proximityRing=L.circle([lat,lon],{radius:PROX_RADIUS_KM*1000,pane:'gps',color:ringColor,weight:2,opacity:0.7,fillColor:ringColor,fillOpacity:0.04,dashArray:'8 6',interactive:false}).addTo(map);}
+    else{proximityRing.setLatLng([lat,lon]);proximityRing.setStyle({color:ringColor,fillColor:ringColor});}
 const color=isWarning?'#cc2200':'#a16207';
     const label=isWarning?'⚡ LIGHTNING WARNING':'⚡ LIGHTNING CAUTION';
     if(!proximityWarning){
@@ -616,25 +631,43 @@ const color=isWarning?'#cc2200':'#a16207';
     document.getElementById('prox-label').textContent=label;
     document.getElementById('prox-detail').style.color=color;
     document.getElementById('prox-detail').textContent=count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closest.toFixed(1)+' km';
-    const nowD=new Date();
-    document.getElementById('prox-time').textContent='Updated '+nowD.toLocaleTimeString('en-HK',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Hong_Kong'})+' HKT';
-if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
+const ptEl=document.getElementById('prox-time');
+    if(!ptEl.dataset.detected){
+      // Use the strike's own time, not the current clock
+      const _strikeSec=newestWarningLL?
+        (newestWarningLL.key.startsWith('hko_')?parseFloat(newestWarningLL.key.split('_')[1]):parseFloat(newestWarningLL.key.split('_')[1])):
+        (newestCautionLL?
+          (newestCautionLL.key&&newestCautionLL.key.startsWith('hko_')?parseFloat(newestCautionLL.key.split('_')[1]):null):null);
+      if(_strikeSec){
+        const _sd=new Date(_strikeSec*1000);
+        const _timeStr=_sd.toLocaleTimeString('en-HK',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Hong_Kong'});
+        const _ageSec=Math.round(Date.now()/1000-_strikeSec);
+        const _ageStr=_ageSec<60?_ageSec+'s ago':_ageSec<3600?Math.round(_ageSec/60)+'m ago':Math.round(_ageSec/3600*10)/10+'h ago';
+        ptEl.dataset.detected=_timeStr+' HKT ('+_ageStr+')';
+      } else {
+        ptEl.dataset.detected=new Date().toLocaleTimeString('en-HK',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Hong_Kong'})+' HKT';
+      }
+    }
+    ptEl.textContent='Strike time: '+ptEl.dataset.detected;
+    
+    if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
       if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
       if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
       if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
       if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-  proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
-    // Do NOT clear _proxWarnedKeys here — keeps suppression active until strikes age out
+proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
+      const _pt=document.getElementById('prox-time');if(_pt)delete _pt.dataset.detected;
     },PROX_FADE_DELAY_MS);}
   } else {
+    if(_proxFadeTimer){
+      // a display is already fading out on its own schedule — let it finish, don't yank it now
+      return;
+    }
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
     if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
     if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
     _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
-_proxWarnedKeys.clear();   // all strikes gone — reset suppression for next event
-    _proxVibratedKeys.clear();
   }
 }
 
