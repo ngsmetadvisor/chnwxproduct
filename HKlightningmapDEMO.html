@@ -613,14 +613,17 @@ const color=isWarning?'#cc2200':'#a16207';
     document.getElementById('prox-label').textContent=label;
     document.getElementById('prox-detail').style.color=color;
     document.getElementById('prox-detail').textContent=count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closest.toFixed(1)+' km';
-    const nowD=new Date();
-    document.getElementById('prox-time').textContent='Updated '+nowD.toLocaleTimeString('en-HK',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Hong_Kong'})+' HKT';
-if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
+const ptEl=document.getElementById('prox-time');
+    if(!ptEl.dataset.detected){
+      ptEl.dataset.detected=new Date().toLocaleTimeString('en-HK',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Hong_Kong'});
+    }
+    ptEl.textContent='Detected '+ptEl.dataset.detected+' HKT';if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
       if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
       if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
       if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
       if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-      proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
+proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
+      const _pt=document.getElementById('prox-time');if(_pt)delete _pt.dataset.detected;
     },PROX_FADE_DELAY_MS);}
   } else {
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
