@@ -517,7 +517,7 @@ function haversineKm(lat1,lon1,lat2,lon2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-const PROX_FADE_DELAY_MS=5000;
+const PROX_FADE_DELAY_MS=15000;
 function startProxCountdownFill(){
   const fill=document.getElementById('prox-countdown-fill');
   if(!fill) return;
@@ -605,8 +605,9 @@ const _vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?newestCau
     if(!window._proxDistLabel){
       window._proxDistLabel=L.marker([midLat,midLon],{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<div id="prox-dist-label" style="color:'+lineColor+';font-size:11px;font-family:monospace;font-weight:700;white-space:nowrap;text-shadow:0 0 4px #000,0 0 4px #000;transform:translate(-50%,-50%);position:absolute;">'+distLabel+'</div>',iconSize:[0,0],iconAnchor:[0,0]})}).addTo(map);
     }else{window._proxDistLabel.setLatLng([midLat,midLon]);const el=document.getElementById('prox-dist-label');if(el){el.textContent=distLabel;el.style.color=lineColor;}}
-    if(!proximityRing){proximityRing=L.circle([lat,lon],{radius:PROX_RADIUS_KM*1000,pane:'gps',color:'#ff4400',weight:2,opacity:0.7,fillColor:'#ff4400',fillOpacity:0.04,dashArray:'8 6',interactive:false}).addTo(map);}
-    else proximityRing.setLatLng([lat,lon]);
+    const ringColor=isWarning?'#ff4400':'#ffdd00';
+    if(!proximityRing){proximityRing=L.circle([lat,lon],{radius:PROX_RADIUS_KM*1000,pane:'gps',color:ringColor,weight:2,opacity:0.7,fillColor:ringColor,fillOpacity:0.04,dashArray:'8 6',interactive:false}).addTo(map);}
+    else{proximityRing.setLatLng([lat,lon]);proximityRing.setStyle({color:ringColor,fillColor:ringColor});}
 const color=isWarning?'#cc2200':'#a16207';
     const label=isWarning?'⚡ LIGHTNING WARNING':'⚡ LIGHTNING CAUTION';
     if(!proximityWarning){
