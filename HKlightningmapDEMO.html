@@ -517,7 +517,7 @@ function haversineKm(lat1,lon1,lat2,lon2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-const PROX_FADE_DELAY_MS=5000;
+const PROX_FADE_DELAY_MS=15000;
 function startProxCountdownFill(){
   const fill=document.getElementById('prox-countdown-fill');
   if(!fill) return;
@@ -561,13 +561,14 @@ if(hkoEnabled){
         _hkoClosestDist=d; _hkoClosestMarker=m; _hkoClosestKey=hkoKey;
       }
     });
-    // Second pass: count ALL unseen in-range HKO strikes for the banner count
+// Second pass: count ALL unseen in-range HKO strikes for the banner count,
+    // and mark them ALL as seen together so they don't trickle in one-by-one on later ticks
     hkoMarkers.forEach(m=>{
       if((nowSec-m._hkoBinEnd)>600)return;
       const hkoKey='hko_'+m._hkoBinEnd+'_'+m._lat.toFixed(4)+'_'+m._lon.toFixed(4);
       if(_hkoSeenKeys.has(hkoKey))return;
       const d=haversineKm(lat,lon,m._lat,m._lon);
-      if(d<=PROX_RADIUS_KM){ count++; if(d<closest)closest=d; }
+      if(d<=PROX_RADIUS_KM){ count++; if(d<closest)closest=d; _hkoSeenKeys.add(hkoKey); }
     });
     // Only the single closest unseen strike sets the warning/caution target
     if(_hkoClosestMarker){
@@ -586,8 +587,8 @@ if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   if(count>0 && _proxElapsed<10){
 const isWarning=closest<=PROX_WARNING_KM;
 const _vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?newestCautionLL.key:null);
-    if(_vibrateKey&&_vibrateKey!==_proxVibratedKey){
-      if(isWarning) triggerProximityVibrate();
+if(_vibrateKey&&_vibrateKey!==_proxVibratedKey){
+      triggerProximityVibrate();
       _proxVibratedKey=_vibrateKey;
       if(_vibrateKey.startsWith('hko_')) _hkoSeenKeys.add(_vibrateKey);
     }
@@ -604,8 +605,9 @@ const _vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?newestCau
     if(!window._proxDistLabel){
       window._proxDistLabel=L.marker([midLat,midLon],{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<div id="prox-dist-label" style="color:'+lineColor+';font-size:11px;font-family:monospace;font-weight:700;white-space:nowrap;text-shadow:0 0 4px #000,0 0 4px #000;transform:translate(-50%,-50%);position:absolute;">'+distLabel+'</div>',iconSize:[0,0],iconAnchor:[0,0]})}).addTo(map);
     }else{window._proxDistLabel.setLatLng([midLat,midLon]);const el=document.getElementById('prox-dist-label');if(el){el.textContent=distLabel;el.style.color=lineColor;}}
-    if(!proximityRing){proximityRing=L.circle([lat,lon],{radius:PROX_RADIUS_KM*1000,pane:'gps',color:'#ff4400',weight:2,opacity:0.7,fillColor:'#ff4400',fillOpacity:0.04,dashArray:'8 6',interactive:false}).addTo(map);}
-    else proximityRing.setLatLng([lat,lon]);
+    const ringColor=isWarning?'#ff4400':'#ffdd00';
+    if(!proximityRing){proximityRing=L.circle([lat,lon],{radius:PROX_RADIUS_KM*1000,pane:'gps',color:ringColor,weight:2,opacity:0.7,fillColor:ringColor,fillOpacity:0.04,dashArray:'8 6',interactive:false}).addTo(map);}
+    else{proximityRing.setLatLng([lat,lon]);proximityRing.setStyle({color:ringColor,fillColor:ringColor});}
 const color=isWarning?'#cc2200':'#a16207';
     const label=isWarning?'⚡ LIGHTNING WARNING':'⚡ LIGHTNING CAUTION';
     if(!proximityWarning){
@@ -657,11 +659,14 @@ proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
       const _pt=document.getElementById('prox-time');if(_pt)delete _pt.dataset.detected;
     },PROX_FADE_DELAY_MS);}
   } else {
+    if(_proxFadeTimer){
+      // a display is already fading out on its own schedule — let it finish, don't yank it now
+      return;
+    }
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
     if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
     if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
     _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
   }
 }
@@ -1453,6 +1458,7 @@ function hkoDisable(){
   if(hkoRefreshTimer){ clearInterval(hkoRefreshTimer); hkoRefreshTimer=null; }
   hkoStopCountdown();
   hkoClearMarkers();
+  _hkoSeenKeys.clear(); // re-enabling HKO should re-evaluate strikes as a fresh batch
 }
 
 document.getElementById('hko-toggle').addEventListener('click',()=>{
