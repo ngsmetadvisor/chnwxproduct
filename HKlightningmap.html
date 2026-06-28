@@ -501,7 +501,8 @@ let proximityRing=null,proximityWarning=null,proximityActive=false;
 let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null,_proxVibratedKey=null;
 let _proxLastRenderedKey='';
-const _proxWarnedKeys=new Set(); // keys shown this warning cycle; cleared only when all strikes leave
+const _proxWarnedKeys=new Set();   // banner shown this cycle; cleared only when all strikes leave
+const _proxVibratedKeys=new Set(); // vibrated this cycle; cleared only when all strikes leave
 let _gpsLastLL=null;
 
 
@@ -568,10 +569,10 @@ if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   if(count>0 && _proxElapsed<10){
 const isWarning=closest<=PROX_WARNING_KM;
 const vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?'cau_'+newestCautionLL.lat.toFixed(4)+'_'+newestCautionLL.lon.toFixed(4):null);
-    if(vibrateKey&&!_proxWarnedKeys.has(vibrateKey)){
+    if(vibrateKey&&!_proxVibratedKeys.has(vibrateKey)){
       if(isWarning) triggerProximityVibrate();
       _proxVibratedKey=vibrateKey;
-      _proxWarnedKeys.add(vibrateKey);
+      _proxVibratedKeys.add(vibrateKey);
     }
     _proxLastWasWarning=isWarning;
 const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
@@ -632,7 +633,8 @@ if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
 if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
     _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
-    _proxWarnedKeys.clear(); // all strikes gone — reset suppression for next event
+_proxWarnedKeys.clear();   // all strikes gone — reset suppression for next event
+    _proxVibratedKeys.clear();
   }
 }
 
