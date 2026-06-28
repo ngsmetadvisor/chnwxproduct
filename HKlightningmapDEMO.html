@@ -567,10 +567,11 @@ if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
   if(count>0 && _proxElapsed<10){
 const isWarning=closest<=PROX_WARNING_KM;
-if(isWarning&&newestWarningLL&&newestWarningLL.key&&!_proxWarnedKeys.has(newestWarningLL.key)){
-      triggerProximityVibrate();
-      _proxVibratedKey=newestWarningLL.key;
-      _proxWarnedKeys.add(newestWarningLL.key);
+const vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?'cau_'+newestCautionLL.lat.toFixed(4)+'_'+newestCautionLL.lon.toFixed(4):null);
+    if(vibrateKey&&!_proxWarnedKeys.has(vibrateKey)){
+      if(isWarning) triggerProximityVibrate();
+      _proxVibratedKey=vibrateKey;
+      _proxWarnedKeys.add(vibrateKey);
     }
     _proxLastWasWarning=isWarning;
 const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
