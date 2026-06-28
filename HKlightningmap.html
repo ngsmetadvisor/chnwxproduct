@@ -501,6 +501,7 @@ let proximityRing=null,proximityWarning=null,proximityActive=false;
 let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null,_proxVibratedKey=null;
 let _proxLastRenderedKey='';
+const _proxWarnedKeys=new Set(); // keys shown this warning cycle; cleared only when all strikes leave
 let _gpsLastLL=null;
 
 
@@ -566,13 +567,18 @@ if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
   if(count>0 && _proxElapsed<10){
 const isWarning=closest<=PROX_WARNING_KM;
-    if(isWarning&&newestWarningLL&&newestWarningLL.key&&newestWarningLL.key!==_proxVibratedKey){
+if(isWarning&&newestWarningLL&&newestWarningLL.key&&!_proxWarnedKeys.has(newestWarningLL.key)){
       triggerProximityVibrate();
       _proxVibratedKey=newestWarningLL.key;
+      _proxWarnedKeys.add(newestWarningLL.key);
     }
     _proxLastWasWarning=isWarning;
-    const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
+const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
+    // Suppress re-display if the closest warning key was already shown this cycle
+    const suppressKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?'cau_'+newestCautionLL.lat.toFixed(4)+'_'+newestCautionLL.lon.toFixed(4):null);
     if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
+    if(suppressKey&&_proxWarnedKeys.has(suppressKey)&&proximityWarning)return;
+    if(suppressKey) _proxWarnedKeys.add(suppressKey);
     _proxLastRenderedKey=renderKey;
     const lineColor=isWarning?'#ff4400':'#ffdd00';
     if(!window._proxNearestLine){
@@ -615,7 +621,8 @@ if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
       if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
       if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
       if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-      proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
+  proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
+    // Do NOT clear _proxWarnedKeys here — keeps suppression active until strikes age out
     },PROX_FADE_DELAY_MS);}
   } else {
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
@@ -624,6 +631,7 @@ if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
 if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
     _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
+    _proxWarnedKeys.clear(); // all strikes gone — reset suppression for next event
   }
 }
 
