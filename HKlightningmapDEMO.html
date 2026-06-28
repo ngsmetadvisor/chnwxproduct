@@ -576,8 +576,8 @@ if(isWarning&&newestWarningLL&&newestWarningLL.key&&!_proxWarnedKeys.has(newestW
 const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
     // Suppress re-display if the closest warning key was already shown this cycle
     const suppressKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?'cau_'+newestCautionLL.lat.toFixed(4)+'_'+newestCautionLL.lon.toFixed(4):null);
-    if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
-    if(suppressKey&&_proxWarnedKeys.has(suppressKey)&&proximityWarning)return;
+if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
+    if(suppressKey&&_proxWarnedKeys.has(suppressKey))return;
     if(suppressKey) _proxWarnedKeys.add(suppressKey);
     _proxLastRenderedKey=renderKey;
     const lineColor=isWarning?'#ff4400':'#ffdd00';
