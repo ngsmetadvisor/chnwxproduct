@@ -550,17 +550,33 @@ if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarni
     }
   });
 if(hkoEnabled){
+    // First pass: find the single closest unseen HKO strike within range
+    let _hkoClosestDist=Infinity, _hkoClosestMarker=null, _hkoClosestKey=null;
     hkoMarkers.forEach(m=>{
       if((nowSec-m._hkoBinEnd)>600)return;
       const hkoKey='hko_'+m._hkoBinEnd+'_'+m._lat.toFixed(4)+'_'+m._lon.toFixed(4);
-      if(_hkoSeenKeys.has(hkoKey))return; // already warned for this strike, skip entirely
+      if(_hkoSeenKeys.has(hkoKey))return;
       const d=haversineKm(lat,lon,m._lat,m._lon);
-      if(d<=PROX_RADIUS_KM){
-        count++;if(d<closest)closest=d;
-        if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon,key:hkoKey};}}
-        else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon,key:hkoKey};}}
+      if(d<=PROX_RADIUS_KM&&d<_hkoClosestDist){
+        _hkoClosestDist=d; _hkoClosestMarker=m; _hkoClosestKey=hkoKey;
       }
     });
+    // Second pass: count ALL unseen in-range HKO strikes for the banner count
+    hkoMarkers.forEach(m=>{
+      if((nowSec-m._hkoBinEnd)>600)return;
+      const hkoKey='hko_'+m._hkoBinEnd+'_'+m._lat.toFixed(4)+'_'+m._lon.toFixed(4);
+      if(_hkoSeenKeys.has(hkoKey))return;
+      const d=haversineKm(lat,lon,m._lat,m._lon);
+      if(d<=PROX_RADIUS_KM){ count++; if(d<closest)closest=d; }
+    });
+    // Only the single closest unseen strike sets the warning/caution target
+    if(_hkoClosestMarker){
+      if(_hkoClosestDist<=PROX_WARNING_KM){
+        if(_hkoClosestDist<closestWarningDist){closestWarningDist=_hkoClosestDist;newestWarningLL={lat:_hkoClosestMarker._lat,lon:_hkoClosestMarker._lon,key:_hkoClosestKey};}
+      } else {
+        if(_hkoClosestDist<closestCautionDist){closestCautionDist=_hkoClosestDist;newestCautionLL={lat:_hkoClosestMarker._lat,lon:_hkoClosestMarker._lon,key:_hkoClosestKey};}
+      }
+    }
   }
   window._proxNearestLL=newestWarningLL||newestCautionLL;
   const hasNewStrike=(newestWarningLL||newestCautionLL)?true:false;
