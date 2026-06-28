@@ -1458,6 +1458,7 @@ function hkoDisable(){
   if(hkoRefreshTimer){ clearInterval(hkoRefreshTimer); hkoRefreshTimer=null; }
   hkoStopCountdown();
   hkoClearMarkers();
+  _hkoSeenKeys.clear(); // re-enabling HKO should re-evaluate strikes as a fresh batch
 }
 
 document.getElementById('hko-toggle').addEventListener('click',()=>{
