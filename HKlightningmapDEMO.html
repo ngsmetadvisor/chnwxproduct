@@ -659,11 +659,14 @@ proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
       const _pt=document.getElementById('prox-time');if(_pt)delete _pt.dataset.detected;
     },PROX_FADE_DELAY_MS);}
   } else {
+    if(_proxFadeTimer){
+      // a display is already fading out on its own schedule — let it finish, don't yank it now
+      return;
+    }
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
     if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
     if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
-if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
     _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
   }
 }
