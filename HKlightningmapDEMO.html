@@ -494,16 +494,13 @@ map.on('zoomanim zoom', function(){
 map.on('moveend zoomend', updateRegionCount);
 
 // ── Lightning Proximity Warning ────────────────────────────────
-const PROX_RADIUS_KM=1000, PROX_WARNING_PCT=0.25;   //100km default, 10000km DEMO
+const PROX_RADIUS_KM=100, PROX_WARNING_PCT=0.25;   //100km default, 10000km DEMO
 const PROX_WARNING_KM=PROX_RADIUS_KM*PROX_WARNING_PCT;
 const PROX_VIBRATE_MS=[200,100,200,100,200];
 let proximityRing=null,proximityWarning=null,proximityActive=false;
 let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null,_proxVibratedKey=null;
 let _proxLastRenderedKey='';
-const _proxWarnedKeys=new Set();   // banner shown this cycle; cleared only when all strikes leave
-const _proxVibratedKeys=new Set(); // vibrated this cycle; cleared only when all strikes leave
-const _hkoSeenKeys=new Set();      // HKO strikes already warned about; never cleared until page reload
 let _gpsLastLL=null;
 
 
@@ -551,16 +548,14 @@ if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarni
       else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon};}}
     }
   });
-if(hkoEnabled){
+  if(hkoEnabled){
     hkoMarkers.forEach(m=>{
       if((nowSec-m._hkoBinEnd)>600)return;
-      const hkoKey='hko_'+m._hkoBinEnd+'_'+m._lat.toFixed(4)+'_'+m._lon.toFixed(4);
-      if(_hkoSeenKeys.has(hkoKey))return; // already warned for this strike
       const d=haversineKm(lat,lon,m._lat,m._lon);
       if(d<=PROX_RADIUS_KM){
         count++;if(d<closest)closest=d;
-        if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon,key:hkoKey};}}
-        else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon,key:hkoKey};}}
+if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon,key:'hko_'+m._hkoBinEnd+'_'+m._lat+'_'+m._lon};}}
+        else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon};}}
       }
     });
   }
@@ -571,21 +566,13 @@ if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
   if(count>0 && _proxElapsed<10){
 const isWarning=closest<=PROX_WARNING_KM;
-const vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?newestCautionLL.key||('cau_'+newestCautionLL.lat.toFixed(4)+'_'+newestCautionLL.lon.toFixed(4)):null);
-    if(vibrateKey&&!_proxVibratedKeys.has(vibrateKey)){
-      if(isWarning) triggerProximityVibrate();
-      _proxVibratedKey=vibrateKey;
-      _proxVibratedKeys.add(vibrateKey);
-      // If this was an HKO strike, mark it seen so it never re-triggers
-      if(vibrateKey.startsWith('hko_')) _hkoSeenKeys.add(vibrateKey);
+    if(isWarning&&newestWarningLL&&newestWarningLL.key&&newestWarningLL.key!==_proxVibratedKey){
+      triggerProximityVibrate();
+      _proxVibratedKey=newestWarningLL.key;
     }
     _proxLastWasWarning=isWarning;
-const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
-    // Suppress re-display if the closest warning key was already shown this cycle
-    const suppressKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?'cau_'+newestCautionLL.lat.toFixed(4)+'_'+newestCautionLL.lon.toFixed(4):null);
-if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
-    if(suppressKey&&_proxWarnedKeys.has(suppressKey))return;
-    if(suppressKey) _proxWarnedKeys.add(suppressKey);
+    const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
+    if(renderKey===_proxLastRenderedKey&&proximityWarning)return;
     _proxLastRenderedKey=renderKey;
     const lineColor=isWarning?'#ff4400':'#ffdd00';
     if(!window._proxNearestLine){
@@ -629,7 +616,6 @@ if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
       if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
       if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
       proximityActive=false;_proxFadeTimer=null;_proxLastRenderedKey='';
-      _proxDisplayStart=null; // reset so elapsed gate doesn't expire and trigger else-branch clear
     },PROX_FADE_DELAY_MS);}
   } else {
     if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
@@ -638,9 +624,6 @@ if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
     if(window._proxDistLabel){map.removeLayer(window._proxDistLabel);window._proxDistLabel=null;}
 if(_proxFadeTimer){clearTimeout(_proxFadeTimer);_proxFadeTimer=null;}
     _proxLastStrikeTime=-Infinity;_proxLastWasWarning=false;_proxLastRenderedKey='';proximityActive=false;_proxDisplayStart=null;
-_proxWarnedKeys.clear();   // strikes truly gone — reset for next event
-    _proxVibratedKeys.clear();
-    _proxDisplayStart=null;
   }
 }
 
