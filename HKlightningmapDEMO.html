@@ -561,13 +561,14 @@ if(hkoEnabled){
         _hkoClosestDist=d; _hkoClosestMarker=m; _hkoClosestKey=hkoKey;
       }
     });
-    // Second pass: count ALL unseen in-range HKO strikes for the banner count
+// Second pass: count ALL unseen in-range HKO strikes for the banner count,
+    // and mark them ALL as seen together so they don't trickle in one-by-one on later ticks
     hkoMarkers.forEach(m=>{
       if((nowSec-m._hkoBinEnd)>600)return;
       const hkoKey='hko_'+m._hkoBinEnd+'_'+m._lat.toFixed(4)+'_'+m._lon.toFixed(4);
       if(_hkoSeenKeys.has(hkoKey))return;
       const d=haversineKm(lat,lon,m._lat,m._lon);
-      if(d<=PROX_RADIUS_KM){ count++; if(d<closest)closest=d; }
+      if(d<=PROX_RADIUS_KM){ count++; if(d<closest)closest=d; _hkoSeenKeys.add(hkoKey); }
     });
     // Only the single closest unseen strike sets the warning/caution target
     if(_hkoClosestMarker){
