@@ -502,6 +502,7 @@ let _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity,_proxFadeTimer=null,_proxDisplayStart=null,_proxVibratedKey=null;
 let _proxLastRenderedKey='';
 let _gpsLastLL=null;
+const _hkoSeenKeys=new Set(); // HKO strikes already warned; never cleared (page lifetime)
 
 
 
@@ -548,14 +549,16 @@ if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarni
       else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon};}}
     }
   });
-  if(hkoEnabled){
+if(hkoEnabled){
     hkoMarkers.forEach(m=>{
       if((nowSec-m._hkoBinEnd)>600)return;
+      const hkoKey='hko_'+m._hkoBinEnd+'_'+m._lat.toFixed(4)+'_'+m._lon.toFixed(4);
+      if(_hkoSeenKeys.has(hkoKey))return; // already warned for this strike, skip entirely
       const d=haversineKm(lat,lon,m._lat,m._lon);
       if(d<=PROX_RADIUS_KM){
         count++;if(d<closest)closest=d;
-if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon,key:'hko_'+m._hkoBinEnd+'_'+m._lat+'_'+m._lon};}}
-        else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon};}}
+        if(d<=PROX_WARNING_KM){if(d<closestWarningDist){closestWarningDist=d;newestWarningLL={lat:m._lat,lon:m._lon,key:hkoKey};}}
+        else{if(d<closestCautionDist){closestCautionDist=d;newestCautionLL={lat:m._lat,lon:m._lon,key:hkoKey};}}
       }
     });
   }
@@ -566,9 +569,11 @@ if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   const _proxElapsed=_proxDisplayStart!==null?(nowSec-_proxDisplayStart):0;
   if(count>0 && _proxElapsed<10){
 const isWarning=closest<=PROX_WARNING_KM;
-    if(isWarning&&newestWarningLL&&newestWarningLL.key&&newestWarningLL.key!==_proxVibratedKey){
-      triggerProximityVibrate();
-      _proxVibratedKey=newestWarningLL.key;
+const _vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?newestCautionLL.key:null);
+    if(_vibrateKey&&_vibrateKey!==_proxVibratedKey){
+      if(isWarning) triggerProximityVibrate();
+      _proxVibratedKey=_vibrateKey;
+      if(_vibrateKey.startsWith('hko_')) _hkoSeenKeys.add(_vibrateKey);
     }
     _proxLastWasWarning=isWarning;
     const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
