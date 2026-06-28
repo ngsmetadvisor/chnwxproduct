@@ -615,9 +615,24 @@ const color=isWarning?'#cc2200':'#a16207';
     document.getElementById('prox-detail').textContent=count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closest.toFixed(1)+' km';
 const ptEl=document.getElementById('prox-time');
     if(!ptEl.dataset.detected){
-      ptEl.dataset.detected=new Date().toLocaleTimeString('en-HK',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Hong_Kong'});
+      // Use the strike's own time, not the current clock
+      const _strikeSec=newestWarningLL?
+        (newestWarningLL.key.startsWith('hko_')?parseFloat(newestWarningLL.key.split('_')[1]):parseFloat(newestWarningLL.key.split('_')[1])):
+        (newestCautionLL?
+          (newestCautionLL.key&&newestCautionLL.key.startsWith('hko_')?parseFloat(newestCautionLL.key.split('_')[1]):null):null);
+      if(_strikeSec){
+        const _sd=new Date(_strikeSec*1000);
+        const _timeStr=_sd.toLocaleTimeString('en-HK',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Hong_Kong'});
+        const _ageSec=Math.round(Date.now()/1000-_strikeSec);
+        const _ageStr=_ageSec<60?_ageSec+'s ago':_ageSec<3600?Math.round(_ageSec/60)+'m ago':Math.round(_ageSec/3600*10)/10+'h ago';
+        ptEl.dataset.detected=_timeStr+' HKT ('+_ageStr+')';
+      } else {
+        ptEl.dataset.detected=new Date().toLocaleTimeString('en-HK',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Hong_Kong'})+' HKT';
+      }
     }
-    ptEl.textContent='Detected '+ptEl.dataset.detected+' HKT';if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
+    ptEl.textContent='Strike time: '+ptEl.dataset.detected;
+    
+    if(!_proxFadeTimer){_proxFadeTimer=setTimeout(()=>{
       if(proximityRing){map.removeLayer(proximityRing);proximityRing=null;}
       if(proximityWarning){proximityWarning.remove();proximityWarning=null;}
       if(window._proxNearestLine){map.removeLayer(window._proxNearestLine);window._proxNearestLine=null;}
