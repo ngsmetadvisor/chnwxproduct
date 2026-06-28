@@ -587,8 +587,8 @@ if(count>0 && _proxDisplayStart===null) _proxDisplayStart=nowSec;
   if(count>0 && _proxElapsed<10){
 const isWarning=closest<=PROX_WARNING_KM;
 const _vibrateKey=newestWarningLL?newestWarningLL.key:(newestCautionLL?newestCautionLL.key:null);
-    if(_vibrateKey&&_vibrateKey!==_proxVibratedKey){
-      if(isWarning) triggerProximityVibrate();
+if(_vibrateKey&&_vibrateKey!==_proxVibratedKey){
+      triggerProximityVibrate();
       _proxVibratedKey=_vibrateKey;
       if(_vibrateKey.startsWith('hko_')) _hkoSeenKeys.add(_vibrateKey);
     }
