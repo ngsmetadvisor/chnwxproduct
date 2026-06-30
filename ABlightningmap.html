@@ -2800,8 +2800,8 @@ ticks: {
             }
           },
 grid: {
-            color: (ctx) => { const l = labels[ctx.tick.value]||''; return l.endsWith('/00') ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.04)'; },
-            lineWidth: (ctx) => { const l = labels[ctx.tick.value]||''; return l.endsWith('/00') ? 1.5 : 0.5; }
+            color: (ctx) => { const idx = ctx.tick ? ctx.tick.value : ctx.index; const l = labels[idx]||''; return l.endsWith('/00') ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.04)'; },
+            lineWidth: (ctx) => { const idx = ctx.tick ? ctx.tick.value : ctx.index; const l = labels[idx]||''; return l.endsWith('/00') ? 1.5 : 0.5; }
           }
         },
         yT:  {position:'left',  min:-40, max:40,  title:{display:true,text:'°C',   color:'#ff6b35',font:{size:10}}, ticks:{color:'#ff6b35',font:{size:9}}, grid:{color:'rgba(255,255,255,0.06)'}},
