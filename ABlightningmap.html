@@ -2740,6 +2740,35 @@ document.getElementById('wx-wind-unit-btn').addEventListener('click', () => {
     plugins: [{
       id: 'windArrowSync',
       afterLayout: (chart) => drawWindArrows(labels, ws, wd, chart.scales.x)
+    }, {
+      id: 'nowLine',
+      afterDatasetsDraw: (chart) => {
+        const nowMs = Date.now();
+        let idx = -1;
+        for (let i = 0; i < times.length - 1; i++) {
+          if (nowMs >= new Date(times[i]).getTime() && nowMs <= new Date(times[i+1]).getTime()) { idx = i; break; }
+        }
+        if (idx === -1) return; // current time outside chart range
+        const t0 = new Date(times[idx]).getTime(), t1 = new Date(times[idx+1]).getTime();
+        const frac = (nowMs - t0) / (t1 - t0);
+        const xScale = chart.scales.x;
+        const x0 = xScale.getPixelForValue(idx), x1 = xScale.getPixelForValue(idx+1);
+        const x = x0 + (x1 - x0) * frac;
+        const { top, bottom } = chart.chartArea;
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.strokeStyle = '#ff2222';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
+        ctx.stroke();
+        ctx.fillStyle = '#ff2222';
+        ctx.font = 'bold 10px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('NOW', x, top - 4);
+        ctx.restore();
+      }
     }],
     options: {
       responsive:true, maintainAspectRatio:false,
