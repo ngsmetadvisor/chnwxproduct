@@ -1657,16 +1657,17 @@ window._wxKnots=!window._wxKnots;
         ctx.moveTo(x, top);
         ctx.lineTo(x, bottom);
         ctx.stroke();
-        ctx.fillStyle = '#ff2222';
+ctx.fillStyle = '#ff2222';
         ctx.font = 'bold 10px Courier New';
         ctx.textAlign = 'center';
-        ctx.fillText('NOW', x, top - 4);
+        ctx.fillText('NOW', x, top - 6);
         ctx.restore();
       }
     }],
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction: {mode:'index', intersect:false},
+      layout: { padding: { top: 18 } },
       plugins:{legend:{display:false},tooltip:{
         backgroundColor:'rgba(8,10,24,0.95)',titleColor:'#88ccff',bodyColor:'#ccc',
         titleFont:{family:'Courier New',size:11},bodyFont:{family:'Courier New',size:11},
