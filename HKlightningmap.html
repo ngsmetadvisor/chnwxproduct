@@ -1675,14 +1675,9 @@ ctx.fillStyle = '#ff2222';
       }},
       scales:{
         x:{
-          ticks:{
-            color:(ctx)=>{
-              const lbl=labels[ctx.index]||'';
-              return lbl.endsWith('/00')?'#ffffff':'#556';
-            },
-            font:(ctx)=>{
-              const lbl=labels[ctx.index]||'';
-              return{size:9,weight:lbl.endsWith('/00')?'bold':'normal'};
+          ticks: {
+            color: (ctx) => { const idx = ctx.tick ? ctx.tick.value : ctx.index; const l = labels[idx]||''; return l.endsWith('/00') ? '#ffffff' : '#556'; },
+            font:  (ctx) => { const idx = ctx.tick ? ctx.tick.value : ctx.index; const l = labels[idx]||''; return {size:9, weight: l.endsWith('/00') ? 'bold' : 'normal'}; },
             },
             maxRotation:45,autoSkip:false,
             callback:(val,idx)=>{
@@ -1697,15 +1692,10 @@ ctx.fillStyle = '#ff2222';
               return hh+'h';
             }
           },
-          grid:{
-            color:(ctx)=>{
-              const lbl=labels[ctx.index]||'';
-              return lbl.endsWith('/00')?'rgba(255,255,255,0.25)':'rgba(255,255,255,0.04)';
-            },
-            lineWidth:(ctx)=>{
-              const lbl=labels[ctx.index]||'';
-              return lbl.endsWith('/00')?1.5:0.5;
-            }
+          grid: {
+            color: (ctx) => { const idx = ctx.tick ? ctx.tick.value : ctx.index; const l = labels[idx]||''; return l.endsWith('/00') ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.04)'; },
+            lineWidth: (ctx) => { const idx = ctx.tick ? ctx.tick.value : ctx.index; const l = labels[idx]||''; return l.endsWith('/00') ? 1.5 : 0.5; }
+          }
           }
         },
         yT:{position:'left',min:0,max:40,title:{display:true,text:'°C',color:'#ff6b35',font:{size:10}},ticks:{color:'#ff6b35',font:{size:9}},grid:{color:'rgba(255,255,255,0.06)'}},
