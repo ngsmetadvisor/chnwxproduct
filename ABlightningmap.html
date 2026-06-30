@@ -2715,7 +2715,7 @@ if (legend) legend.innerHTML = `
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#ff6b35;display:inline-block;"></span>Temp (°C)</span>
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#44ff44;display:inline-block;border-bottom:2px dotted #44ff44;height:0;"></span>RH (%)</span>
 <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#ffffff;display:inline-block;"></span>Wind</span>
-    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(60,140,255,0.5);display:inline-block;border-radius:2px;"></span>Precip 3h (mm)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(60,140,255,0.9);display:inline-block;border-radius:2px;"></span>Precip 3h (mm)</span>
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(180,180,200,0.25);display:inline-block;border-radius:2px;"></span>Cloud (%)</span>
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(255,221,0,0.5);display:inline-block;border-radius:2px;"></span>Thunderstorm Risk (CAPE)</span>
     <button id="wx-wind-unit-btn" style="margin-left:6px;background:transparent;border:0.5px solid rgba(100,180,255,0.4);color:#88ccff;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;">${window._wxKnots ? 'kt → km/h' : 'km/h → kt'}</button>
@@ -2732,7 +2732,7 @@ document.getElementById('wx-wind-unit-btn').addEventListener('click', () => {
         {type:'line', label:'Temp (°C)', data:temp, yAxisID:'yT', borderColor:'#ff6b35', backgroundColor:'transparent', borderWidth:2, pointRadius:0, tension:0.3, order:1},
         {type:'line', label:'RH (%)', data:rh, yAxisID:'yRH', borderColor:'#44ff44', backgroundColor:'transparent', borderWidth:1.5, borderDash:[2,2], pointRadius:0, tension:0.3, order:2},
 {type:'line', label:'Wind', data:window._wxKnots ? ws.map(v => parseFloat((v*0.539957).toFixed(1))) : ws, yAxisID:'yW', borderColor:'#ffffff', backgroundColor:'transparent', borderWidth:1.5, pointRadius:0, tension:0.3, order:3},
-        {type:'bar', label:'Precip 3h (mm)', data:precip, yAxisID:'yP', backgroundColor:'rgba(60,140,255,0.5)', order:4},
+        {type:'bar', label:'Precip 3h (mm)', data:precip, yAxisID:'yP', backgroundColor:'rgba(60,140,255,0.9)', order:4},
         {type:'bar', label:'Cloud (%)', data:cloud, yAxisID:'yC', backgroundColor:'rgba(180,180,200,0.25)', order:5},
         {type:'bar', label:'Thunderstorm Risk (CAPE)', data:cape, yAxisID:'yCAPE', backgroundColor:'rgba(255,221,0,0.5)', order:6},
       ]
