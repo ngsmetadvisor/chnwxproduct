@@ -2804,10 +2804,10 @@ grid: {
             lineWidth: (ctx) => { const idx = ctx.tick ? ctx.tick.value : ctx.index; const l = labels[idx]||''; return l.endsWith('/00') ? 1.5 : 0.5; }
           }
         },
-        yT:  {position:'left',  min:-40, max:40,  title:{display:true,text:'°C',   color:'#ff6b35',font:{size:10}}, ticks:{color:'#ff6b35',font:{size:9}}, grid:{color:'rgba(255,255,255,0.06)'}},
-        yRH: {position:'right', min:0,   max:100, title:{display:true,text:'RH%',  color:'#00ccff',font:{size:10}}, ticks:{color:'#00ccff',font:{size:9},stepSize:20}, grid:{display:false}},
+       yT:  {position:'left',  min:-40, max:40,  title:{display:true,text:'°C',   color:'#ff6b35',font:{size:10}}, ticks:{color:'#ff6b35',font:{size:9}}, grid:{color:'rgba(255,255,255,0.06)'}},
+        yRH: {position:'right', min:0,   max:100, title:{display:true,text:'RH%',  color:'#44ff44',font:{size:10}}, ticks:{color:'#44ff44',font:{size:9},stepSize:20}, grid:{display:false}},
 yW:  {position:'right', min:0,   max:window._wxKnots?60:110, title:{display:true,text:window._wxKnots?'kt':'km/h', color:'#ffdd00',font:{size:10}}, ticks:{color:'#ffdd00',font:{size:9}}, grid:{display:false}, offset:true},
-        yP:  {position:'left',  min:0,   max:50,  title:{display:true,text:'mm',   color:'rgba(0,200,80,0.8)',font:{size:10}}, ticks:{color:'rgba(0,200,80,0.8)',font:{size:9}}, grid:{display:false}, offset:true},
+        yP:  {position:'left',  min:0,   max:50,  title:{display:true,text:'mm',   color:'rgba(60,140,255,0.9)',font:{size:10}}, ticks:{color:'rgba(60,140,255,0.9)',font:{size:9}}, grid:{display:false}, offset:true},
         yC:  {display:false, min:0, max:100},
         yCAPE: {display:false, min:0, max:2500},
       }
