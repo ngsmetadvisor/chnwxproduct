@@ -2654,8 +2654,7 @@ function openWeatherPopup(lat, lon) {
 }
 
 async function fetchAndDrawWeather(lat, lon) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-    `&hourly=teconst url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&hourly=temperature_2m,relative_humidity_2m,windspeed_10m,winddirection_10m,precipitation,cloudcover,cape` +
     `&models=ecmwf_ifs025` +
     `&forecast_days=5&timezone=America%2FEdmonton`;
