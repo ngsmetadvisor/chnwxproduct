@@ -1631,15 +1631,21 @@ window._wxKnots=!window._wxKnots;
       id: 'windArrowSync',
       afterLayout: (chart) => drawWindArrows(labels, ws, wd, chart.scales.x)
     }, {
-      id: 'nowLine',
+id: 'nowLine',
       afterDatasetsDraw: (chart) => {
+        const _hkMs = (isoLocal) => {
+          const [datePart, timePart] = isoLocal.split('T');
+          const [yyyy, mm, dd] = datePart.split('-').map(Number);
+          const [hh, mi] = timePart.split(':').map(Number);
+          return Date.UTC(yyyy, mm - 1, dd, hh, mi, 0) - 8 * 3600 * 1000;
+        };
         const nowMs = Date.now();
         let idx = -1;
         for (let i = 0; i < times.length - 1; i++) {
-          if (nowMs >= new Date(times[i]).getTime() && nowMs <= new Date(times[i+1]).getTime()) { idx = i; break; }
+          if (nowMs >= _hkMs(times[i]) && nowMs <= _hkMs(times[i+1])) { idx = i; break; }
         }
         if (idx === -1) return; // current time outside chart range
-        const t0 = new Date(times[idx]).getTime(), t1 = new Date(times[idx+1]).getTime();
+        const t0 = _hkMs(times[idx]), t1 = _hkMs(times[idx+1]);
         const frac = (nowMs - t0) / (t1 - t0);
         const xScale = chart.scales.x;
         const x0 = xScale.getPixelForValue(idx), x1 = xScale.getPixelForValue(idx+1);
@@ -1692,10 +1698,10 @@ ctx.fillStyle = '#ff2222';
             lineWidth: (ctx) => { const idx = ctx.tick ? ctx.tick.value : ctx.index; const l = labels[idx]||''; return l.endsWith('/00') ? 1.5 : 0.5; }
           }
         },
-        yT:{position:'left',min:0,max:40,title:{display:true,text:'°C',color:'#ff6b35',font:{size:10}},ticks:{color:'#ff6b35',font:{size:9}},grid:{color:'rgba(255,255,255,0.06)'}},
-        yRH:{position:'right',min:0,max:100,title:{display:true,text:'RH%',color:'#00ccff',font:{size:10}},ticks:{color:'#00ccff',font:{size:9},stepSize:20},grid:{display:false}},
+yT:{position:'left',min:0,max:40,title:{display:true,text:'°C',color:'#ff6b35',font:{size:10}},ticks:{color:'#ff6b35',font:{size:9}},grid:{color:'rgba(255,255,255,0.06)'}},
+        yRH:{position:'right',min:0,max:100,title:{display:true,text:'RH%',color:'#44ff44',font:{size:10}},ticks:{color:'#44ff44',font:{size:9},stepSize:20},grid:{display:false}},
 yW:{position:'right',min:0,max:window._wxKnots?40:74,title:{display:true,text:window._wxKnots?'kt':'km/h',color:'#ffdd00',font:{size:10}},ticks:{color:'#ffdd00',font:{size:9}},grid:{display:false},offset:true},
-        yP:{position:'left',min:0,max:50,title:{display:true,text:'mm',color:'rgba(0,200,80,0.8)',font:{size:10}},ticks:{color:'rgba(0,200,80,0.8)',font:{size:9}},grid:{display:false},offset:true},
+        yP:{position:'left',min:0,max:50,title:{display:true,text:'mm',color:'rgba(60,140,255,0.9)',font:{size:10}},ticks:{color:'rgba(60,140,255,0.9)',font:{size:9}},grid:{display:false},offset:true},
 yC:{display:false,min:0,max:100},
         yCAPE:{display:false,min:0,max:2500},
       }
