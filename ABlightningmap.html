@@ -271,6 +271,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <button id="gps-btn">⊕ GPS</button>
     <div class="sep"></div>
     <button id="ec-lightning-toggle" class="tb-btn">⚡ 3h</button>
+    <button id="ec-duration-toggle" class="tb-btn" style="display:none;padding:6px 8px;">12h</button>
     <div class="sep"></div>
     <button id="station-toggle" class="tb-btn active">📡 Stns</button>
     <div class="sep"></div>
@@ -561,7 +562,7 @@ if(!best){
       const clickLat=e.latlng.lat, clickLon=e.latlng.lng;
       for(const z of zonePolygons){
         if(pip(clickLat,clickLon,z.latlngs)){
-          const ec1=z._ec1||0, ec2=z._ec2||0, ec3=z._ec3||0;
+const ec1=z._ec1||0, ec2=z._ec2||0, ec3=z._ec3||0, ec12=z._ec12||0;
           L.popup({closeButton:true,className:'strike-popup',maxWidth:240})
             .setLatLng(e.latlng)
             .setContent(
@@ -570,11 +571,11 @@ if(!best){
     '<div style="color:#ffdd00;font-size:13px;margin-bottom:5px;">'+(z._count||0)+' strikes</div>'+
           '<div style="color:#888;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">EC Lightning</div>'+
           (!ecLightningEnabled
-            ? '<div style="color:#ffaa00;font-size:9px;margin-bottom:4px;">Tap <b>⚡ 3h</b> in toolbar to enable</div>'
+            ? '<div style="color:#ffaa00;font-size:9px;margin-bottom:4px;">Tap <b>⚡</b> in toolbar to enable</div>'
             : '')+
           '<table style="border-collapse:collapse;font-size:11px;color:#ffaa00;">'+
-          '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="color:#888;">3h</td></tr>'+
-          '<tr><td style="padding-right:10px;">'+ec1+'</td><td style="padding-right:10px;">'+ec2+'</td><td>'+ec3+'</td></tr>'+
+          '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="padding-right:10px;color:#888;">3h</td><td style="color:#888;">12h</td></tr>'+
+          '<tr><td style="padding-right:10px;">'+ec1+'</td><td style="padding-right:10px;">'+ec2+'</td><td style="padding-right:10px;">'+ec3+'</td><td>'+(ecLightningWindowH>3?ec12:'–')+'</td></tr>'+
           '</table></div>'
             ).openOn(map);
           break;
@@ -1035,13 +1036,13 @@ function loadZones(){
       zoneLayer=L.layerGroup();
       features.forEach(f=>{
         const poly=L.polygon(f.latlngs,{pane:'zones',color:'#ff8c00',weight:1.5,opacity:0.75,fillColor:'#ff8c00',fillOpacity:0.06});
-        poly.bindPopup('<div style="font-family:monospace;min-width:170px;line-height:1.6;">'+
+poly.bindPopup('<div style="font-family:monospace;min-width:170px;line-height:1.6;">'+
   '<div style="color:#ff8c00;font-size:12px;font-weight:700;margin-bottom:3px;white-space:nowrap;">'+f.label+'</div>'+
   '<div id="popup-cnt-'+f.shortId+'" style="color:#ffdd00;font-size:13px;margin-bottom:5px;">– strikes</div>'+
   '<div style="color:#888;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">EC Lightning</div>'+
   '<table id="popup-ec-'+f.shortId+'" style="border-collapse:collapse;font-size:11px;color:#ffaa00;">'+
-  '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="color:#888;">3h</td></tr>'+
-  '<tr><td id="ec1-'+f.shortId+'" style="padding-right:10px;">–</td><td id="ec2-'+f.shortId+'" style="padding-right:10px;">–</td><td id="ec3-'+f.shortId+'">–</td></tr>'+
+  '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="padding-right:10px;color:#888;">3h</td><td style="color:#888;">12h</td></tr>'+
+  '<tr><td id="ec1-'+f.shortId+'" style="padding-right:10px;">–</td><td id="ec2-'+f.shortId+'" style="padding-right:10px;">–</td><td id="ec3-'+f.shortId+'" style="padding-right:10px;">–</td><td id="ec12-'+f.shortId+'">–</td></tr>'+
   '</table></div>',{maxWidth:240,className:'strike-popup'});
 // Zone popup is now triggered from the map click handler below (zones pane has no pointer events)
 
@@ -1069,7 +1070,7 @@ function buildZoneListUI(){
 function rebuildZoneCounts(){
   if(!zonePolygons.length)return;
   const now=t||Date.now()/1000;
-  zonePolygons.forEach(z=>{z._count=0;z._ec1=0;z._ec2=0;z._ec3=0;});
+zonePolygons.forEach(z=>{z._count=0;z._ec1=0;z._ec2=0;z._ec3=0;z._ec12=0;});
   strokes.forEach(m=>{
     if(!m._inAB||(now-m._strokeTime)>windowSec)return;
     for(const z of zonePolygons){if(pip(m._lat,m._lon,z.latlngs)){z._count++;break;}}
@@ -1078,12 +1079,13 @@ function rebuildZoneCounts(){
     const nowMs=Date.now();
     ecLightningPoints.forEach(p=>{
       const ageH=(nowMs-new Date(p.isoTime).getTime())/3600000;
-      if(ageH>3) return;
+      if(ageH>ecLightningWindowH) return;
       for(const z of zonePolygons){
         if(pip(p.lat,p.lon,z.latlngs)){
           if(ageH<=1) z._ec1++;
           else if(ageH<=2) z._ec2++;
-          else z._ec3++;
+          else if(ageH<=3) z._ec3++;
+          if(ageH<=12) z._ec12++;
           break;
         }
       }
@@ -1334,7 +1336,7 @@ enableRadar();
 
 // ── GPS ───────────────────────────────────────────────────────
 let gpsMarker=null, gpsRing=null, gpsAccCircle=null, gpsHeadingLine=null, gpsCompassLine=null, gpsCompassTicks=[], gpsActive=false, gpsWatchId=null;
-let ecLightningLayers=[], ecLightningTimer=null, ecLightningEnabled=false;
+let ecLightningLayers=[], ecLightningTimer=null, ecLightningEnabled=false, ecLightningWindowH=3;
 let _gpsPrev=null;
 let _gpsLastLL=null;
 let compassHeading=null;
@@ -1943,8 +1945,9 @@ async function loadECLightning(){
 }catch(e){console.warn('[ECLightning]',e);setECLoadProgress(0);return;}
   if(!times.length){setECLoadProgress(0);return;}
   setECLoadProgress(20);
-  const now=Date.now();
-  const window3h=times.filter(tt=>{const ms=new Date(tt).getTime();return ms<=now&&ms>=now-3*3600000;});
+const now=Date.now();
+  const windowMs=ecLightningWindowH*3600000;
+  const window3h=times.filter(tt=>{const ms=new Date(tt).getTime();return ms<=now&&ms>=now-windowMs;});
   if(!window3h.length) return;
 
   const SymbolLayer=L.GridLayer.extend({
@@ -1981,7 +1984,7 @@ async function loadECLightning(){
             }
           }
 
-          const cx2=Math.round(sumX/count),cy2=Math.round(sumY/count);
+const cx2=Math.round(sumX/count),cy2=Math.round(sumY/count);
 const ageH=this._ageH||0;
           if(ageH<1){
             // Original style for recent strikes
@@ -1991,9 +1994,11 @@ const ageH=this._ageH||0;
             ctx.fillText('⚡',cx2,cy2);
           } else {
             // Color-coded box for older strikes matching live scale
-            const boxColor=ageH<2?'#882200':'#551100';
-            const boxSize=ageH<2?11:9;
-            const boxAlpha=ageH<2?0.75:0.55;
+            let boxColor,boxSize,boxAlpha;
+            if(ageH<2){boxColor='#882200';boxSize=11;boxAlpha=0.75;}
+            else if(ageH<3){boxColor='#551100';boxSize=9;boxAlpha=0.55;}
+            else if(ageH<6){boxColor='#441100';boxSize=8;boxAlpha=0.4;}
+            else{boxColor='#331100';boxSize=7;boxAlpha=0.25;}
             ctx.globalAlpha=boxAlpha;
             ctx.fillStyle=boxColor;
             ctx.beginPath();
@@ -2024,8 +2029,8 @@ const now3=Date.now();
   window3h.forEach(tt=>{
     const ageMs=now3-new Date(tt).getTime();
     const ageH=ageMs/3600000;
-    const opacity=ageH<1?1.0:ageH<2?0.55:0.25;
-    const l=new SymbolLayer(tt,{pane:'ecLightningPane',tileSize:256,opacity,attribution:'⚡ © ECCC GeoMet (3h)'});
+    const opacity=ageH<1?1.0:ageH<2?0.6:ageH<3?0.4:ageH<6?0.25:0.12;
+    const l=new SymbolLayer(tt,{pane:'ecLightningPane',tileSize:256,opacity,attribution:'⚡ © ECCC GeoMet ('+ecLightningWindowH+'h)'});
     l._ageH=ageH;
     l.on('load',()=>{
       ecTilesLoaded++;
@@ -2042,31 +2047,44 @@ const now3=Date.now();
   setTimeout(()=>setECLoadProgress(100), 3000);
 }
 
-function enableECLightning(){
-  ecLightningEnabled=true;
-  document.getElementById('ec-lightning-toggle').classList.add('active');
-  loadECLightning();
-  if(!ecLightningTimer) ecLightningTimer=setInterval(loadECLightning,10*60*1000);
-  // Show age legend
+function ecLegendRowsHTML(){
+  let rows=
+    '<div><span style="display:inline-block;width:11px;height:11px;background:rgba(0,0,0,0.75);border-radius:2px;vertical-align:middle;margin-right:5px;text-align:center;font-size:9px;line-height:11px;">⚡</span>&lt; 1h</div>'+
+    '<div><span style="display:inline-block;width:11px;height:11px;background:#882200;border-radius:2px;vertical-align:middle;margin-right:5px;opacity:0.75;text-align:center;font-size:8px;line-height:11px;">⚡</span>1 – 2h</div>'+
+    '<div><span style="display:inline-block;width:9px;height:9px;background:#551100;border-radius:2px;vertical-align:middle;margin-right:5px;opacity:0.55;text-align:center;font-size:7px;line-height:9px;">⚡</span>2 – 3h</div>';
+  if(ecLightningWindowH>3){
+    rows+=
+      '<div><span style="display:inline-block;width:8px;height:8px;background:#441100;border-radius:2px;vertical-align:middle;margin-right:5px;opacity:0.4;text-align:center;font-size:6px;line-height:8px;">⚡</span>3 – 6h</div>'+
+      '<div><span style="display:inline-block;width:7px;height:7px;background:#331100;border-radius:2px;vertical-align:middle;margin-right:5px;opacity:0.25;text-align:center;font-size:5px;line-height:7px;">⚡</span>6 – 12h</div>';
+  }
+  return rows;
+}
+function ecUpdateLegend(){
   let leg=document.getElementById('ec-ltg-legend');
   if(!leg){
     leg=document.createElement('div');
     leg.id='ec-ltg-legend';
     leg.style.cssText='position:absolute;bottom:36px;right:10px;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,220,0,0.25);border-radius:8px;padding:5px 8px;font-family:monospace;font-size:10px;color:#aaa;backdrop-filter:blur(4px);';
-    leg.innerHTML=
-'<div style="font-size:9px;color:#ffdd00;letter-spacing:0.06em;margin-bottom:3px;">EC LIGHTNING AGE</div>'+
-      '<div style="display:flex;flex-direction:column;gap:2px;">'+
-      '<div><span style="display:inline-block;width:11px;height:11px;background:rgba(0,0,0,0.75);border-radius:2px;vertical-align:middle;margin-right:5px;text-align:center;font-size:9px;line-height:11px;">⚡</span>&lt; 1h</div>'+
-      '<div><span style="display:inline-block;width:11px;height:11px;background:#882200;border-radius:2px;vertical-align:middle;margin-right:5px;opacity:0.75;text-align:center;font-size:8px;line-height:11px;">⚡</span>1 – 2h</div>'+
-      '<div><span style="display:inline-block;width:9px;height:9px;background:#551100;border-radius:2px;vertical-align:middle;margin-right:5px;opacity:0.55;text-align:center;font-size:7px;line-height:9px;">⚡</span>2 – 3h</div>'+
-      '</div>';
     document.getElementById('wrap').appendChild(leg);
   }
-  leg.style.display='block';
+  leg.innerHTML=
+    '<div style="font-size:9px;color:#ffdd00;letter-spacing:0.06em;margin-bottom:3px;">EC LIGHTNING AGE ('+ecLightningWindowH+'h)</div>'+
+    '<div style="display:flex;flex-direction:column;gap:2px;">'+ecLegendRowsHTML()+'</div>';
+  return leg;
+}
+function enableECLightning(){
+  ecLightningEnabled=true;
+  document.getElementById('ec-lightning-toggle').classList.add('active');
+  document.getElementById('ec-lightning-toggle').textContent='⚡ '+ecLightningWindowH+'h';
+  document.getElementById('ec-duration-toggle').style.display='inline-block';
+  loadECLightning();
+  if(!ecLightningTimer) ecLightningTimer=setInterval(loadECLightning,10*60*1000);
+  ecUpdateLegend().style.display='block';
 }
 function disableECLightning(){
   ecLightningEnabled=false;
   document.getElementById('ec-lightning-toggle').classList.remove('active');
+  document.getElementById('ec-duration-toggle').style.display='none';
   ecLightningLayers.forEach(l=>{try{map.removeLayer(l);}catch(e){}});
   ecLightningLayers=[];
   if(ecLightningTimer){clearInterval(ecLightningTimer);ecLightningTimer=null;}
@@ -2076,6 +2094,12 @@ function disableECLightning(){
 
 document.getElementById('ec-lightning-toggle').addEventListener('click',()=>{
   if(ecLightningEnabled) disableECLightning(); else enableECLightning();
+});
+document.getElementById('ec-duration-toggle').addEventListener('click',()=>{
+  ecLightningWindowH = ecLightningWindowH===3 ? 12 : 3;
+  document.getElementById('ec-duration-toggle').textContent = ecLightningWindowH===3 ? '12h' : '3h';
+  document.getElementById('ec-lightning-toggle').textContent='⚡ '+ecLightningWindowH+'h';
+  if(ecLightningEnabled){ loadECLightning(); ecUpdateLegend(); }
 });
 
 // ── WebSocket ─────────────────────────────────────────────────
