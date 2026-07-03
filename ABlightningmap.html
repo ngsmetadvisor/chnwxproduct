@@ -446,8 +446,15 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <script>
 // ── Map ───────────────────────────────────────────────────────
 
-const map = L.map('map', { zoomControl:false, attributionControl:true, preferCanvas:true }).setView([55.0,-115.0],5);
-
+const map = L.map('map', {
+  zoomControl:false,
+  attributionControl:true,
+  preferCanvas:true,
+  zoomSnap:0.25,          // allows quarter-level zoom stops instead of whole integers
+  zoomDelta:0.5,          // +/- buttons or keyboard zoom by half a level at a time
+  wheelPxPerZoomLevel:100,// more scroll distance needed per zoom level = finer scroll-wheel zoom
+  wheelDebounceTime:40    // slightly faster response to wheel/trackpad zoom bursts
+}).setView([55.0,-115.0],5);
 // ── Wake Lock (keep screen on) ──────────────────────────────────
 let wakeLock = null;
 async function requestWakeLock(){
