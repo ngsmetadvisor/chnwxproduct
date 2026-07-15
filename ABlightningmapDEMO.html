@@ -1243,7 +1243,19 @@ async function fetchAlertsNear(lat,lon,bufferDeg){
   }catch(e){ console.warn('[alerts]',e); return []; }
 }
 
+let alertBannerMinimized = localStorage.getItem('alert_banner_min')==='1';
+let alertMinPill=null;
+
 function showAlertBanner(info){
+  window._lastAlertInfo=info;
+
+  if(alertBannerMinimized){
+    if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
+    renderAlertMinPill();
+    return;
+  }
+  if(alertMinPill){ alertMinPill.remove(); alertMinPill=null; }
+
   if(!alertBannerEl){
     alertBannerEl=document.createElement('div');
     alertBannerEl.id='alert-banner';
@@ -1251,20 +1263,54 @@ function showAlertBanner(info){
       position:fixed;top:8px;left:50%;transform:translateX(-50%);
       z-index:9100;max-width:92vw;min-width:240px;
       background:#3a0d0d;border:2px solid #ff3333;border-radius:10px;
-      padding:8px 16px;text-align:center;font-family:'Courier New',monospace;
+      padding:8px 30px 8px 16px;text-align:center;font-family:'Courier New',monospace;
       box-shadow:0 4px 16px rgba(0,0,0,0.6);cursor:pointer;
     `;
-    alertBannerEl.addEventListener('click', ()=>{ if(window._lastAlertInfo) showAlertModal(window._lastAlertInfo); });
+    alertBannerEl.addEventListener('click', (e)=>{
+      if(e.target.id==='alert-banner-min-btn') return;
+      if(window._lastAlertInfo) showAlertModal(window._lastAlertInfo);
+    });
     document.body.appendChild(alertBannerEl);
   }
-  window._lastAlertInfo=info;
   alertBannerEl.innerHTML=
+    '<button id="alert-banner-min-btn" title="Minimize" style="position:absolute;top:2px;right:4px;background:transparent;border:none;color:#ff9999;font-size:16px;cursor:pointer;padding:4px 8px;line-height:1;">─</button>'+
     '<div style="font-size:13px;font-weight:800;color:#ff5555;letter-spacing:0.05em;">🚨 '+info.headline+'</div>'+
     (info.area?'<div style="font-size:10px;color:#ffaaaa;margin-top:2px;">'+info.area+'</div>':'')+
     '<div style="font-size:9px;color:#ff8888;margin-top:2px;">Tap for details</div>';
+  document.getElementById('alert-banner-min-btn').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    alertBannerMinimized=true;
+    localStorage.setItem('alert_banner_min','1');
+    if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
+    renderAlertMinPill();
+  });
 }
+
+function renderAlertMinPill(){
+  if(!window._lastAlertInfo) return;
+  if(alertMinPill) return;
+  alertMinPill=document.createElement('div');
+  alertMinPill.id='alert-min-pill';
+  alertMinPill.title='Weather alert — tap to expand';
+  alertMinPill.style.cssText=`
+    position:fixed;top:8px;left:8px;z-index:9100;
+    background:#3a0d0d;border:2px solid #ff3333;border-radius:20px;
+    width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+    font-size:16px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.5);
+  `;
+  alertMinPill.textContent='🚨';
+  alertMinPill.addEventListener('click', ()=>{
+    alertBannerMinimized=false;
+    localStorage.setItem('alert_banner_min','0');
+    if(alertMinPill){ alertMinPill.remove(); alertMinPill=null; }
+    if(window._lastAlertInfo) showAlertBanner(window._lastAlertInfo);
+  });
+  document.body.appendChild(alertMinPill);
+}
+
 function hideAlertBanner(){
   if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
+  if(alertMinPill){ alertMinPill.remove(); alertMinPill=null; }
   window._lastAlertInfo=null;
   _lastActiveAlertKey=null;
 }
@@ -1299,8 +1345,8 @@ async function checkAlertsAtCurrentLocation(){
   const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
   if(!src) return;
   const lat=src.lat, lon=src.lng??src.lon;
-  const locKey=lat.toFixed(2)+','+lon.toFixed(2);
-  if(locKey===_alertsLastLocKey && alertBannerEl) return;
+const locKey=lat.toFixed(2)+','+lon.toFixed(2);
+  if(locKey===_alertsLastLocKey && (alertBannerEl || alertMinPill)) return;
   _alertsLastLocKey=locKey;
   const features=await fetchAlertsNear(lat,lon,0.75);
   let hit=null;
