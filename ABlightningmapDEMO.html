@@ -2,7 +2,7 @@
 <html lang="en">
 <head> 
 <meta charset="UTF-8">
- 
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -162,6 +162,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   cursor: pointer; transition: background 0.1s;
 }
 #ctxWxChart:hover { background: rgba(100,255,180,0.1); }
+#ctxAlertInfo {
+  padding: 8px 14px; font-size: 12px; color: #ff6666;
+  cursor: pointer; transition: background 0.1s;
+}
+#ctxAlertInfo:hover { background: rgba(255,80,80,0.12); }
 
 /* ── Deviation Rose Panel ── */
 #dev-rose-panel {
@@ -275,7 +280,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div class="sep"></div>
     <button id="station-toggle" class="tb-btn active">📡 Stns</button>
     <div class="sep"></div>
-    <button id="compass-menu-btn" class="tb-btn active">🧭 Compass</button>
+<button id="compass-menu-btn" class="tb-btn active">🧭 Compass</button>
+    <div class="sep"></div>
+    <button id="alerts-toggle" class="tb-btn">🚨 Alerts</button>
   </div>
 
   <!-- Radar panel -->
@@ -322,9 +329,10 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <div id="map"></div>
 
   <!-- Context menu -->
-  <div id="mapContextMenu">
+<div id="mapContextMenu">
     <div id="ctxECForecast">⛅ Public forecast from EC</div>
   <div id="ctxWxChart">📈 ECMWF forecast chart</div>
+  <div id="ctxAlertInfo">🚨 Weather alert here</div>
   </div>
 
   <!-- EC Forecast Modal -->
@@ -446,8 +454,15 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <script>
 // ── Map ───────────────────────────────────────────────────────
 
-const map = L.map('map', { zoomControl:false, attributionControl:true, preferCanvas:true }).setView([55.0,-115.0],5);
-
+const map = L.map('map', {
+  zoomControl:false,
+  attributionControl:true,
+  preferCanvas:true,
+  zoomSnap:0.25,          // allows quarter-level zoom stops instead of whole integers
+  zoomDelta:0.5,          // +/- buttons or keyboard zoom by half a level at a time
+  wheelPxPerZoomLevel:100,// more scroll distance needed per zoom level = finer scroll-wheel zoom
+  wheelDebounceTime:40    // slightly faster response to wheel/trackpad zoom bursts
+}).setView([55.0,-115.0],5);
 // ── Wake Lock (keep screen on) ──────────────────────────────────
 let wakeLock = null;
 async function requestWakeLock(){
@@ -510,6 +525,8 @@ map.createPane('stations');     map.getPane('stations').style.zIndex     = 660;
 map.createPane('strikes');      map.getPane('strikes').style.zIndex      = 650;
 map.getPane('strikes').style.pointerEvents = 'none';
 map.createPane('ecLightningPane'); map.getPane('ecLightningPane').style.zIndex = 640;
+map.createPane('alertsPane');      map.getPane('alertsPane').style.zIndex      = 420;
+map.getPane('alertsPane').style.pointerEvents = 'none';
 
 
 
@@ -1142,6 +1159,181 @@ function rebuildStationIcons(){
 }
 loadZones();
 
+// ── Weather Alerts (Current-Alerts) ─────────────────────────────
+const ALERTS_GEOMET='https://geo.weather.gc.ca/geomet';
+const ALERTS_WMS_LAYER='Current-Alerts';
+let alertsWmsLayer=null, alertsVisible=false, alertsCheckTimer=null;
+let alertBannerEl=null, _alertsLastLocKey='', _lastActiveAlertKey=null;
+
+function enableAlertsLayer(){
+  if(alertsWmsLayer) return;
+  alertsWmsLayer=L.tileLayer.wms(ALERTS_GEOMET+'?',{
+    layers:ALERTS_WMS_LAYER, version:'1.3.0', format:'image/png',
+    transparent:true, opacity:0.7, pane:'alertsPane',
+    attribution:'⚠ ECCC / MSC GeoMet'
+  }).addTo(map);
+  alertsVisible=true;
+  document.getElementById('alerts-toggle').classList.add('active');
+}
+function disableAlertsLayer(){
+  if(alertsWmsLayer){ map.removeLayer(alertsWmsLayer); alertsWmsLayer=null; }
+  alertsVisible=false;
+  document.getElementById('alerts-toggle').classList.remove('active');
+}
+
+// Location-based alert banner runs continuously, independent of the visual
+// overlay toggle above — rechecks every 5 min. The first call is deferred with
+// setTimeout(...,0) because gpsMarker/_gpsLastLL are declared with `let` further
+// down in this script; calling synchronously here would hit them in the
+// temporal dead zone (silently swallowed since this is an async function).
+if(!alertsCheckTimer) alertsCheckTimer=setInterval(checkAlertsAtCurrentLocation, 5*60*1000);
+setTimeout(checkAlertsAtCurrentLocation, 0);
+document.getElementById('alerts-toggle').addEventListener('click', ()=>{
+  if(alertsVisible) disableAlertsLayer(); else enableAlertsLayer();
+});
+
+// GeoJSON ring [lon,lat] -> pip()-friendly [lat,lon]
+function geojsonRingToLatLon(ring){ return ring.map(c=>[c[1],c[0]]); }
+
+// Point-in-polygon with holes for a GeoJSON Polygon or MultiPolygon geometry
+function pointInGeoJSON(lat,lon,geometry){
+  if(!geometry) return false;
+  const polys = geometry.type==='Polygon' ? [geometry.coordinates] :
+                geometry.type==='MultiPolygon' ? geometry.coordinates : [];
+  for(const rings of polys){
+    if(!rings.length) continue;
+    if(!pip(lat,lon,geojsonRingToLatLon(rings[0]))) continue;
+    let inHole=false;
+    for(let i=1;i<rings.length;i++){
+      if(pip(lat,lon,geojsonRingToLatLon(rings[i]))){ inHole=true; break; }
+    }
+    if(!inHole) return true;
+  }
+  return false;
+}
+
+// Confirmed field names from a live api.weather.gc.ca/collections/weather-alerts/items response.
+function extractAlertInfo(props){
+  const cap=s=>(s&&typeof s==='string')?s.charAt(0).toUpperCase()+s.slice(1):s;
+  const area=[props.feature_name_en, props.province].filter(Boolean).join(', ');
+  return {
+    headline: cap(props.alert_name_en) || 'Weather Alert',
+    area: area || null,
+    description: props.alert_text_en || null,
+    severity: props.risk_colour_en ? cap(props.risk_colour_en) : null,
+    urgency: props.alert_type ? cap(props.alert_type) : null,
+    status: props.status_en ? cap(props.status_en) : null,
+    expires: props.event_end_datetime || props.expiration_datetime || null,
+    url: null
+  };
+}
+
+async function fetchAlertsNear(lat,lon,bufferDeg){
+  bufferDeg = bufferDeg || 0.75;
+  const minLon=lon-bufferDeg, maxLon=lon+bufferDeg, minLat=lat-bufferDeg, maxLat=lat+bufferDeg;
+  // GeoMet-OGC-API (REST/GeoJSON) — confirmed working. bbox is minLon,minLat,maxLon,maxLat (CRS84 order).
+  const url = 'https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit=100&bbox='+
+    minLon+','+minLat+','+maxLon+','+maxLat;
+  try{
+    const res=await fetch(url,{signal:AbortSignal.timeout(12000)});
+    if(!res.ok){ console.warn('[alerts] bad response', res.status); return []; }
+    const gj=await res.json();
+    console.log('[alerts] fetched', (gj.features||[]).length, 'features near', lat.toFixed(3), lon.toFixed(3));
+    return gj.features||[];
+  }catch(e){ console.warn('[alerts]',e); return []; }
+}
+
+function showAlertBanner(info){
+  if(!alertBannerEl){
+    alertBannerEl=document.createElement('div');
+    alertBannerEl.id='alert-banner';
+    alertBannerEl.style.cssText=`
+      position:fixed;top:8px;left:50%;transform:translateX(-50%);
+      z-index:9100;max-width:92vw;min-width:240px;
+      background:#3a0d0d;border:2px solid #ff3333;border-radius:10px;
+      padding:8px 16px;text-align:center;font-family:'Courier New',monospace;
+      box-shadow:0 4px 16px rgba(0,0,0,0.6);cursor:pointer;
+    `;
+    alertBannerEl.addEventListener('click', ()=>{ if(window._lastAlertInfo) showAlertModal(window._lastAlertInfo); });
+    document.body.appendChild(alertBannerEl);
+  }
+  window._lastAlertInfo=info;
+  alertBannerEl.innerHTML=
+    '<div style="font-size:13px;font-weight:800;color:#ff5555;letter-spacing:0.05em;">🚨 '+info.headline+'</div>'+
+    (info.area?'<div style="font-size:10px;color:#ffaaaa;margin-top:2px;">'+info.area+'</div>':'')+
+    '<div style="font-size:9px;color:#ff8888;margin-top:2px;">Tap for details</div>';
+}
+function hideAlertBanner(){
+  if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
+  window._lastAlertInfo=null;
+  _lastActiveAlertKey=null;
+}
+
+function showAlertModal(info){
+  const existing=document.getElementById('alert-modal-overlay');
+  if(existing) existing.remove();
+  const overlay=document.createElement('div');
+  overlay.id='alert-modal-overlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:19500;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:14px;';
+  const box=document.createElement('div');
+  box.style.cssText='background:#1a0d0d;border:1px solid #ff3333;border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;padding:16px;font-family:\'Courier New\',monospace;color:#eee;';
+  box.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'+
+    '<div style="font-size:15px;font-weight:700;color:#ff5555;">🚨 '+info.headline+'</div>'+
+    '<button id="alert-modal-close" style="background:transparent;border:0.5px solid #ff3333;color:#ff5555;border-radius:50%;width:26px;height:26px;cursor:pointer;flex-shrink:0;">✕</button>'+
+    '</div>'+
+    (info.area?'<div style="font-size:11px;color:#ffaaaa;margin-bottom:6px;">📍 '+info.area+'</div>':'')+
+    (info.status?'<div style="font-size:10px;color:#888;">Status: <span style="color:#ccc;">'+info.status+'</span></div>':'')+
+    (info.severity?'<div style="font-size:10px;color:#888;">Severity: <span style="color:#ccc;">'+info.severity+'</span></div>':'')+
+    (info.urgency?'<div style="font-size:10px;color:#888;">Urgency: <span style="color:#ccc;">'+info.urgency+'</span></div>':'')+
+    (info.expires?'<div style="font-size:10px;color:#888;">Expires: <span style="color:#ccc;">'+info.expires+'</span></div>':'')+
+    (info.description?'<div style="font-size:12px;color:#ddd;line-height:1.6;margin-top:8px;white-space:pre-wrap;">'+info.description+'</div>':'')+
+    (info.url?'<div style="margin-top:10px;"><a href="'+info.url+'" target="_blank" style="color:#88ccff;font-size:11px;">🔗 Full alert on weather.gc.ca</a></div>':'');
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  document.getElementById('alert-modal-close').addEventListener('click',()=>overlay.remove());
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+}
+
+async function checkAlertsAtCurrentLocation(){
+  const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
+  if(!src) return;
+  const lat=src.lat, lon=src.lng??src.lon;
+  const locKey=lat.toFixed(2)+','+lon.toFixed(2);
+  if(locKey===_alertsLastLocKey && alertBannerEl) return;
+  _alertsLastLocKey=locKey;
+  const features=await fetchAlertsNear(lat,lon,0.75);
+  let hit=null;
+  for(const f of features){ if(pointInGeoJSON(lat,lon,f.geometry)){ hit=f; break; } }
+  if(hit){
+    console.log('[alerts] properties at GPS location:', hit.properties);
+    const info=extractAlertInfo(hit.properties||{});
+    const key=JSON.stringify(info);
+    if(key!==_lastActiveAlertKey){ _lastActiveAlertKey=key; showAlertBanner(info); }
+  } else {
+    hideAlertBanner();
+  }
+}
+
+// Right-click / long-press → "Weather alert here"
+document.getElementById('ctxAlertInfo').addEventListener('click', async ()=>{
+  const pos=window._ecFcLatLng;
+  document.getElementById('mapContextMenu').style.display='none';
+  if(!pos) return;
+  const features=await fetchAlertsNear(pos.lat,pos.lng,0.75);
+  let hit=null;
+  for(const f of features){ if(pointInGeoJSON(pos.lat,pos.lng,f.geometry)){ hit=f; break; } }
+  if(hit){
+    console.log('[alerts] properties at clicked location:', hit.properties);
+    showAlertModal(extractAlertInfo(hit.properties||{}));
+  } else {
+    L.popup({closeButton:true,className:'strike-popup',maxWidth:220})
+      .setLatLng(pos)
+      .setContent('<div style="font-family:monospace;font-size:11px;color:#aaa;padding:2px;">🚨 No active weather alerts at this location.</div>')
+      .openOn(map);
+  }
+});
+
   
 // ── GeoMet Radar ──────────────────────────────────────────────
 const GEOMET='https://geo.weather.gc.ca/geomet';
@@ -1672,11 +1864,12 @@ function onGPSSuccess(pos){
   const spdStr=speed!=null&&!isNaN(speed)?' '+(speed*3.6).toFixed(0)+'km/h':'';
   const bearStr=bear!=null?' '+Math.round(bear)+'°':'';
 
-  document.getElementById('gpsStatus').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4)+' '+accStr+spdStr+bearStr;
+document.getElementById('gpsStatus').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4)+' '+accStr+spdStr+bearStr;
   _gpsLastLL={lat,lon};
   _devLastGpsHeading=bear;
   _devLastGpsSpeedKmh=(speed!=null&&!isNaN(speed))?speed*3.6:0;
   devTryRecord();
+  checkAlertsAtCurrentLocation(); // deduped internally via _alertsLastLocKey, safe to call on every fix
 
   
 if(!gpsMarker){
