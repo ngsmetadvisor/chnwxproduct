@@ -1461,6 +1461,8 @@ let radarMaxPending=false;   // true if the user asked to track/recalculate befo
                               // fires automatically once radarFramesLoaded flips to true
 let animFrame=0, animPlaying=true, animSpeedIdx=0, animTimer=null, radarOpacity=0.8, refreshTimer=null;
 let radarMaxEnabled=false, radarMaxMarkers=[], radarMaxCurrentMarkers=[], radarMaxBusy=false;
+let radarMaxRecalcTimer=null;
+const RADAR_MAX_RECALC_MS=6*60*1000; // auto-recalculate storm tracks every 6 minutes while tracking is on
 const FAST_TRACK_SPEED_MS=50; // ~10x the fastest normal playback speed — used only while (re)calculating storm tracks
 let _radarMaxFastTimer=null;
 let radarMaxFirstRunDone=false; // first detection after a fresh page/session load can hit
@@ -1731,6 +1733,16 @@ function repositionStormBanner(){
   const ltgBanner=document.getElementById('proximity-warning');
   const gap=10, baseBottom=36;
   el2.style.bottom=ltgBanner?(baseBottom+ltgBanner.getBoundingClientRect().height+gap)+'px':baseBottom+'px';
+}
+
+function startRadarMaxRecalcTimer(){
+  if(radarMaxRecalcTimer) clearInterval(radarMaxRecalcTimer);
+  radarMaxRecalcTimer=setInterval(()=>{
+    if(radarMaxEnabled && radarVisible && !radarMaxBusy) runRadarMaxDetectionFast();
+  }, RADAR_MAX_RECALC_MS);
+}
+function stopRadarMaxRecalcTimer(){
+  if(radarMaxRecalcTimer){ clearInterval(radarMaxRecalcTimer); radarMaxRecalcTimer=null; }
 }
 
 function clearRadarMaxMarkers(){
@@ -2072,9 +2084,10 @@ function disableRadar(){
   if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null;}
   radarLayers.forEach(r=>{if(r.layer)map.removeLayer(r.layer);}); radarLayers=[];
 disableRadarCoverage(); radarVisible=false; updateLegendVisibility();
-  radarFramesLoaded=false;
+radarFramesLoaded=false;
   radarMaxPending=false;
   clearRadarMaxMarkers();
+  stopRadarMaxRecalcTimer();
 }
 
 document.getElementById('anim-play-btn').addEventListener('click',()=>{animPlaying=!animPlaying;if(animPlaying)startAnim();else stopAnim();updateAnimUI();});
@@ -2120,8 +2133,9 @@ radarMaxBtn.addEventListener('click',()=>{
       radarMaxBtn.classList.remove('active');
       radarMaxBtn.style.background='transparent';
       radarMaxBtn.style.borderColor='rgba(255,255,255,0.3)';
-      radarMaxBtn.style.color='rgba(255,255,255,0.6)';
+radarMaxBtn.style.color='rgba(255,255,255,0.6)';
       clearRadarMaxMarkers();
+      stopRadarMaxRecalcTimer();
       return;
     }
     // Turning on — zoom to a ~100km high-res view around the user's location first,
@@ -2129,8 +2143,9 @@ radarMaxBtn.addEventListener('click',()=>{
     radarMaxBtn.classList.add('active');
     radarMaxBtn.style.background='rgba(255,255,255,0.18)';
     radarMaxBtn.style.borderColor='#fff';
-    radarMaxBtn.style.color='#fff';
+radarMaxBtn.style.color='#fff';
     startTrackingWithZoom();
+    startRadarMaxRecalcTimer();
     });
   })();
 document.getElementById('radar-max-recalc-btn').addEventListener('click',()=>{
