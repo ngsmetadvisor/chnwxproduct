@@ -1901,10 +1901,18 @@ const pline=L.polyline(projPts,{pane:'radarMax',color:tr.color,weight:2,opacity:
     // Check current position (hour 0) and every hourly projection against refLL,
     // using the same watch/warning radii as the lightning proximity system.
 if(refLL){
-      projPts.forEach((p,hIdx)=>{
-        const dKm=haversineKm(refLL.lat,refLL.lng,p[0],p[1]);
-        if(dKm<stormClosestKm){ stormClosestKm=dKm; stormClosestHour=hIdx; stormClosestPos=p; }
+      const distByHour=projPts.map(p=>haversineKm(refLL.lat,refLL.lng,p[0],p[1]));
+      // A track whose distance is already increasing by the next projected hour is
+      // moving away — if its closest point is "now" (hour 0), it's not a growing
+      // threat, so don't let it trigger a warning/caution.
+      const isDeparting=distByHour.length>1 && distByHour[1]>distByHour[0];
+      let trackClosestKm=Infinity, trackClosestHour=null, trackClosestPos=null;
+      distByHour.forEach((dKm,hIdx)=>{
+        if(dKm<trackClosestKm){ trackClosestKm=dKm; trackClosestHour=hIdx; trackClosestPos=projPts[hIdx]; }
       });
+      if(!(trackClosestHour===0 && isDeparting) && trackClosestKm<stormClosestKm){
+        stormClosestKm=trackClosestKm; stormClosestHour=trackClosestHour; stormClosestPos=trackClosestPos;
+      }
     }
   });
 
