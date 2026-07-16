@@ -218,8 +218,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
         <span title="Minimum band required to count as a storm — matched to the RainViewer legend colors">Min intensity</span>
         <span id="radar-max-intensity-swatch" title="Orange" style="display:inline-block;width:16px;height:16px;border-radius:4px;background:rgb(255,140,0);border:1px solid rgba(255,255,255,0.3);"></span>
       </div>
-      <input id="radar-max-intensity-slider" type="range" min="1" max="5" step="1" value="2" style="width:100%;accent-color:#fff;border-radius:6px;height:6px;background:linear-gradient(to right, rgb(255,214,0) 0%, rgb(255,140,0) 25%, rgb(220,20,20) 50%, rgb(153,0,0) 75%, rgb(216,99,216) 100%);">
+<input id="radar-max-intensity-slider" type="range" min="1" max="5" step="1" value="2" style="width:100%;accent-color:#fff;border-radius:6px;height:6px;background:linear-gradient(to right, rgb(255,214,0) 0%, rgb(255,140,0) 25%, rgb(220,20,20) 50%, rgb(153,0,0) 75%, rgb(216,99,216) 100%);">
     </div>
+    <button id="radar-max-reset-btn" type="button" style="width:100%;margin-top:2px;background:transparent;border:0.5px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.7);font-size:10px;padding:6px 0;border-radius:8px;cursor:pointer;">↺ Reset to defaults</button>
   </div>
 
   <div id="bottom-stack" style="display:flex;flex-direction:column;flex-shrink:0;">
@@ -1342,6 +1343,31 @@ document.getElementById('radar-max-intensity-slider').addEventListener('input',f
   if(swatch){ swatch.style.background=RAINVIEWER_SWATCH_COLOR[idx]; swatch.title=RAINVIEWER_SWATCH_LABEL[idx]; }
 });
 document.getElementById('radar-max-intensity-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+
+document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
+  radarMaxSeparationKm=20;
+  RADAR_MAX_LINK_KM=100;
+  RADAR_MAX_PROJECT_HOURS=6;
+  RADAR_MAX_STORMS=36;
+  RADAR_MAX_SPEED_KMH=100;
+  radarMaxMinIntensity=2;
+
+  document.getElementById('radar-max-sep-slider').value=20;
+  document.getElementById('radar-max-sep-val').textContent='20km';
+  document.getElementById('radar-max-link-slider').value=100;
+  document.getElementById('radar-max-link-val').textContent='100km';
+  document.getElementById('radar-max-proj-slider').value=6;
+  document.getElementById('radar-max-proj-val').textContent='6h';
+  document.getElementById('radar-max-storms-slider').value=36;
+  document.getElementById('radar-max-storms-val').textContent='36';
+  document.getElementById('radar-max-speed-slider').value=100;
+  document.getElementById('radar-max-speed-val').textContent='100km/h';
+  document.getElementById('radar-max-intensity-slider').value=2;
+  const swatch=document.getElementById('radar-max-intensity-swatch');
+  if(swatch){ swatch.style.background=RAINVIEWER_SWATCH_COLOR[2]; swatch.title=RAINVIEWER_SWATCH_LABEL[2]; }
+
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
 
