@@ -440,6 +440,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       </div>
 <input id="radar-max-intensity-slider" type="range" min="0" max="14" step="1" value="7" style="width:100%;accent-color:#fff;border-radius:6px;height:6px;background:rgba(255,255,255,0.12);">
     </div>
+    <button id="radar-max-reset-btn" type="button" style="width:100%;margin-top:2px;background:transparent;border:0.5px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.7);font-size:10px;padding:6px 0;border-radius:8px;cursor:pointer;">↺ Reset to defaults</button>
   </div>
 
   <!-- Alberta panel -->
@@ -2221,6 +2222,30 @@ updateRadarMaxIntensitySwatch(7);
 document.getElementById('radar-max-intensity-slider').addEventListener('change',function(){
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
+document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
+  radarMaxSeparationKm=20;
+  RADAR_MAX_LINK_KM=100;
+  RADAR_MAX_PROJECT_HOURS=6;
+  RADAR_MAX_STORMS=36;
+  RADAR_MAX_SPEED_KMH=100;
+  radarMaxMinIntensity=RADAR_INTENSITY_STEPS[7];
+
+  document.getElementById('radar-max-sep-slider').value=20;
+  document.getElementById('radar-max-sep-val').textContent='20km';
+  document.getElementById('radar-max-link-slider').value=100;
+  document.getElementById('radar-max-link-val').textContent='100km';
+  document.getElementById('radar-max-proj-slider').value=6;
+  document.getElementById('radar-max-proj-val').textContent='6h';
+  document.getElementById('radar-max-storms-slider').value=36;
+  document.getElementById('radar-max-storms-val').textContent='36';
+  document.getElementById('radar-max-speed-slider').value=100;
+  document.getElementById('radar-max-speed-val').textContent='100km/h';
+  document.getElementById('radar-max-intensity-slider').value=7;
+  updateRadarMaxIntensitySwatch(7);
+
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+
 (function initRadarMaxSettings(){
   const btn=document.getElementById('radar-max-settings-btn');
   const panel=document.getElementById('radar-max-settings-panel');
