@@ -424,15 +424,23 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
         <span title="Max number of separate storms detected per frame">Max storms</span>
         <span id="radar-max-storms-val" style="color:#fff;">36</span>
       </div>
-      <input id="radar-max-storms-slider" type="range" min="4" max="60" step="2" value="36" style="width:100%;accent-color:#fff;">
+<input id="radar-max-storms-slider" type="range" min="4" max="60" step="2" value="36" style="width:100%;accent-color:#fff;">
     </div>
-<div style="margin-bottom:2px;">
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="Reject a frame-to-frame link if it implies motion faster than this — filters out spurious fast jumps">Max speed</span>
+        <span id="radar-max-speed-val" style="color:#fff;">100km/h</span>
+      </div>
+      <input id="radar-max-speed-slider" type="range" min="20" max="200" step="10" value="100" style="width:100%;accent-color:#fff;">
+    </div>
+<div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="Minimum precipitation rate required to count as a storm — matched to the radar legend's own colors">Min intensity</span>
         <span id="radar-max-intensity-swatch" title="Off" style="display:inline-block;width:16px;height:16px;border-radius:4px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.3);"></span>
       </div>
 <input id="radar-max-intensity-slider" type="range" min="0" max="14" step="1" value="7" style="width:100%;accent-color:#fff;border-radius:6px;height:6px;background:rgba(255,255,255,0.12);">
     </div>
+    <button id="radar-max-reset-btn" type="button" style="width:100%;margin-top:2px;background:transparent;border:0.5px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.7);font-size:10px;padding:6px 0;border-radius:8px;cursor:pointer;">↺ Reset to defaults</button>
   </div>
 
   <!-- Alberta panel -->
@@ -1461,6 +1469,8 @@ let radarMaxPending=false;   // true if the user asked to track/recalculate befo
                               // fires automatically once radarFramesLoaded flips to true
 let animFrame=0, animPlaying=true, animSpeedIdx=0, animTimer=null, radarOpacity=0.8, refreshTimer=null;
 let radarMaxEnabled=false, radarMaxMarkers=[], radarMaxCurrentMarkers=[], radarMaxBusy=false;
+let radarMaxRecalcTimer=null;
+const RADAR_MAX_RECALC_MS=6*60*1000; // auto-recalculate storm tracks every 6 minutes while tracking is on
 const FAST_TRACK_SPEED_MS=50; // ~10x the fastest normal playback speed — used only while (re)calculating storm tracks
 let _radarMaxFastTimer=null;
 let radarMaxFirstRunDone=false; // first detection after a fresh page/session load can hit
@@ -1479,7 +1489,7 @@ const RADAR_INTENSITY_STEP_COLORS=[null,
 ];
 const RADAR_INTENSITY_GRADIENT='linear-gradient(to right, rgba(255,255,255,0.15) 0%, '+RADAR_INTENSITY_STEP_COLORS.slice(1).map((c,i)=>c+' '+Math.round((i+1)/(RADAR_INTENSITY_STEP_COLORS.length-1)*100)+'%').join(', ')+')';
 let RADAR_MAX_LINK_KM=100;        // max distance to link the same storm between consecutive frames
-const RADAR_MAX_SPEED_KMH=150;    // implied speed above this between frames is treated as noise, not real motion — link rejected
+let RADAR_MAX_SPEED_KMH=100;      // implied speed above this between frames is treated as noise, not real motion — link rejected
 let RADAR_MAX_PROJECT_HOURS=6;    // how far forward to project each track's best-fit line
 let RADAR_MAX_STORMS=36;          // max storms tracked at once per frame
 const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
@@ -1731,6 +1741,16 @@ function repositionStormBanner(){
   const ltgBanner=document.getElementById('proximity-warning');
   const gap=10, baseBottom=36;
   el2.style.bottom=ltgBanner?(baseBottom+ltgBanner.getBoundingClientRect().height+gap)+'px':baseBottom+'px';
+}
+
+function startRadarMaxRecalcTimer(){
+  if(radarMaxRecalcTimer) clearInterval(radarMaxRecalcTimer);
+  radarMaxRecalcTimer=setInterval(()=>{
+    if(radarMaxEnabled && radarVisible && !radarMaxBusy) runRadarMaxDetectionFast();
+  }, RADAR_MAX_RECALC_MS);
+}
+function stopRadarMaxRecalcTimer(){
+  if(radarMaxRecalcTimer){ clearInterval(radarMaxRecalcTimer); radarMaxRecalcTimer=null; }
 }
 
 function clearRadarMaxMarkers(){
@@ -2072,9 +2092,10 @@ function disableRadar(){
   if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null;}
   radarLayers.forEach(r=>{if(r.layer)map.removeLayer(r.layer);}); radarLayers=[];
 disableRadarCoverage(); radarVisible=false; updateLegendVisibility();
-  radarFramesLoaded=false;
+radarFramesLoaded=false;
   radarMaxPending=false;
   clearRadarMaxMarkers();
+  stopRadarMaxRecalcTimer();
 }
 
 document.getElementById('anim-play-btn').addEventListener('click',()=>{animPlaying=!animPlaying;if(animPlaying)startAnim();else stopAnim();updateAnimUI();});
@@ -2120,8 +2141,9 @@ radarMaxBtn.addEventListener('click',()=>{
       radarMaxBtn.classList.remove('active');
       radarMaxBtn.style.background='transparent';
       radarMaxBtn.style.borderColor='rgba(255,255,255,0.3)';
-      radarMaxBtn.style.color='rgba(255,255,255,0.6)';
+radarMaxBtn.style.color='rgba(255,255,255,0.6)';
       clearRadarMaxMarkers();
+      stopRadarMaxRecalcTimer();
       return;
     }
     // Turning on — zoom to a ~100km high-res view around the user's location first,
@@ -2129,8 +2151,9 @@ radarMaxBtn.addEventListener('click',()=>{
     radarMaxBtn.classList.add('active');
     radarMaxBtn.style.background='rgba(255,255,255,0.18)';
     radarMaxBtn.style.borderColor='#fff';
-    radarMaxBtn.style.color='#fff';
+radarMaxBtn.style.color='#fff';
     startTrackingWithZoom();
+    startRadarMaxRecalcTimer();
     });
   })();
 document.getElementById('radar-max-recalc-btn').addEventListener('click',()=>{
@@ -2171,6 +2194,13 @@ document.getElementById('radar-max-storms-slider').addEventListener('input',func
 document.getElementById('radar-max-storms-slider').addEventListener('change',function(){
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
+document.getElementById('radar-max-speed-slider').addEventListener('input',function(){
+  RADAR_MAX_SPEED_KMH=parseInt(this.value);
+  document.getElementById('radar-max-speed-val').textContent=RADAR_MAX_SPEED_KMH+'km/h';
+});
+document.getElementById('radar-max-speed-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
 function updateRadarMaxIntensitySwatch(idx){
   const swatch=document.getElementById('radar-max-intensity-swatch');
   if(!swatch) return;
@@ -2192,6 +2222,30 @@ updateRadarMaxIntensitySwatch(7);
 document.getElementById('radar-max-intensity-slider').addEventListener('change',function(){
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
+document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
+  radarMaxSeparationKm=20;
+  RADAR_MAX_LINK_KM=100;
+  RADAR_MAX_PROJECT_HOURS=6;
+  RADAR_MAX_STORMS=36;
+  RADAR_MAX_SPEED_KMH=100;
+  radarMaxMinIntensity=RADAR_INTENSITY_STEPS[7];
+
+  document.getElementById('radar-max-sep-slider').value=20;
+  document.getElementById('radar-max-sep-val').textContent='20km';
+  document.getElementById('radar-max-link-slider').value=100;
+  document.getElementById('radar-max-link-val').textContent='100km';
+  document.getElementById('radar-max-proj-slider').value=6;
+  document.getElementById('radar-max-proj-val').textContent='6h';
+  document.getElementById('radar-max-storms-slider').value=36;
+  document.getElementById('radar-max-storms-val').textContent='36';
+  document.getElementById('radar-max-speed-slider').value=100;
+  document.getElementById('radar-max-speed-val').textContent='100km/h';
+  document.getElementById('radar-max-intensity-slider').value=7;
+  updateRadarMaxIntensitySwatch(7);
+
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+
 (function initRadarMaxSettings(){
   const btn=document.getElementById('radar-max-settings-btn');
   const panel=document.getElementById('radar-max-settings-panel');
@@ -3190,7 +3244,7 @@ fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/st
       const type = p[4] ? p[4].trim() : '';
       const elev = p[5] ? parseFloat(p[5].trim()) : null;
       if(isNaN(lat)||isNaN(lon)) return;
-      stations[id] = {lat, lon, name, type, elev};
+stations[id] = {lat, lon, name, type, elev};
 const charW = 6.6, padX = 6, padY = 6;
       const iw = id.length * charW + padX * 2;
       const ih = 11 + padY * 2;
@@ -3202,7 +3256,6 @@ const charW = 6.6, padX = 6, padY = 6;
       });
 const m = L.marker([lat, lon], {icon, interactive: true, pane: 'stations'}).addTo(map);
       m._stationId = id;
-      console.log('[station marker added]', id, lat, lon);
 m.on('click', function(e){
         console.log('[station click]', id);
         L.DomEvent.stopPropagation(e);
