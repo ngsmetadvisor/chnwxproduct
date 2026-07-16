@@ -204,7 +204,14 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
         <span title="Max number of separate storms detected per frame">Max storms</span>
         <span id="radar-max-storms-val" style="color:#fff;">36</span>
       </div>
-      <input id="radar-max-storms-slider" type="range" min="4" max="60" step="2" value="36" style="width:100%;accent-color:#fff;">
+<input id="radar-max-storms-slider" type="range" min="4" max="60" step="2" value="36" style="width:100%;accent-color:#fff;">
+    </div>
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="Reject a frame-to-frame link if it implies motion faster than this — filters out spurious fast jumps">Max speed</span>
+        <span id="radar-max-speed-val" style="color:#fff;">100km/h</span>
+      </div>
+      <input id="radar-max-speed-slider" type="range" min="20" max="200" step="10" value="100" style="width:100%;accent-color:#fff;">
     </div>
     <div style="margin-bottom:2px;">
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#aaa;margin-bottom:3px;">
@@ -908,7 +915,7 @@ let radarMaxTrailLines=[], radarMaxProjectionLines=[], radarMaxProjectionMarkers
 let radarMaxSeparationKm=20;
 let radarMaxMinIntensity=2; // 1=Yellow 2=Orange 3=Red 4=DarkRed 5=Purple — default Orange
 let RADAR_MAX_LINK_KM=100;
-const RADAR_MAX_SPEED_KMH=150;
+let RADAR_MAX_SPEED_KMH=100;
 let RADAR_MAX_PROJECT_HOURS=6;
 let RADAR_MAX_STORMS=36;
 const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
@@ -1319,6 +1326,13 @@ document.getElementById('radar-max-storms-slider').addEventListener('input',func
   document.getElementById('radar-max-storms-val').textContent=RADAR_MAX_STORMS;
 });
 document.getElementById('radar-max-storms-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-speed-slider').addEventListener('input',function(){
+  RADAR_MAX_SPEED_KMH=parseInt(this.value);
+  document.getElementById('radar-max-speed-val').textContent=RADAR_MAX_SPEED_KMH+'km/h';
+});
+document.getElementById('radar-max-speed-slider').addEventListener('change',function(){
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
 document.getElementById('radar-max-intensity-slider').addEventListener('input',function(){
