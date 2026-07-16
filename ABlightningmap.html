@@ -1488,7 +1488,7 @@ const RADAR_INTENSITY_STEP_COLORS=[null,
 ];
 const RADAR_INTENSITY_GRADIENT='linear-gradient(to right, rgba(255,255,255,0.15) 0%, '+RADAR_INTENSITY_STEP_COLORS.slice(1).map((c,i)=>c+' '+Math.round((i+1)/(RADAR_INTENSITY_STEP_COLORS.length-1)*100)+'%').join(', ')+')';
 let RADAR_MAX_LINK_KM=100;        // max distance to link the same storm between consecutive frames
-const RADAR_MAX_SPEED_KMH=150;    // implied speed above this between frames is treated as noise, not real motion — link rejected
+let RADAR_MAX_SPEED_KMH=100;      // implied speed above this between frames is treated as noise, not real motion — link rejected
 let RADAR_MAX_PROJECT_HOURS=6;    // how far forward to project each track's best-fit line
 let RADAR_MAX_STORMS=36;          // max storms tracked at once per frame
 const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
@@ -3219,7 +3219,7 @@ fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/st
       const type = p[4] ? p[4].trim() : '';
       const elev = p[5] ? parseFloat(p[5].trim()) : null;
       if(isNaN(lat)||isNaN(lon)) return;
-      stations[id] = {lat, lon, name, type, elev};
+stations[id] = {lat, lon, name, type, elev};
 const charW = 6.6, padX = 6, padY = 6;
       const iw = id.length * charW + padX * 2;
       const ih = 11 + padY * 2;
@@ -3231,7 +3231,6 @@ const charW = 6.6, padX = 6, padY = 6;
       });
 const m = L.marker([lat, lon], {icon, interactive: true, pane: 'stations'}).addTo(map);
       m._stationId = id;
-      console.log('[station marker added]', id, lat, lon);
 m.on('click', function(e){
         console.log('[station click]', id);
         L.DomEvent.stopPropagation(e);
@@ -3896,4 +3895,3 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
 </script>
 </body>
 </html>
- 
