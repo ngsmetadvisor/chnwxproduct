@@ -846,9 +846,10 @@ function disableRadar(){
   if(rvRefreshTimer){clearInterval(rvRefreshTimer);rvRefreshTimer=null;}
   rvLayers.forEach(l=>{try{map.removeLayer(l);}catch(e){}});
   rvLayers=[];rvFrames=[];
-  radarFramesLoaded=false;
+radarFramesLoaded=false;
   radarMaxPending=false;
   clearRadarMaxMarkers();
+  stopRadarMaxRecalcTimer();
 }
 
 document.getElementById('radar-toggle').addEventListener('click',()=>{if(rvEnabled)disableRadar();else enableRadar();});
@@ -898,6 +899,8 @@ function tileToLonLat(x,y,z){
 }
 
 let radarMaxEnabled=false, radarMaxMarkers=[], radarMaxCurrentMarkers=[], radarMaxBusy=false;
+let radarMaxRecalcTimer=null;
+const RADAR_MAX_RECALC_MS=6*60*1000; // auto-recalculate storm tracks every 6 minutes while tracking is on
 const FAST_TRACK_SPEED_MS=50;
 let _radarMaxFastTimer=null;
 let radarMaxFirstRunDone=false;
@@ -1059,6 +1062,16 @@ function repositionStormBanner(){
   const ltgBanner=document.getElementById('proximity-warning');
   const gap=10, baseBottom=0;
   el2.style.bottom=ltgBanner?(baseBottom+ltgBanner.offsetHeight+gap)+'px':baseBottom+'px';
+}
+
+function startRadarMaxRecalcTimer(){
+  if(radarMaxRecalcTimer) clearInterval(radarMaxRecalcTimer);
+  radarMaxRecalcTimer=setInterval(()=>{
+    if(radarMaxEnabled && rvEnabled && rvFrames.length && !radarMaxBusy) runRadarMaxDetectionFast();
+  }, RADAR_MAX_RECALC_MS);
+}
+function stopRadarMaxRecalcTimer(){
+  if(radarMaxRecalcTimer){ clearInterval(radarMaxRecalcTimer); radarMaxRecalcTimer=null; }
 }
 
 function clearRadarMaxMarkers(){
@@ -1255,15 +1268,17 @@ function startTrackingWithZoom(){
       radarMaxBtn.classList.remove('active');
       radarMaxBtn.style.background='transparent';
       radarMaxBtn.style.borderColor='rgba(255,255,255,0.3)';
-      radarMaxBtn.style.color='rgba(255,255,255,0.6)';
+radarMaxBtn.style.color='rgba(255,255,255,0.6)';
       clearRadarMaxMarkers();
+      stopRadarMaxRecalcTimer();
       return;
     }
     radarMaxBtn.classList.add('active');
     radarMaxBtn.style.background='rgba(255,255,255,0.18)';
     radarMaxBtn.style.borderColor='#fff';
-    radarMaxBtn.style.color='#fff';
+radarMaxBtn.style.color='#fff';
     startTrackingWithZoom();
+    startRadarMaxRecalcTimer();
   });
 })();
 
