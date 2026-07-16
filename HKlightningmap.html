@@ -129,9 +129,12 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
   <!-- Radar panel -->
   <div id="radar-panel">
-    <div id="radar-top-row">
+<div id="radar-top-row" style="flex-wrap:wrap;">
       <button id="radar-toggle">🌧 Radar</button>
       <span id="radarStatus"></span>
+      <button id="radar-max-toggle" type="button" title="Track storm maxima across frames and mark with ✕" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">Track storms</button>
+      <button id="radar-max-recalc-btn" type="button" title="Recalculate storm tracks now" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">⟳</button>
+      <button id="radar-max-settings-btn" type="button" title="Storm tracking parameters" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">⚙</button>
     </div>
     <div id="radar-controls">
       <div id="radar-row">
@@ -162,11 +165,54 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div id="ctxCoords">📍 Coordinates</div>
   </div>
 
-  <!-- Region info panel -->
+<!-- Region info panel -->
   <div id="region-panel">
     <div class="title">In View</div>
     <div id="region-total">0</div>
     <div id="region-label">strikes</div>
+  </div>
+
+  <!-- Radar Max settings popup -->
+  <div id="radar-max-settings-panel" style="display:none;position:absolute;z-index:2000;background:rgba(8,8,18,0.97);border:0.5px solid rgba(255,255,255,0.25);border-radius:14px;padding:10px 12px;min-width:220px;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.7);font-family:monospace;">
+    <div style="font-size:10px;color:#fff;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;border-bottom:0.5px solid rgba(255,255,255,0.15);padding-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+      <span>Storm Tracking Params</span>
+      <span id="radar-max-settings-close" style="cursor:pointer;color:#888;font-size:13px;">✕</span>
+    </div>
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="Minimum distance between simultaneously-tracked storms in one frame">Separation</span>
+        <span id="radar-max-sep-val" style="color:#fff;">20km</span>
+      </div>
+      <input id="radar-max-sep-slider" type="range" min="5" max="150" step="5" value="20" style="width:100%;accent-color:#fff;">
+    </div>
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="Max distance a storm can move between frames and still count as the same storm">Link distance</span>
+        <span id="radar-max-link-val" style="color:#fff;">100km</span>
+      </div>
+      <input id="radar-max-link-slider" type="range" min="20" max="300" step="10" value="100" style="width:100%;accent-color:#fff;">
+    </div>
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="How many hours forward to project each active storm's track">Projection</span>
+        <span id="radar-max-proj-val" style="color:#fff;">6h</span>
+      </div>
+      <input id="radar-max-proj-slider" type="range" min="1" max="12" step="1" value="6" style="width:100%;accent-color:#fff;">
+    </div>
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="Max number of separate storms detected per frame">Max storms</span>
+        <span id="radar-max-storms-val" style="color:#fff;">36</span>
+      </div>
+      <input id="radar-max-storms-slider" type="range" min="4" max="60" step="2" value="36" style="width:100%;accent-color:#fff;">
+    </div>
+    <div style="margin-bottom:2px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="Minimum band required to count as a storm — matched to the RainViewer legend colors">Min intensity</span>
+        <span id="radar-max-intensity-swatch" title="Orange" style="display:inline-block;width:16px;height:16px;border-radius:4px;background:rgb(255,140,0);border:1px solid rgba(255,255,255,0.3);"></span>
+      </div>
+      <input id="radar-max-intensity-slider" type="range" min="1" max="5" step="1" value="2" style="width:100%;accent-color:#fff;border-radius:6px;height:6px;background:linear-gradient(to right, rgb(255,214,0) 0%, rgb(255,140,0) 25%, rgb(220,20,20) 50%, rgb(153,0,0) 75%, rgb(216,99,216) 100%);">
+    </div>
   </div>
 
   <div id="bottom-stack" style="display:flex;flex-direction:column;flex-shrink:0;">
@@ -287,6 +333,8 @@ map.createPane('rvRadar'); map.getPane('rvRadar').style.zIndex = 350;
 map.createPane('gps');     map.getPane('gps').style.zIndex     = 600;
 map.createPane('strikes'); map.getPane('strikes').style.zIndex = 650;
 map.createPane('hko');     map.getPane('hko').style.zIndex     = 640;
+map.createPane('radarMax');map.getPane('radarMax').style.zIndex= 700;
+map.getPane('radarMax').style.pointerEvents = 'none';
 
 
 
@@ -480,6 +528,7 @@ setInterval(()=>{
   try{updateColors();}catch(e){console.warn('[updateColors]',e);}
   try{updateRegionCount();}catch(e){console.warn('[updateRegionCount]',e);}
   try{checkLightningProximity();}catch(e){console.warn('[checkLightningProximity]',e);}
+  try{repositionStormBanner();}catch(e){console.warn('[repositionStormBanner]',e);}
 },2000);
 
 let _zoomThrottle=null;
@@ -729,10 +778,37 @@ let rvTileTotal=0,rvTileLoaded=0;
   const bar=document.getElementById('radar-load-bar');
   if(bar){bar.style.display='block';}
   rvTileTotal=0;rvTileLoaded=0;
+radarFramesLoaded=false;
+  let rvLayersLoaded=0;
   rvFrames.forEach(f=>{
     const url=f.host+f.path+'/512/{z}/{x}/{y}/'+RV_COLOR+'/1_1.png';
     const layer=L.tileLayer(url,{tileSize:512,opacity:0,pane:'rvRadar',interactive:false,maxNativeZoom:6,zoomOffset:-1,attribution:'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>'}).addTo(map);    layer.on('tileloadstart',()=>{rvTileTotal++;rvUpdateLoadBar();});
     layer.on('tileload tileerror',()=>{rvTileLoaded++;rvUpdateLoadBar();});
+    layer.on('load',()=>{
+      rvLayersLoaded++;
+      if(rvLayersLoaded>=rvFrames.length){
+        radarFramesLoaded=true;
+        if(radarMaxPending){
+          radarMaxPending=false;
+          radarMaxEnabled=true;
+          const btn=document.getElementById('radar-max-toggle');
+          if(btn){
+            btn.classList.add('active');
+            btn.style.background='rgba(255,255,255,0.18)';
+            btn.style.borderColor='#fff';
+            btn.style.color='#fff';
+          }
+          document.getElementById('radarStatus').textContent=rvFrames.length+' frames — tracking started';
+          runRadarMaxDetectionFast();
+        } else if(radarMaxEnabled){
+          runRadarMaxDetection();
+          if(!radarMaxFirstRunDone){
+            radarMaxFirstRunDone=true;
+            setTimeout(()=>{ if(radarMaxEnabled && rvEnabled) runRadarMaxDetection(); }, 8000);
+          }
+        }
+      }
+    });
     // Pre-warm HK z=4,5,6 tiles within ~200 km
     const hkTiles=[
       {z:4,x:13,y:7},{z:4,x:14,y:7},
@@ -770,6 +846,9 @@ function disableRadar(){
   if(rvRefreshTimer){clearInterval(rvRefreshTimer);rvRefreshTimer=null;}
   rvLayers.forEach(l=>{try{map.removeLayer(l);}catch(e){}});
   rvLayers=[];rvFrames=[];
+  radarFramesLoaded=false;
+  radarMaxPending=false;
+  clearRadarMaxMarkers();
 }
 
 document.getElementById('radar-toggle').addEventListener('click',()=>{if(rvEnabled)disableRadar();else enableRadar();});
@@ -788,6 +867,480 @@ document.getElementById('rv-opacity').addEventListener('input',function(){
 
 // Auto-start radar on load
 enableRadar();
+
+// ── Storm Max-Intensity Tracker (RainViewer tiles) ──────────────────────
+// RainViewer only serves XYZ tiles (no arbitrary-bbox WMS GetMap like GeoMet), so
+// detection works by fetching a 3x3 grid of z=6/512px tiles centered on the reference
+// location (same z=6 tile scheme already used by the "hkTiles" pre-warm list above),
+// compositing them into one canvas, then scanning pixels exactly like the GeoMet version.
+const RV_DETECT_Z = 6;
+const bearingDIR_NAMES=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+function bearingTo(lat1,lon1,lat2,lon2){
+  const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180;
+  const dλ=(lon2-lon1)*Math.PI/180;
+  const y=Math.sin(dλ)*Math.cos(φ2);
+  const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(dλ);
+  const brng=(Math.atan2(y,x)*180/Math.PI+360)%360;
+  return {deg:brng, dir:bearingDIR_NAMES[Math.round(brng/22.5)%16]};
+}
+function lonLatToTile(lon,lat,z){
+  const n=Math.pow(2,z);
+  const x=(lon+180)/360*n;
+  const latRad=lat*Math.PI/180;
+  const y=(1-Math.log(Math.tan(latRad)+1/Math.cos(latRad))/Math.PI)/2*n;
+  return {x,y};
+}
+function tileToLonLat(x,y,z){
+  const n=Math.pow(2,z);
+  const lon=x/n*360-180;
+  const latRad=Math.atan(Math.sinh(Math.PI*(1-2*y/n)));
+  return {lat:latRad*180/Math.PI,lon};
+}
+
+let radarMaxEnabled=false, radarMaxMarkers=[], radarMaxCurrentMarkers=[], radarMaxBusy=false;
+const FAST_TRACK_SPEED_MS=50;
+let _radarMaxFastTimer=null;
+let radarMaxFirstRunDone=false;
+let radarMaxTrailLines=[], radarMaxProjectionLines=[], radarMaxProjectionMarkers=[];
+let radarMaxSeparationKm=20;
+let radarMaxMinIntensity=2; // 1=Yellow 2=Orange 3=Red 4=DarkRed 5=Purple — default Orange
+let RADAR_MAX_LINK_KM=100;
+const RADAR_MAX_SPEED_KMH=150;
+let RADAR_MAX_PROJECT_HOURS=6;
+let RADAR_MAX_STORMS=36;
+const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
+const RADAR_MAX_CANDIDATE_POOL=80;
+let radarFramesLoaded=false;
+let radarMaxPending=false;
+
+// Approximate swatches for RainViewer's "original" (color=2) palette, ranked by
+// intensity. These are visual-proxy matches, not calibrated dBZ/rate values.
+const RAINVIEWER_LUT=[
+  {r:216,g:99, b:216,v:5}, // Purple
+  {r:153,g:0,  b:0,  v:4}, // Dark Red
+  {r:220,g:20, b:20, v:3}, // Red
+  {r:255,g:140,b:0,  v:2}, // Orange
+  {r:255,g:214,b:0,  v:1}, // Yellow
+];
+const RAINVIEWER_LUT_MAX_DIST_SQ=3600;
+const RAINVIEWER_SWATCH_COLOR={1:'rgb(255,214,0)',2:'rgb(255,140,0)',3:'rgb(220,20,20)',4:'rgb(153,0,0)',5:'rgb(216,99,216)'};
+const RAINVIEWER_SWATCH_LABEL={1:'Yellow',2:'Orange',3:'Red',4:'Dark Red',5:'Purple'};
+
+function radarMaxScorePixel(r,g,b,a){
+  if(a<40) return -1;
+  let best=-1, bestDist=Infinity;
+  for(const sw of RAINVIEWER_LUT){
+    const dr=r-sw.r, dg=g-sw.g, db=b-sw.b;
+    const d=dr*dr+dg*dg+db*db;
+    if(d<bestDist){bestDist=d;best=sw.v;}
+  }
+  if(bestDist>RAINVIEWER_LUT_MAX_DIST_SQ) return -1;
+  return best;
+}
+
+function linearRegression(pts){
+  const n=pts.length;
+  let sumT=0,sumV=0,sumTT=0,sumTV=0;
+  pts.forEach(p=>{sumT+=p.t;sumV+=p.v;sumTT+=p.t*p.t;sumTV+=p.t*p.v;});
+  const denom=n*sumTT-sumT*sumT;
+  if(Math.abs(denom)<1e-9) return{a:sumV/n,b:0};
+  const b=(n*sumTV-sumT*sumV)/denom;
+  const a=(sumV-b*sumT)/n;
+  return{a,b};
+}
+
+function getRadarMaxReferenceLL(){
+  if(gpsMarker) return gpsMarker.getLatLng();
+  if(_gpsLastLL) return {lat:_gpsLastLL.lat, lng:_gpsLastLL.lon};
+  const c=map.getCenter();
+  return {lat:c.lat, lng:c.lng};
+}
+
+// Fetches a 3x3 grid of z=6 tiles around refLL for one frame, composites them, and
+// finds up to RADAR_MAX_STORMS local intensity maxima via iterative non-max suppression.
+async function detectRadarMaximaForFrame(frame, refLL, sepKm){
+  const center=lonLatToTile(refLL.lng, refLL.lat, RV_DETECT_Z);
+  const cx=Math.floor(center.x), cy=Math.floor(center.y);
+  const TS=512, GRID=3, W=TS*GRID, H=TS*GRID;
+  const cnv=document.createElement('canvas');
+  cnv.width=W; cnv.height=H;
+  const cctx=cnv.getContext('2d');
+
+  const loads=[];
+  for(let dy=-1;dy<=1;dy++){
+    for(let dx=-1;dx<=1;dx++){
+      const tx=cx+dx, ty=cy+dy;
+      const url=frame.host+frame.path+'/512/'+RV_DETECT_Z+'/'+tx+'/'+ty+'/2/1_1.png';
+      loads.push(new Promise(resolve=>{
+        const img=new Image();
+        img.crossOrigin='anonymous';
+        img.onload=()=>{ try{ cctx.drawImage(img,(dx+1)*TS,(dy+1)*TS,TS,TS); }catch(e){} resolve(); };
+        img.onerror=()=>resolve();
+        img.src=url;
+      }));
+    }
+  }
+  await Promise.all(loads);
+
+  try{
+    const id=cctx.getImageData(0,0,W,H).data;
+    const scores=new Float32Array(W*H);
+    for(let py=0;py<H;py++){
+      for(let px=0;px<W;px++){
+        const i=(py*W+px)*4;
+        scores[py*W+px]=radarMaxScorePixel(id[i],id[i+1],id[i+2],id[i+3]);
+      }
+    }
+    // Rough meters-per-pixel at this latitude/zoom for the separation radius in pixels
+    const mpp = (156543.03 / Math.pow(2,RV_DETECT_Z)) * Math.cos(refLL.lat*Math.PI/180);
+    const sepPx=Math.max(1,Math.round((sepKm*1000)/mpp));
+
+    const candidates=[];
+    for(let n=0;n<RADAR_MAX_CANDIDATE_POOL;n++){
+      let bestScore=-1,bestX=-1,bestY=-1;
+      for(let py=0;py<H;py++){
+        for(let px=0;px<W;px++){
+          const sc=scores[py*W+px];
+          if(sc>bestScore){bestScore=sc;bestX=px;bestY=py;}
+        }
+      }
+      if(bestScore<=0 || bestScore<radarMaxMinIntensity) break;
+      const tileFracX=cx-1+bestX/TS, tileFracY=cy-1+bestY/TS;
+      const ll=tileToLonLat(tileFracX,tileFracY,RV_DETECT_Z);
+      candidates.push({lat:ll.lat,lon:ll.lon,score:bestScore});
+      const x0=Math.max(0,bestX-sepPx), x1=Math.min(W-1,bestX+sepPx);
+      const y0=Math.max(0,bestY-sepPx), y1=Math.min(H-1,bestY+sepPx);
+      for(let yy=y0;yy<=y1;yy++){ for(let xx=x0;xx<=x1;xx++){ scores[yy*W+xx]=-1; } }
+    }
+    return candidates
+      .map(c=>({...c,_distKm:haversineKm(refLL.lat,refLL.lng,c.lat,c.lon)}))
+      .sort((a,b)=>a._distKm-b._distKm)
+      .slice(0,RADAR_MAX_STORMS);
+  }catch(e){ console.warn('[radarMax] pixel scan failed',e); return []; }
+}
+
+function updateStormProximityBanner(status){
+  let el=document.getElementById('storm-proximity-warning');
+  if(!status || status.level==='none'){
+    if(el) el.remove();
+    return;
+  }
+  if(!document.getElementById('storm-pulse-style')){
+    const st=document.createElement('style');
+    st.id='storm-pulse-style';
+    st.textContent='@keyframes stormPulse{0%,100%{opacity:1}50%{opacity:0.45}}';
+    document.head.appendChild(st);
+  }
+  const cfg={
+    caution:{color:'#a16207',label:'⛈ STORM APPROACHING',anim:'none'},
+    warning:{color:'#cc2200',label:'⛈ STORM WARNING',anim:'none'},
+    severe:{color:'#ff0000',label:'⛈ SEVERE STORM WARNING',anim:'stormPulse 0.6s ease-in-out infinite'}
+  };
+  const c=cfg[status.level];
+  if(!el){
+    el=document.createElement('div');
+    el.id='storm-proximity-warning';
+    el.style.cssText='position:absolute;left:50%;transform:translateX(-50%);z-index:1500;pointer-events:none;min-width:260px;max-width:90vw;';
+    document.getElementById('map').appendChild(el);
+  }
+  const hourLabel=status.hour===0?'now':('~'+status.hour+'h');
+  const dirStr=status.bearing?(' · from '+status.bearing.dir+' ('+Math.round(status.bearing.deg)+'°)'):'';
+  el.innerHTML=
+    '<div style="border-radius:10px;padding:9px 20px;text-align:center;font-family:\'Courier New\',monospace;border:2px solid '+c.color+';background:#e8e8e8;animation:'+c.anim+';box-sizing:border-box;">'+
+    '<div style="font-size:14px;font-weight:800;letter-spacing:0.07em;color:'+c.color+';">'+c.label+'</div>'+
+    '<div style="font-size:11px;font-weight:700;margin-top:3px;color:'+c.color+';">Tracked cell '+status.km.toFixed(0)+' km away'+dirStr+' · closest approach '+hourLabel+'</div>'+
+    '</div>';
+  repositionStormBanner();
+}
+
+function repositionStormBanner(){
+  const el2=document.getElementById('storm-proximity-warning');
+  if(!el2) return;
+  const ltgBanner=document.getElementById('proximity-warning');
+  const gap=10, baseBottom=0;
+  el2.style.bottom=ltgBanner?(baseBottom+ltgBanner.offsetHeight+gap)+'px':baseBottom+'px';
+}
+
+function clearRadarMaxMarkers(){
+  radarMaxMarkers.forEach(m=>map.removeLayer(m)); radarMaxMarkers=[];
+  radarMaxTrailLines.forEach(l=>map.removeLayer(l)); radarMaxTrailLines=[];
+  radarMaxProjectionLines.forEach(l=>map.removeLayer(l)); radarMaxProjectionLines=[];
+  radarMaxProjectionMarkers.forEach(m=>map.removeLayer(m)); radarMaxProjectionMarkers=[];
+  radarMaxCurrentMarkers.forEach(m=>map.removeLayer(m)); radarMaxCurrentMarkers=[];
+  updateStormProximityBanner({level:'none'});
+}
+
+async function runRadarMaxDetection(){
+  if(!radarMaxEnabled||!rvFrames.length||radarMaxBusy) return;
+  radarMaxBusy=true;
+  document.getElementById('radar-max-toggle').textContent='Tracking…';
+  const refLL={lat:getRadarMaxReferenceLL().lat, lng:getRadarMaxReferenceLL().lng};
+  clearRadarMaxMarkers();
+
+  const perFrame=[];
+  for(let i=0;i<rvFrames.length;i++){
+    const f=rvFrames[i];
+    const pts=await detectRadarMaximaForFrame(f, refLL, radarMaxSeparationKm);
+    const tMs=f.time*1000;
+    const withTime=pts.map(p=>({...p,t:tMs}));
+    perFrame.push(withTime);
+  }
+
+  const tracks=[];
+  let nextId=0;
+  for(let frameIdx=0;frameIdx<perFrame.length;frameIdx++){
+    const framePts=perFrame[frameIdx];
+    const openTracks=tracks.filter(tr=>tr.lastFrameIdx===frameIdx-1);
+    const pairs=[];
+    openTracks.forEach((tr,ti)=>{
+      const last=tr.points[tr.points.length-1];
+      framePts.forEach((pt,pi)=>{
+        const d=haversineKm(last.lat,last.lon,pt.lat,pt.lon);
+        if(d>RADAR_MAX_LINK_KM) return;
+        const elapsedH=Math.max((pt.t-last.t)/3600000, 1/3600);
+        const speedKmh=d/elapsedH;
+        if(speedKmh>RADAR_MAX_SPEED_KMH) return;
+        pairs.push({ti,pi,d});
+      });
+    });
+    pairs.sort((a,b)=>a.d-b.d);
+    const usedTr=new Set(), usedPt=new Set();
+    pairs.forEach(p=>{
+      if(usedTr.has(p.ti)||usedPt.has(p.pi)) return;
+      usedTr.add(p.ti); usedPt.add(p.pi);
+      const tr=openTracks[p.ti], pt=framePts[p.pi];
+      pt.trackId=tr.id; pt.color=tr.color;
+      tr.points.push(pt);
+      tr.lastFrameIdx=frameIdx;
+    });
+    framePts.forEach((pt,pi)=>{
+      if(usedPt.has(pi)) return;
+      const color=RADAR_MAX_PALETTE[nextId%RADAR_MAX_PALETTE.length];
+      pt.trackId=nextId; pt.color=color;
+      tracks.push({id:nextId,color,points:[pt],lastFrameIdx:frameIdx});
+      nextId++;
+    });
+  }
+
+  perFrame.forEach((framePts,fi)=>{
+    if(fi!==perFrame.length-1) return; // only current frame gets X markers (kept light on RainViewer's 512px composites)
+  });
+  tracks.forEach(tr=>{
+    if(tr.points.length<2) return;
+    const pts=tr.points.map(p=>[p.lat,p.lon]);
+    const line=L.polyline(pts,{pane:'radarMax',color:tr.color,weight:1.5,opacity:0.55,dashArray:'2 4',interactive:false}).addTo(map);
+    radarMaxTrailLines.push(line);
+  });
+
+  const lastFrameIdx=perFrame.length-1;
+  const MIN_PROJECTION_POINTS=4;
+  const activeTracks=tracks.filter(tr=>
+    (tr.lastFrameIdx===lastFrameIdx || tr.lastFrameIdx===lastFrameIdx-1) &&
+    tr.points.length>=MIN_PROJECTION_POINTS
+  );
+  const projEPSG=L.CRS.EPSG3857;
+  let stormClosestKm=Infinity, stormClosestHour=null, stormClosestPos=null;
+  activeTracks.forEach(tr=>{
+    const t0=tr.points[0].t;
+    const regPts=tr.points.map(p=>{
+      const m=projEPSG.project(L.latLng(p.lat,p.lon));
+      return{t:(p.t-t0)/60000,x:m.x,y:m.y};
+    });
+    const regX=linearRegression(regPts.map(p=>({t:p.t,v:p.x})));
+    const regY=linearRegression(regPts.map(p=>({t:p.t,v:p.y})));
+    const lastPt=tr.points[tr.points.length-1];
+    const projPts=[[lastPt.lat,lastPt.lon]];
+    for(let h=1;h<=RADAR_MAX_PROJECT_HOURS;h++){
+      const futureT=lastPt.t+h*3600000;
+      const tMin=(futureT-t0)/60000;
+      const x=regX.a+regX.b*tMin, y=regY.a+regY.b*tMin;
+      const ll=projEPSG.unproject(L.point(x,y));
+      projPts.push([ll.lat,ll.lng]);
+      const mk=L.marker([ll.lat,ll.lng],{
+        pane:'radarMax',interactive:false,
+        icon:L.divIcon({
+          className:'',
+          html:'<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:6px;height:6px;border-radius:50%;background:'+tr.color+';box-shadow:0 0 4px #000;"></div><div style="color:'+tr.color+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div></div>',
+          iconSize:[30,20],iconAnchor:[15,4]
+        })
+      }).addTo(map);
+      radarMaxProjectionMarkers.push(mk);
+    }
+    const pline=L.polyline(projPts,{pane:'radarMax',color:tr.color,weight:2,opacity:0.9,interactive:false}).addTo(map);
+    radarMaxProjectionLines.push(pline);
+    projPts.forEach((p,hIdx)=>{
+      const dKm=haversineKm(refLL.lat,refLL.lng,p[0],p[1]);
+      if(dKm<stormClosestKm){ stormClosestKm=dKm; stormClosestHour=hIdx; stormClosestPos=p; }
+    });
+  });
+
+  let stormLevel='none';
+  if(stormClosestKm<=PROX_WARNING_KM && stormClosestHour<=1) stormLevel='severe';
+  else if(stormClosestKm<=PROX_WARNING_KM) stormLevel='warning';
+  else if(stormClosestKm<=PROX_RADIUS_KM) stormLevel='caution';
+  let stormBearing=null;
+  if(stormClosestPos) stormBearing=bearingTo(refLL.lat,refLL.lng,stormClosestPos[0],stormClosestPos[1]);
+  updateStormProximityBanner({level:stormLevel, km:stormClosestKm, hour:stormClosestHour, bearing:stormBearing});
+
+  // Current-frame markers colored by track
+  const lastFramePts=perFrame[perFrame.length-1]||[];
+  lastFramePts.forEach(pt=>{
+    const col=pt.color||'#fff';
+    const m=L.marker([pt.lat,pt.lon],{
+      pane:'radarMax',interactive:false,
+      icon:L.divIcon({className:'',html:'<div style="color:'+col+';font-size:22px;font-weight:900;text-shadow:0 0 5px #000,0 0 5px #000,0 0 8px #000;">✕</div>',iconSize:[26,26],iconAnchor:[13,13]})
+    }).addTo(map);
+    radarMaxCurrentMarkers.push(m);
+  });
+
+  document.getElementById('radar-max-toggle').textContent='Track storms';
+  radarMaxBusy=false;
+}
+
+async function runRadarMaxDetectionFast(){
+  if(!rvFrames.length) return;
+  const prevPlaying=rvPlaying;
+  rvStopAnim();
+  if(_radarMaxFastTimer) clearInterval(_radarMaxFastTimer);
+  _radarMaxFastTimer=setInterval(()=>{
+    if(!rvLayers.length) return;
+    rvShowFrame((rvFrameIdx+1)%rvLayers.length);
+  }, FAST_TRACK_SPEED_MS);
+  try{
+    await runRadarMaxDetection();
+  } finally {
+    if(_radarMaxFastTimer){ clearInterval(_radarMaxFastTimer); _radarMaxFastTimer=null; }
+    rvShowFrame(rvLayers.length-1);
+    rvPlaying=prevPlaying;
+    if(rvPlaying) rvStartAnim();
+    rvUpdateUI();
+  }
+}
+
+// Zooms/pans to a ~100km view centered on the user, which makes RainViewer's tiles
+// render sharper for this area and ensures the detection grid sits right over it.
+function zoomToTrackingArea(){
+  const ref=getRadarMaxReferenceLL();
+  if(!ref) return;
+  const n=_destPoint(ref.lat,ref.lng,0,100);
+  const s=_destPoint(ref.lat,ref.lng,180,100);
+  const e=_destPoint(ref.lat,ref.lng,90,100);
+  const w=_destPoint(ref.lat,ref.lng,270,100);
+  const bounds=L.latLngBounds([s[0],w[1]],[n[0],e[1]]);
+  map.fitBounds(bounds,{animate:true});
+}
+
+function startTrackingWithZoom(){
+  zoomToTrackingArea();
+  radarMaxPending=true;
+  radarFramesLoaded=false;
+  document.getElementById('radarStatus').textContent='⟳ Zooming in for high-res radar…';
+  let fired=false;
+  const proceed=()=>{
+    if(fired) return;
+    fired=true;
+    if(rvEnabled) rvBuild(); else enableRadar();
+  };
+  map.once('moveend', proceed);
+  setTimeout(proceed, 700);
+}
+
+(function(){
+  const radarMaxBtn=document.getElementById('radar-max-toggle');
+  if(!radarMaxBtn) return;
+  radarMaxBtn.addEventListener('click',()=>{
+    if(radarMaxEnabled){
+      radarMaxEnabled=false;
+      radarMaxPending=false;
+      radarMaxBtn.classList.remove('active');
+      radarMaxBtn.style.background='transparent';
+      radarMaxBtn.style.borderColor='rgba(255,255,255,0.3)';
+      radarMaxBtn.style.color='rgba(255,255,255,0.6)';
+      clearRadarMaxMarkers();
+      return;
+    }
+    radarMaxBtn.classList.add('active');
+    radarMaxBtn.style.background='rgba(255,255,255,0.18)';
+    radarMaxBtn.style.borderColor='#fff';
+    radarMaxBtn.style.color='#fff';
+    startTrackingWithZoom();
+  });
+})();
+
+document.getElementById('radar-max-recalc-btn').addEventListener('click',()=>{
+  const btn=document.getElementById('radar-max-toggle');
+  if(btn){
+    btn.classList.add('active');
+    btn.style.background='rgba(255,255,255,0.18)';
+    btn.style.borderColor='#fff';
+    btn.style.color='#fff';
+  }
+  startTrackingWithZoom();
+});
+
+document.getElementById('radar-max-sep-slider').addEventListener('input',function(){
+  radarMaxSeparationKm=parseInt(this.value);
+  document.getElementById('radar-max-sep-val').textContent=radarMaxSeparationKm+'km';
+});
+document.getElementById('radar-max-sep-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-link-slider').addEventListener('input',function(){
+  RADAR_MAX_LINK_KM=parseInt(this.value);
+  document.getElementById('radar-max-link-val').textContent=RADAR_MAX_LINK_KM+'km';
+});
+document.getElementById('radar-max-link-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-proj-slider').addEventListener('input',function(){
+  RADAR_MAX_PROJECT_HOURS=parseInt(this.value);
+  document.getElementById('radar-max-proj-val').textContent=RADAR_MAX_PROJECT_HOURS+'h';
+});
+document.getElementById('radar-max-proj-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-storms-slider').addEventListener('input',function(){
+  RADAR_MAX_STORMS=parseInt(this.value);
+  document.getElementById('radar-max-storms-val').textContent=RADAR_MAX_STORMS;
+});
+document.getElementById('radar-max-storms-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-intensity-slider').addEventListener('input',function(){
+  const idx=parseInt(this.value);
+  radarMaxMinIntensity=idx;
+  const swatch=document.getElementById('radar-max-intensity-swatch');
+  if(swatch){ swatch.style.background=RAINVIEWER_SWATCH_COLOR[idx]; swatch.title=RAINVIEWER_SWATCH_LABEL[idx]; }
+});
+document.getElementById('radar-max-intensity-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+
+(function initRadarMaxSettings(){
+  const btn=document.getElementById('radar-max-settings-btn');
+  const panel=document.getElementById('radar-max-settings-panel');
+  const closeBtn=document.getElementById('radar-max-settings-close');
+  if(!btn||!panel) return;
+  function positionPanel(){
+    const br=btn.getBoundingClientRect();
+    const pw=220;
+    let left=br.right-pw;
+    if(left<8) left=8;
+    panel.style.left=left+'px';
+    panel.style.top=(br.bottom+6)+'px';
+  }
+  function openPanel(){ positionPanel(); panel.style.display='block'; }
+  function closePanel(){ panel.style.display='none'; }
+  btn.addEventListener('click', e=>{
+    e.stopPropagation();
+    panel.style.display==='none' ? openPanel() : closePanel();
+  });
+  closeBtn.addEventListener('click', closePanel);
+  document.addEventListener('click', e=>{
+    if(!panel.contains(e.target) && e.target!==btn) closePanel();
+  });
+  map.on('click', closePanel);
+})();
 
 // ── GPS ────────────────────────────────────────────────────────
 let gpsMarker=null,gpsRing=null,gpsAccCircle=null,gpsHeadingLine=null,gpsCompassLine=null,gpsCompassTicks=[],gpsActive=false,gpsWatchId=null;
