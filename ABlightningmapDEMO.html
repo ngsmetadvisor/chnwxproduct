@@ -798,7 +798,7 @@ map.on('zoomend', function(){
   const p = map.getPane('stations');
   if(p) setTimeout(()=>{ p.style.visibility=''; }, 250);
 });
-// ── Lightning Proximity Warning ───────────────────────────────
+// ── Lightning Proximity Warning ─────────────────────────────── 
 const PROX_RADIUS_KM     = 10000  // total watch radius distance in km. 100km in default
 const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
 const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
