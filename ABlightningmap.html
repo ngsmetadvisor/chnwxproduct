@@ -1558,9 +1558,11 @@ function zoomToTrackingArea(){
 // Shared by both the Track storms toggle and Recalculate button: zoom in first, then
 // reload radar frames for the new (higher-res, location-centered) view, and only once
 // that load fully completes does tracking start — via the existing radarMaxPending flow.
-function startTrackingWithZoom(){
+let _radarMaxNextAdditive=false; // if true, the pending tracking pass (from startTrackingWithZoom) refreshes+keeps existing tracked storms instead of dropping them
+function startTrackingWithZoom(additive){
   // Remember what the user is actually watching — the zoom below is only temporary,
   // for a high-res detection pass at the GPS/reference location.
+  _radarMaxNextAdditive=!!additive;
   _radarMaxFocusBounds=map.getBounds();
   zoomToTrackingArea();
   radarMaxPending=true;
@@ -1961,7 +1963,7 @@ document.getElementById('radar-max-toggle').textContent='Track storms';
 
 // Runs storm detection at accelerated (~10x) playback so the recalculation is visually
 // fast, then restores whatever speed/playing-state/frame the user had selected before.
-async function runRadarMaxDetectionFast(){
+async function runRadarMaxDetectionFast(additive){
   if(!radarLayers.length) return;
   const prevPlaying=animPlaying, prevSpeedIdx=animSpeedIdx, prevFrame=animFrame;
   stopAnim();
@@ -1971,7 +1973,7 @@ async function runRadarMaxDetectionFast(){
     showFrame((animFrame+1)%radarLayers.length);
   }, FAST_TRACK_SPEED_MS);
   try{
-    await runRadarMaxDetection();
+    await runRadarMaxDetection(additive);
   } finally {
     if(_radarMaxFastTimer){ clearInterval(_radarMaxFastTimer); _radarMaxFastTimer=null; }
     animSpeedIdx=prevSpeedIdx;
@@ -2066,9 +2068,11 @@ if(loadedCount===radarLayers.length){
         document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
         setLoadProgress(100);
         radarFramesLoaded=true;
-        if(radarMaxPending){
+if(radarMaxPending){
           radarMaxPending=false;
           radarMaxEnabled=true;
+          const wasRefresh=_radarMaxNextAdditive;
+          _radarMaxNextAdditive=false;
           const btn=document.getElementById('radar-max-toggle');
           if(btn){
             btn.classList.add('active');
@@ -2077,13 +2081,23 @@ if(loadedCount===radarLayers.length){
             btn.style.color='#fff';
           }
 document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — tracking started';
-          runRadarMaxDetectionFast().then(()=>{
+          runRadarMaxDetectionFast(false).then(()=>{
             if(_radarMaxFocusBounds){
+              const restoreBounds=_radarMaxFocusBounds;
               document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — returning to your view…';
-              map.flyToBounds(_radarMaxFocusBounds,{animate:true,duration:0.8});
+              map.flyToBounds(restoreBounds,{animate:true,duration:0.8});
               _radarMaxFocusBounds=null;
               map.once('moveend',()=>{
-                document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+                if(wasRefresh){
+                  // Recalc/auto-refresh: re-detect at the original view WITHOUT clearing,
+                  // so previously tracked storms outside the zoomed GPS area are refreshed and kept, not dropped.
+                  document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — refreshing your view…';
+                  runRadarMaxDetection(true).then(()=>{
+                    document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+                  });
+                } else {
+                  document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+                }
               });
             }
           });
@@ -2109,10 +2123,10 @@ updateAnimUI();
   startBtnCountdown('radar-toggle', 6*60*1000, 'rgba(100,180,255,0.18)');
 refreshTimer=setInterval(()=>{
     if(!radarVisible) return;
-    // Reuse the exact same path as the manual Recalculate button so auto-refresh gets
+// Reuse the exact same path as the manual Recalculate button so auto-refresh gets
     // identical behavior: zoom, wait for the pan to actually finish, then load frames
     // and run detection via the Fast/accelerated variant once loaded.
-    if(radarMaxEnabled) startTrackingWithZoom();
+    if(radarMaxEnabled) startTrackingWithZoom(true); // additive: refresh tracked storms instead of dropping them every cycle
     else buildRadarAnimLoop();
   },6*60*1000);
 }
@@ -2224,7 +2238,7 @@ document.getElementById('radar-max-recalc-btn').addEventListener('click',()=>{
     btn.style.borderColor='#fff';
     btn.style.color='#fff';
   }
-  startTrackingWithZoom();
+  startTrackingWithZoom(true); // additive: refresh tracked storms instead of dropping the ones outside the zoomed GPS area
   startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, 'rgba(255,255,255,0.18)');
 });
 
