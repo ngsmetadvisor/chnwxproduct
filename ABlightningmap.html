@@ -388,7 +388,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div style="font-size:10px;color:#888;letter-spacing:0.06em;text-transform:uppercase;">Stations</div>
     <select id="stationSelect"><option value="">-- select --</option></select>
     <div style="font-size:10px;color:#888;letter-spacing:0.06em;text-transform:uppercase;margin-top:8px;">Zoom to Zone</div>
-    <select id="zoneZoomSelect"><option value="">-- select --</option><option value="AB">AB (all zones)</option></select>
+<select id="zoneZoomSelect"><option value="">-- select --</option><option value="AB">AB (all zones)</option><option value="__export_png">Export AB png</option></select>
   </div>
 
 
@@ -514,8 +514,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   </div>
 
 </div><!-- #wrap -->
-
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 // ── Map ───────────────────────────────────────────────────────
 
@@ -1164,11 +1164,20 @@ function buildZoneZoomDropdown(){
     o.textContent=z.label;
     sel.appendChild(o);
   });
+  const exportOpt=document.createElement('option');
+  exportOpt.value='__export_png';
+  exportOpt.textContent='📷 Export AB view PNG';
+  sel.appendChild(exportOpt);
 }
 
 document.getElementById('zoneZoomSelect').addEventListener('change',function(){
   const val=this.value;
   if(!val) return;
+  if(val==='__export_png'){
+    exportMapViewPNG();
+    this.value='';
+    return;
+  }
   if(val==='AB'){
     if(zonePolygons.length){
       let bounds=null;
@@ -1184,6 +1193,30 @@ document.getElementById('zoneZoomSelect').addEventListener('change',function(){
   const zone=zonePolygons.find(z=>z.shortId===val);
   if(zone&&zone.polygon) map.fitBounds(zone.polygon.getBounds(),{animate:true,maxZoom:9});
 });
+
+function exportMapViewPNG(){
+  if(typeof html2canvas==='undefined'){
+    alert('Export unavailable — html2canvas failed to load.');
+    return;
+  }
+  const mapEl=document.getElementById('map');
+  const statusEl=document.getElementById('radarStatus');
+  const prevText=statusEl?statusEl.textContent:'';
+  if(statusEl) statusEl.textContent='⟳ Exporting PNG…';
+  html2canvas(mapEl,{useCORS:true,allowTaint:true,logging:false}).then(canvas=>{
+    const ts=new Date();
+    const stamp=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,'0')+String(ts.getDate()).padStart(2,'0')+'_'+String(ts.getHours()).padStart(2,'0')+String(ts.getMinutes()).padStart(2,'0');
+    const link=document.createElement('a');
+    link.download='AB_lightning_view_'+stamp+'.png';
+    link.href=canvas.toDataURL('image/png');
+    link.click();
+    if(statusEl) statusEl.textContent=prevText;
+  }).catch(e=>{
+    console.warn('[exportMapViewPNG]',e);
+    alert('PNG export failed: '+e.message);
+    if(statusEl) statusEl.textContent=prevText;
+  });
+}
 
 function buildZoneListUI(){
   const list=document.getElementById('zone-list');
