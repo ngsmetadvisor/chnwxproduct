@@ -1502,6 +1502,7 @@ let radarMaxPending=false;   // true if the user asked to track/recalculate befo
                               // fires automatically once radarFramesLoaded flips to true
 let animFrame=0, animPlaying=true, animSpeedIdx=0, animTimer=null, radarOpacity=0.8, refreshTimer=null;
 let radarMaxEnabled=false, radarMaxMarkers=[], radarMaxCurrentMarkers=[], radarMaxBusy=false;
+let radarMaxFocusAreas=[]; // {lat,lng} of every location zoomed into for tracking (initial + each "+" add) — Recalculate re-fits to all of them
 const RADAR_MAX_RECALC_MS=6*60*1000; // storm-track recalc cadence, matches the radar auto-refresh interval — used only for the button countdown fill
 let _radarMaxFocusBounds=null; // the view the user was actually watching before a zoom-to-location refresh — restored once detection finishes
 const FAST_TRACK_SPEED_MS=50; // ~10x the fastest normal playback speed — used only while (re)calculating storm tracks
@@ -1589,6 +1590,24 @@ function zoomToLocationTrackingArea(lat,lng){
   map.fitBounds(bounds,{animate:true});
 }
 
+// Fits the map to cover EVERY previously-tracked focus area (each expanded to its own
+// ~100km box), not just the most recent one — so Recalculate/auto-refresh re-scans
+// every zoomed-in area the user has built up via the initial track + each "+" add,
+// instead of dropping back to a single GPS/reference point.
+function zoomToAllFocusAreas(){
+  if(!radarMaxFocusAreas.length) return;
+  let bounds=null;
+  radarMaxFocusAreas.forEach(a=>{
+    const n=_destPoint(a.lat,a.lng,0,100);
+    const s=_destPoint(a.lat,a.lng,180,100);
+    const e=_destPoint(a.lat,a.lng,90,100);
+    const w=_destPoint(a.lat,a.lng,270,100);
+    const areaBounds=L.latLngBounds([s[0],w[1]],[n[0],e[1]]);
+    bounds=bounds?bounds.extend(areaBounds):areaBounds;
+  });
+  if(bounds) map.fitBounds(bounds,{animate:true});
+}
+
 // Shared by both the Track storms toggle and Recalculate button: zoom in first, then
 // reload radar frames for the new (higher-res, location-centered) view, and only once
 // that load fully completes does tracking start — via the existing radarMaxPending flow.
@@ -1598,7 +1617,16 @@ function startTrackingWithZoom(additive){
   // for a high-res detection pass at the GPS/reference location.
   _radarMaxNextAdditive=!!additive;
   _radarMaxFocusBounds=map.getBounds();
-  zoomToTrackingArea();
+  if(additive && radarMaxFocusAreas.length){
+    // Recalculate / auto-refresh: re-zoom to cover every focus area tracked so far,
+    // not just a single reference point.
+    zoomToAllFocusAreas();
+  } else {
+    // Fresh start (toggle ON): reset the focus-area list to just this reference point.
+    const ref=getRadarMaxReferenceLL();
+    radarMaxFocusAreas=ref?[{lat:ref.lat,lng:ref.lng}]:[];
+    zoomToTrackingArea();
+  }
   radarMaxPending=true;
   radarFramesLoaded=false;
   document.getElementById('radarStatus').textContent='⟳ Zooming in for high-res radar…';
@@ -2260,11 +2288,12 @@ radarMaxBtn.addEventListener('click',()=>{
       // Turning off — no zoom needed, just stop.
       radarMaxEnabled=false;
       radarMaxPending=false;
-      radarMaxBtn.classList.remove('active');
+radarMaxBtn.classList.remove('active');
       radarMaxBtn.style.background='transparent';
       radarMaxBtn.style.borderColor='rgba(255,255,255,0.3)';
 radarMaxBtn.style.color='rgba(255,255,255,0.6)';
 clearRadarMaxMarkers();
+      radarMaxFocusAreas=[];
       stopBtnCountdown('radar-max-toggle');
       return;
     }
@@ -2316,6 +2345,7 @@ if(!radarMaxEnabled){
 addBtn.textContent='…';
   document.getElementById('radarStatus').textContent='⟳ Zooming in for high-res tracking…';
   const _addViewCenter=map.getCenter();
+  radarMaxFocusAreas.push({lat:_addViewCenter.lat,lng:_addViewCenter.lng});
   zoomToLocationTrackingArea(_addViewCenter.lat,_addViewCenter.lng);
   let _addViewFired=false;
 const _addViewProceed=()=>{
