@@ -513,6 +513,12 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     </div>
   </div>
 
+<!-- Storm tracking status banner -->
+  <div id="storm-tracking-banner" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:19500;background:#f5f5f5;border:2px solid #333;border-radius:12px;padding:18px 32px;box-shadow:0 6px 24px rgba(0,0,0,0.5);font-family:'Courier New',monospace;text-align:center;pointer-events:none;">
+    <div style="font-size:15px;font-weight:800;color:#222;letter-spacing:0.04em;">⛈ Tracking storm…</div>
+    <div style="font-size:11px;color:#666;margin-top:4px;">Scanning radar for active cells</div>
+  </div>
+
 </div><!-- #wrap -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -1751,6 +1757,7 @@ let _radarMaxNextAdditive=false; // if true, the pending tracking pass (from sta
 async function startTrackingWithZoom(additive){
   // Remember what the user is actually watching — the zoom below is only temporary,
   // for a high-res detection pass at the GPS/reference location.
+  showStormTrackingBanner();
   _radarMaxNextAdditive=!!additive;
   _radarMaxFocusBounds=map.getBounds();
   if(additive && radarMaxFocusAreas.length){
@@ -1771,16 +1778,23 @@ async function startTrackingWithZoom(additive){
     });
     // Quick scan: Alberta + 300km buffer for storm cells already above the
     // min-intensity threshold, clustered to one focus area per ~100km radius
-    // (STORM_FOCUS_MIN_SEP_KM). Falls back to the GPS/reference point if nothing found.
+    // (STORM_FOCUS_MIN_SEP_KM).
     document.getElementById('radarStatus').textContent='⟳ Scanning Alberta for active storms…';
     let foci=[];
     try{ foci=await findStormFociInABRegion(); }catch(e){ console.warn('[stormFoci]',e); }
+    // Always include the user's own GPS/last-known/map-center location as a focus
+    // too, so the zoomed-in tracking view always covers their area — even when the
+    // AB-wide scan finds storms elsewhere and none near them.
+    const ref=getRadarMaxReferenceLL();
+    if(ref){
+      const nearExisting=foci.some(f=>haversineKm(ref.lat,ref.lng,f.lat,f.lng)<STORM_FOCUS_MIN_SEP_KM);
+      if(!nearExisting) foci.push({lat:ref.lat,lng:ref.lng});
+    }
     if(foci.length){
       radarMaxFocusAreas=foci;
       zoomToAllFocusAreas();
     } else {
-      const ref=getRadarMaxReferenceLL();
-      radarMaxFocusAreas=ref?[{lat:ref.lat,lng:ref.lng}]:[];
+      radarMaxFocusAreas=[];
       zoomToTrackingArea();
     }
   }
@@ -2001,6 +2015,15 @@ function repositionStormBanner(){
 }
 
 
+
+function showStormTrackingBanner(){
+  const el=document.getElementById('storm-tracking-banner');
+  if(el) el.style.display='block';
+}
+function hideStormTrackingBanner(){
+  const el=document.getElementById('storm-tracking-banner');
+  if(el) el.style.display='none';
+}
 
 function clearRadarMaxMarkers(){
   radarMaxMarkers.forEach(m=>map.removeLayer(m));
@@ -2326,11 +2349,15 @@ map.once('moveend',()=>{
                   document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — refreshing your view…';
                   runRadarMaxDetectionFast(true).then(()=>{
                     document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+                    hideStormTrackingBanner();
                   });
                 } else {
                   document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+                  hideStormTrackingBanner();
                 }
               });
+            } else {
+              hideStormTrackingBanner();
             }
           });
         } else if(radarMaxEnabled){
@@ -2500,6 +2527,7 @@ if(!radarMaxEnabled){
     return;
   }
 addBtn.textContent='…';
+  showStormTrackingBanner();
   document.getElementById('radarStatus').textContent='⟳ Zooming in for high-res tracking…';
   const _addViewCenter=map.getCenter();
   radarMaxFocusAreas.push({lat:_addViewCenter.lat,lng:_addViewCenter.lng});
@@ -2512,6 +2540,7 @@ const _addViewProceed=()=>{
     runRadarMaxDetectionFast(true).then(()=>{
       addBtn.textContent='+';
       document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+      hideStormTrackingBanner();
     });
   };
   map.once('moveend', _addViewProceed);
