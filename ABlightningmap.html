@@ -1758,9 +1758,20 @@ async function startTrackingWithZoom(additive){
     // not just a single reference point.
     zoomToAllFocusAreas();
   } else {
-    // Fresh start (toggle ON): scan Alberta + 300km buffer for storm cells already
-    // above the min-intensity threshold, clustered to one focus area per ~100km
-    // radius. Falls back to the GPS/reference point if nothing is found.
+    // Fresh start (toggle ON): first zoom OUT to the full Alberta overview so the
+    // user can see the whole province while a quick low-res scan runs, then zoom
+    // in per the existing procedure once candidate storms are found.
+    document.getElementById('radarStatus').textContent='⟳ Zooming out for Alberta overview…';
+    await new Promise(resolveOverview=>{
+      let overviewDone=false;
+      const overviewProceed=()=>{ if(overviewDone) return; overviewDone=true; resolveOverview(); };
+      map.once('moveend', overviewProceed);
+      map.fitBounds(getABBounds(), {animate:true});
+      setTimeout(overviewProceed, 900); // fallback in case the view was already framed and moveend never fires
+    });
+    // Quick scan: Alberta + 300km buffer for storm cells already above the
+    // min-intensity threshold, clustered to one focus area per ~100km radius
+    // (STORM_FOCUS_MIN_SEP_KM). Falls back to the GPS/reference point if nothing found.
     document.getElementById('radarStatus').textContent='⟳ Scanning Alberta for active storms…';
     let foci=[];
     try{ foci=await findStormFociInABRegion(); }catch(e){ console.warn('[stormFoci]',e); }
