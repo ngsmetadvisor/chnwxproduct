@@ -2133,12 +2133,13 @@ document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' 
               document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — returning to your view…';
               map.flyToBounds(restoreBounds,{animate:true,duration:0.8});
               _radarMaxFocusBounds=null;
-              map.once('moveend',()=>{
+map.once('moveend',()=>{
                 if(wasRefresh){
                   // Recalc/auto-refresh: re-detect at the original view WITHOUT clearing,
                   // so previously tracked storms outside the zoomed GPS area are refreshed and kept, not dropped.
+                  // Runs at accelerated (x10) speed like every other tracking pass.
                   document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — refreshing your view…';
-                  runRadarMaxDetection(true).then(()=>{
+                  runRadarMaxDetectionFast(true).then(()=>{
                     document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
                   });
                 } else {
@@ -2150,12 +2151,13 @@ document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' 
         } else if(radarMaxEnabled){
           startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
           runRadarMaxDetection();
-          if(!radarMaxFirstRunDone){
+if(!radarMaxFirstRunDone){
             radarMaxFirstRunDone=true;
             // Newest GeoMet tiles can still be mid-generation on the very first load,
             // rendering blurry/placeholder imagery that throws off pixel classification.
-            // Re-run once after a short settle delay to replace any bad initial detection.
-            setTimeout(()=>{ if(radarMaxEnabled && radarVisible) runRadarMaxDetection(); }, 8000);
+            // Re-run once after a short settle delay to replace any bad initial detection —
+            // at accelerated (x10) speed, same as every other tracking pass.
+            setTimeout(()=>{ if(radarMaxEnabled && radarVisible) runRadarMaxDetectionFast(); }, 8000);
           }
         }
       }
@@ -2316,11 +2318,11 @@ addBtn.textContent='…';
   const _addViewCenter=map.getCenter();
   zoomToLocationTrackingArea(_addViewCenter.lat,_addViewCenter.lng);
   let _addViewFired=false;
-  const _addViewProceed=()=>{
+const _addViewProceed=()=>{
     if(_addViewFired) return;
     _addViewFired=true;
     document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — tracking current view…';
-    runRadarMaxDetection(true).then(()=>{
+    runRadarMaxDetectionFast(true).then(()=>{
       addBtn.textContent='+';
       document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
     });
