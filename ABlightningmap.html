@@ -2,7 +2,7 @@
 <html lang="en">
 <head> 
 <meta charset="UTF-8">
-  
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1286,8 +1286,8 @@ function disableAlertsLayer(){
 // setTimeout(...,0) because gpsMarker/_gpsLastLL are declared with `let` further
 // down in this script; calling synchronously here would hit them in the
 // temporal dead zone (silently swallowed since this is an async function).
-if(!alertsCheckTimer) alertsCheckTimer=setInterval(()=>{ checkAlertsAtCurrentLocation(); refreshAlertsWmsLayer(); }, ALERTS_CHECK_MS);
-setTimeout(checkAlertsAtCurrentLocation, 0);
+if(!alertsCheckTimer) alertsCheckTimer=setInterval(()=>{ checkAlertsAtCurrentLocation(true); refreshAlertsWmsLayer(); }, ALERTS_CHECK_MS);
+setTimeout(()=>checkAlertsAtCurrentLocation(true), 0);
 document.getElementById('alerts-toggle').addEventListener('click', ()=>{
   if(alertsVisible) disableAlertsLayer(); else enableAlertsLayer();
 });
@@ -1441,13 +1441,13 @@ function showAlertModal(info){
   overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
 }
 
-async function checkAlertsAtCurrentLocation(){
+async function checkAlertsAtCurrentLocation(force){
   startBtnCountdown('alerts-toggle', ALERTS_CHECK_MS, 'rgba(255,80,80,0.18)');
   const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
   if(!src) return;
   const lat=src.lat, lon=src.lng??src.lon;
 const locKey=lat.toFixed(2)+','+lon.toFixed(2);
-  if(locKey===_alertsLastLocKey && (alertBannerEl || alertMinPill)) return;
+  if(!force && locKey===_alertsLastLocKey) return;
   _alertsLastLocKey=locKey;
   const features=await fetchAlertsNear(lat,lon,0.75);
   let hit=null;
