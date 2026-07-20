@@ -715,6 +715,16 @@ L.popup({closeButton:true,className:'strike-popup'})
 const AB = { latMin:49, latMax:60, lonMin:-120, lonMax:-110 };
 function inAB(lat,lon){ return lat>=AB.latMin&&lat<=AB.latMax&&lon>=AB.lonMin&&lon<=AB.lonMax; }
 
+// Alberta bbox padded outward by bufferKm on every side — approximate (degrees-based)
+// padding is fine here since this is only used to define a coarse search region for
+// auto-detecting active storm foci, not for precise geometry.
+function getABSearchBounds(bufferKm){
+  const midLat=(AB.latMin+AB.latMax)/2;
+  const latPad=bufferKm/111;
+  const lonPad=bufferKm/(111*Math.cos(midLat*Math.PI/180));
+  return L.latLngBounds([[AB.latMin-latPad,AB.lonMin-lonPad],[AB.latMax+latPad,AB.lonMax+lonPad]]);
+}
+
 // ── Lightning core ────────────────────────────────────────────
 let windowSec = 86400, t = 0, ws = null;
 let MAX = parseInt(localStorage.getItem('max_strikes') || '3000');
@@ -1690,6 +1700,32 @@ function zoomToLocationTrackingArea(lat,lng){
   map.fitBounds(bounds,{animate:true});
 }
 
+const STORM_FOCUS_AUTO_BUFFER_KM=300;   // how far around Alberta to search for active storms on startup
+const STORM_FOCUS_MIN_SEP_KM=100;       // minimum spacing between auto-detected foci — one per ~100km radius
+
+// Scans Alberta + a 300km buffer for storm cells above the current min-intensity
+// threshold, using the same non-max-suppression pass as per-frame detection so
+// nearby cells collapse into a single focus area (min separation = 100km) instead
+// of one focus per individual storm. Returns [] if none found or on failure.
+async function findStormFociInABRegion(){
+  const layerName=document.getElementById('radar-type').value;
+  if(layerName==='Radar_1km_SfcPrecipType') return [];
+  const bounds=getABSearchBounds(STORM_FOCUS_AUTO_BUFFER_KM);
+  let isoTime=radarLayers.length?radarLayers[radarLayers.length-1].time:null;
+  if(!isoTime){
+    try{
+      const times=await fetchRadarTimesteps(layerName);
+      isoTime=times.length?times[times.length-1]:null;
+    }catch(e){ console.warn('[stormFoci] failed to fetch latest timestep',e); }
+  }
+  if(!isoTime) return [];
+  const abCenter={lat:(AB.latMin+AB.latMax)/2,lng:(AB.lonMin+AB.lonMax)/2};
+  try{
+    const pts=await detectRadarMaximaForFrame(layerName,isoTime,bounds,STORM_FOCUS_MIN_SEP_KM,abCenter);
+    return pts.map(p=>({lat:p.lat,lng:p.lon}));
+  }catch(e){ console.warn('[stormFoci] detection failed',e); return []; }
+}
+
 // Fits the map to cover EVERY previously-tracked focus area (each expanded to its own
 // ~100km box), not just the most recent one — so Recalculate/auto-refresh re-scans
 // every zoomed-in area the user has built up via the initial track + each "+" add,
@@ -1712,7 +1748,7 @@ function zoomToAllFocusAreas(){
 // reload radar frames for the new (higher-res, location-centered) view, and only once
 // that load fully completes does tracking start — via the existing radarMaxPending flow.
 let _radarMaxNextAdditive=false; // if true, the pending tracking pass (from startTrackingWithZoom) refreshes+keeps existing tracked storms instead of dropping them
-function startTrackingWithZoom(additive){
+async function startTrackingWithZoom(additive){
   // Remember what the user is actually watching — the zoom below is only temporary,
   // for a high-res detection pass at the GPS/reference location.
   _radarMaxNextAdditive=!!additive;
@@ -1722,10 +1758,20 @@ function startTrackingWithZoom(additive){
     // not just a single reference point.
     zoomToAllFocusAreas();
   } else {
-    // Fresh start (toggle ON): reset the focus-area list to just this reference point.
-    const ref=getRadarMaxReferenceLL();
-    radarMaxFocusAreas=ref?[{lat:ref.lat,lng:ref.lng}]:[];
-    zoomToTrackingArea();
+    // Fresh start (toggle ON): scan Alberta + 300km buffer for storm cells already
+    // above the min-intensity threshold, clustered to one focus area per ~100km
+    // radius. Falls back to the GPS/reference point if nothing is found.
+    document.getElementById('radarStatus').textContent='⟳ Scanning Alberta for active storms…';
+    let foci=[];
+    try{ foci=await findStormFociInABRegion(); }catch(e){ console.warn('[stormFoci]',e); }
+    if(foci.length){
+      radarMaxFocusAreas=foci;
+      zoomToAllFocusAreas();
+    } else {
+      const ref=getRadarMaxReferenceLL();
+      radarMaxFocusAreas=ref?[{lat:ref.lat,lng:ref.lng}]:[];
+      zoomToTrackingArea();
+    }
   }
   radarMaxPending=true;
   radarFramesLoaded=false;
