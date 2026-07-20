@@ -1521,19 +1521,6 @@ const RADAR_INTENSITY_STEP_COLORS=[null,
   'rgb(254,2,152)','rgb(152,51,203)','rgb(102,0,152)'
 ];
 const RADAR_INTENSITY_GRADIENT='linear-gradient(to right, rgba(255,255,255,0.15) 0%, '+RADAR_INTENSITY_STEP_COLORS.slice(1).map((c,i)=>c+' '+Math.round((i+1)/(RADAR_INTENSITY_STEP_COLORS.length-1)*100)+'%').join(', ')+')';
-
-// Maps a detected storm's intensity (cm/h, sourced from RADAR_INTENSITY_LUT swatch matching)
-// to the same swatch color shown in the Min Intensity slider's gradient/legend — so X
-// markers and trails read at a glance against the filter the user actually set, instead
-// of an arbitrary per-track palette color.
-function radarMaxIntensityColor(score){
-  const idx=RADAR_INTENSITY_STEPS.indexOf(score);
-  if(idx>0) return RADAR_INTENSITY_STEP_COLORS[idx];
-  for(let i=RADAR_INTENSITY_STEPS.length-1;i>=1;i--){
-    if(score>=RADAR_INTENSITY_STEPS[i]) return RADAR_INTENSITY_STEP_COLORS[i];
-  }
-  return RADAR_INTENSITY_STEP_COLORS[1];
-}
 let RADAR_MAX_LINK_KM=100;        // max distance to link the same storm between consecutive frames
 let RADAR_MAX_SPEED_KMH=100;      // implied speed above this between frames is treated as noise, not real motion — link rejected
 let RADAR_MAX_PROJECT_HOURS=6;    // how far forward to project each track's best-fit line
@@ -1868,14 +1855,14 @@ const openTracks=tracks.filter(tr=>tr.lastFrameIdx===frameIdx-1);
       if(usedTr.has(p.ti)||usedPt.has(p.pi)) return;
       usedTr.add(p.ti); usedPt.add(p.pi);
       const tr=openTracks[p.ti], pt=framePts[p.pi];
-      pt.trackId=tr.id; pt.color=radarMaxIntensityColor(pt.score);
+      pt.trackId=tr.id; pt.color=tr.color;
       tr.points.push(pt);
       tr.lastFrameIdx=frameIdx;
     });
     framePts.forEach((pt,pi)=>{
       if(usedPt.has(pi)) return;
-      const color=RADAR_MAX_PALETTE[nextId%RADAR_MAX_PALETTE.length]; // kept only as the track's internal id/grouping color
-      pt.trackId=nextId; pt.color=radarMaxIntensityColor(pt.score);
+      const color=RADAR_MAX_PALETTE[nextId%RADAR_MAX_PALETTE.length];
+      pt.trackId=nextId; pt.color=color;
       tracks.push({id:nextId,color,points:[pt],lastFrameIdx:frameIdx});
       nextId++;
     });
@@ -1903,14 +1890,11 @@ const openTracks=tracks.filter(tr=>tr.lastFrameIdx===frameIdx-1);
     });
   });
 
-// Dashed trail per track (only for tracks with 2+ points) — colored by the most
-  // recent point's intensity (or white if the track hasn't met the minimum timestep
-  // count), matching the Min Intensity legend rather than an arbitrary track palette.
+  // Dashed trail per track (only for tracks with 2+ points)
   tracks.forEach(tr=>{
     if(tr.points.length<2) return;
     const pts=tr.points.map(p=>[p.lat,p.lon]);
-    const trailColor=tr.points[tr.points.length-1].color;
-    const line=L.polyline(pts,{pane:'radarMax',color:trailColor,weight:1.5,opacity:0.55,dashArray:'2 4',interactive:false}).addTo(map);
+    const line=L.polyline(pts,{pane:'radarMax',color:tr.color,weight:1.5,opacity:0.55,dashArray:'2 4',interactive:false}).addTo(map);
     radarMaxTrailLines.push(line);
   });
 
@@ -1935,8 +1919,7 @@ let stormClosestKm=Infinity, stormClosestHour=null, stormClosestPos=null;
     });
     const regX=linearRegression(regPts.map(p=>({t:p.t,v:p.x})));
     const regY=linearRegression(regPts.map(p=>({t:p.t,v:p.y})));
-const lastPt=tr.points[tr.points.length-1];
-    const projColor=lastPt.color; // intensity-based, matches trail/X markers for this track
+    const lastPt=tr.points[tr.points.length-1];
     const projPts=[[lastPt.lat,lastPt.lon]];
     for(let h=1;h<=RADAR_MAX_PROJECT_HOURS;h++){
       const futureT=lastPt.t+h*3600000;
@@ -1948,13 +1931,13 @@ const lastPt=tr.points[tr.points.length-1];
         pane:'radarMax',interactive:false,
         icon:L.divIcon({
           className:'',
-          html:'<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:6px;height:6px;border-radius:50%;background:'+projColor+';box-shadow:0 0 4px #000;"></div><div style="color:'+projColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div></div>',
+          html:'<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:6px;height:6px;border-radius:50%;background:'+tr.color+';box-shadow:0 0 4px #000;"></div><div style="color:'+tr.color+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div></div>',
           iconSize:[30,20],iconAnchor:[15,4]
         })
       }).addTo(map);
       radarMaxProjectionMarkers.push(mk);
     }
-const pline=L.polyline(projPts,{pane:'radarMax',color:projColor,weight:2,opacity:0.9,interactive:false}).addTo(map);
+const pline=L.polyline(projPts,{pane:'radarMax',color:tr.color,weight:2,opacity:0.9,interactive:false}).addTo(map);
     radarMaxProjectionLines.push(pline);
 
     // Check current position (hour 0) and every hourly projection against refLL,
