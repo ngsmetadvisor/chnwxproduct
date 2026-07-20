@@ -384,9 +384,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   </div>
 
   <!-- Station finder -->
-  <div id="station-finder">
+<div id="station-finder">
     <div style="font-size:10px;color:#888;letter-spacing:0.06em;text-transform:uppercase;">Stations</div>
     <select id="stationSelect"><option value="">-- select --</option></select>
+    <div style="font-size:10px;color:#888;letter-spacing:0.06em;text-transform:uppercase;margin-top:8px;">Zoom to Zone</div>
+    <select id="zoneZoomSelect"><option value="">-- select --</option><option value="AB">AB (all zones)</option></select>
   </div>
 
 
@@ -1143,12 +1145,45 @@ poly.bindPopup('<div style="font-family:monospace;min-width:170px;line-height:1.
         poly.addTo(zoneLayer);
         zonePolygons.push({...f,polygon:poly});
       });
-      zoneLayer.addTo(map);
+zoneLayer.addTo(map);
       document.getElementById('zoneStatus').textContent=features.length+' fire weather zones';
       buildZoneListUI();
+      buildZoneZoomDropdown();
       rebuildZoneCounts();
     }).catch(e=>{document.getElementById('zoneStatus').textContent='Zones unavailable';console.error(e);});
 }
+
+function buildZoneZoomDropdown(){
+  const sel=document.getElementById('zoneZoomSelect');
+  if(!sel) return;
+  // Keep the AB option, drop any previously-built zone options, then rebuild from zonePolygons.
+  sel.innerHTML='<option value="">-- select --</option><option value="AB">AB (all zones)</option>';
+  [...zonePolygons].sort((a,b)=>a.shortId.localeCompare(b.shortId)).forEach(z=>{
+    const o=document.createElement('option');
+    o.value=z.shortId;
+    o.textContent=z.label;
+    sel.appendChild(o);
+  });
+}
+
+document.getElementById('zoneZoomSelect').addEventListener('change',function(){
+  const val=this.value;
+  if(!val) return;
+  if(val==='AB'){
+    if(zonePolygons.length){
+      let bounds=null;
+      zonePolygons.forEach(z=>{
+        bounds=bounds?bounds.extend(z.polygon.getBounds()):z.polygon.getBounds();
+      });
+      if(bounds) map.fitBounds(bounds,{animate:true});
+    } else {
+      map.fitBounds([[AB.latMin,AB.lonMin],[AB.latMax,AB.lonMax]],{animate:true});
+    }
+    return;
+  }
+  const zone=zonePolygons.find(z=>z.shortId===val);
+  if(zone&&zone.polygon) map.fitBounds(zone.polygon.getBounds(),{animate:true,maxZoom:9});
+});
 
 function buildZoneListUI(){
   const list=document.getElementById('zone-list');
