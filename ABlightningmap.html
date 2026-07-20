@@ -1717,19 +1717,34 @@ async function findStormFociInABRegion(){
   const layerName=document.getElementById('radar-type').value;
   if(layerName==='Radar_1km_SfcPrecipType') return [];
   const bounds=getABSearchBounds(STORM_FOCUS_AUTO_BUFFER_KM);
-  let isoTime=radarLayers.length?radarLayers[radarLayers.length-1].time:null;
-  if(!isoTime){
-    try{
-      const times=await fetchRadarTimesteps(layerName);
-      isoTime=times.length?times[times.length-1]:null;
-    }catch(e){ console.warn('[stormFoci] failed to fetch latest timestep',e); }
+  let times=radarLayers.length?radarLayers.map(r=>r.time):[];
+  if(!times.length){
+    try{ times=await fetchRadarTimesteps(layerName); }
+    catch(e){ console.warn('[stormFoci] failed to fetch timesteps',e); }
   }
-  if(!isoTime) return [];
+  if(!times.length) return [];
   const abCenter={lat:(AB.latMin+AB.latMax)/2,lng:(AB.lonMin+AB.lonMax)/2};
-  try{
-    const pts=await detectRadarMaximaForFrame(layerName,isoTime,bounds,STORM_FOCUS_MIN_SEP_KM,abCenter);
-    return pts.map(p=>({lat:p.lat,lng:p.lon}));
-  }catch(e){ console.warn('[stormFoci] detection failed',e); return []; }
+  // Scan EVERY timestep in the animation window, not just the latest — a storm that
+  // was above the min-intensity threshold at any point in the loop still gets a focus
+  // area for the detailed zoom-in scan, even if it has since weakened or moved off-screen.
+  let allPts=[];
+  for(const isoTime of times){
+    try{
+      const pts=await detectRadarMaximaForFrame(layerName,isoTime,bounds,STORM_FOCUS_MIN_SEP_KM,abCenter);
+      allPts=allPts.concat(pts);
+    }catch(e){ console.warn('[stormFoci] detection failed for',isoTime,e); }
+  }
+  if(!allPts.length) return [];
+  // Merge detections across frames: greedily keep the strongest point, suppress any
+  // other detection (from any timestep) within STORM_FOCUS_MIN_SEP_KM of it, repeat —
+  // so the same storm seen across several frames collapses into a single focus area.
+  allPts.sort((a,b)=>b.score-a.score);
+  const merged=[];
+  for(const p of allPts){
+    const tooClose=merged.some(m=>haversineKm(m.lat,m.lon,p.lat,p.lon)<STORM_FOCUS_MIN_SEP_KM);
+    if(!tooClose) merged.push(p);
+  }
+  return merged.map(p=>({lat:p.lat,lng:p.lon}));
 }
 
 // Fits the map to cover EVERY previously-tracked focus area (each expanded to its own
