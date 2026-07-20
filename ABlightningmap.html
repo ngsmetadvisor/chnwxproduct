@@ -1351,6 +1351,7 @@ function rebuildStationIcons(){
   _stnStyle.textContent = '.stn-label{color:'+color+';font-size:'+fontSize+';font-family:monospace;white-space:nowrap;cursor:pointer;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';display:flex;align-items:center;justify-content:center;width:100%;height:100%;box-sizing:border-box;}';
 }
 loadZones();
+map.fitBounds(getABBounds(), {animate:false}); // initial view = Alberta overview, matching the same bounds used everywhere else (zoneZoomSelect "AB", PNG export, storm-tracking overview zoom)
 
 // ── Weather Alerts (Current-Alerts) ─────────────────────────────
 const ALERTS_CHECK_MS = 6*60*1000; // alerts check cadence — kept in sync with radar refresh + storm-track recalc
@@ -1618,6 +1619,7 @@ let radarMaxPending=false;   // true if the user asked to track/recalculate befo
                               // fires automatically once radarFramesLoaded flips to true
 let animFrame=0, animPlaying=true, animSpeedIdx=0, animTimer=null, radarOpacity=0.8, refreshTimer=null;
 let radarMaxEnabled=false, radarMaxMarkers=[], radarMaxCurrentMarkers=[], radarMaxBusy=false;
+let radarMaxManualSequence=false; // true while sequentially scanning several discrete focus areas one at a time — suppresses buildRadarAnimLoop's own automatic detection trigger so each focus is only detected once, deliberately, not re-triggered every time frames reload for the next focus
 let radarMaxFocusAreas=[]; // {lat,lng} of every location zoomed into for tracking (initial + each "+" add) — Recalculate re-fits to all of them
 const RADAR_MAX_RECALC_MS=6*60*1000; // storm-track recalc cadence, matches the radar auto-refresh interval — used only for the button countdown fill
 let _radarMaxFocusBounds=null; // the view the user was actually watching before a zoom-to-location refresh — restored once detection finishes
@@ -1747,14 +1749,14 @@ async function findStormFociInABRegion(){
   return merged.map(p=>({lat:p.lat,lng:p.lon}));
 }
 
-// Fits the map to cover EVERY previously-tracked focus area (each expanded to its own
-// ~100km box), not just the most recent one — so Recalculate/auto-refresh re-scans
-// every zoomed-in area the user has built up via the initial track + each "+" add,
-// instead of dropping back to a single GPS/reference point.
-function zoomToAllFocusAreas(){
-  if(!radarMaxFocusAreas.length) return;
+// Builds a Leaflet bounds object covering a list of {lat,lng} points, each expanded
+// by a ~100km box — shared by zoomToAllFocusAreas (whole-session restore) and the
+// per-cluster detail-scan zoom below. For a single point this produces the exact
+// same box zoomToLocationTrackingArea does.
+function boundsForFociList(list){
+  if(!list.length) return null;
   let bounds=null;
-  radarMaxFocusAreas.forEach(a=>{
+  list.forEach(a=>{
     const n=_destPoint(a.lat,a.lng,0,100);
     const s=_destPoint(a.lat,a.lng,180,100);
     const e=_destPoint(a.lat,a.lng,90,100);
@@ -1762,12 +1764,73 @@ function zoomToAllFocusAreas(){
     const areaBounds=L.latLngBounds([s[0],w[1]],[n[0],e[1]]);
     bounds=bounds?bounds.extend(areaBounds):areaBounds;
   });
+  return bounds;
+}
+
+// Fits the map to cover EVERY previously-tracked focus area (each expanded to its own
+// ~100km box), not just the most recent one — so Recalculate/auto-refresh re-scans
+// every zoomed-in area the user has built up via the initial track + each "+" add,
+// instead of dropping back to a single GPS/reference point.
+function zoomToAllFocusAreas(){
+  const bounds=boundsForFociList(radarMaxFocusAreas);
   if(bounds) map.fitBounds(bounds,{animate:true});
+}
+
+// Storms closer together than this share ONE detail-scan zoom instead of each getting
+// their own separate pass — a single zoomed view still resolves both storms at close
+// to full detail when they're this close, so scanning them together avoids doubling
+// the work for no real accuracy gain. Storms farther apart than this still get
+// individual scans, each at full tight zoom.
+const DETAIL_SCAN_MERGE_KM=150;
+
+// Greedily groups foci into clusters for the detail-scan loop: any focus within
+// DETAIL_SCAN_MERGE_KM of an existing cluster member joins that cluster, otherwise it
+// starts a new one. Foci lists here are small (a handful of storms at most), so a
+// simple greedy pass is plenty.
+function clusterFociForDetailScan(foci){
+  const clusters=[];
+  foci.forEach(f=>{
+    const home=clusters.find(cl=>cl.some(m=>haversineKm(m.lat,m.lng,f.lat,f.lng)<=DETAIL_SCAN_MERGE_KM));
+    if(home) home.push(f); else clusters.push([f]);
+  });
+  return clusters;
 }
 
 // Shared by both the Track storms toggle and Recalculate button: zoom in first, then
 // reload radar frames for the new (higher-res, location-centered) view, and only once
 // that load fully completes does tracking start — via the existing radarMaxPending flow.
+// Polls radarFramesLoaded (flipped true by buildRadarAnimLoop once every tile in the
+// current view has finished loading) instead of trusting buildRadarAnimLoop's own
+// returned promise, which resolves as soon as requests are *kicked off*, not loaded.
+function waitForRadarFramesLoaded(timeoutMs){
+  return new Promise(resolve=>{
+    const start=Date.now();
+    (function check(){
+      if(radarFramesLoaded || Date.now()-start>timeoutMs){ resolve(); return; }
+      setTimeout(check,150);
+    })();
+  });
+}
+
+// Zooms to fit ONE cluster of focus points (a single storm, or several close-together
+// storms merged under DETAIL_SCAN_MERGE_KM), waits for that view's radar frames to
+// finish loading there, then runs a single detection pass covering the whole cluster.
+// For a lone storm this is identical to the old single-point "+" button zoom.
+async function runDetailScanAtFocus(clusterMembers,additive){
+  const bounds=boundsForFociList(clusterMembers);
+  if(bounds) map.fitBounds(bounds,{animate:true});
+  await new Promise(resolve=>{
+    let fired=false;
+    const proceed=()=>{ if(fired) return; fired=true; resolve(); };
+    map.once('moveend',proceed);
+    setTimeout(proceed,700);
+  });
+  radarFramesLoaded=false;
+  if(radarVisible) buildRadarAnimLoop(); else enableRadar();
+  await waitForRadarFramesLoaded(15000);
+  await runRadarMaxDetectionFast(additive);
+}
+
 let _radarMaxNextAdditive=false; // if true, the pending tracking pass (from startTrackingWithZoom) refreshes+keeps existing tracked storms instead of dropping them
 async function startTrackingWithZoom(additive){
   // Remember what the user is actually watching — the zoom below is only temporary,
@@ -1806,8 +1869,44 @@ async function startTrackingWithZoom(additive){
       if(!nearExisting) foci.push({lat:ref.lat,lng:ref.lng});
     }
     if(foci.length){
+      // Scan each detected storm INDIVIDUALLY — zoom tight, wait for that view's
+      // frames to load, detect, then move to the next — exactly like pressing "+"
+      // once per storm. This is what lets an east-AB storm and a west-AB storm each
+      // get a full-resolution detail scan instead of sharing one wide fitBounds view.
       radarMaxFocusAreas=foci;
-      zoomToAllFocusAreas();
+      radarMaxManualSequence=true;
+      clearRadarMaxMarkers();
+      radarMaxEnabled=true;
+      const btn=document.getElementById('radar-max-toggle');
+      if(btn){
+        btn.classList.add('active');
+        btn.style.background=rgbToRgba(radarMaxIntensityColor,0.18);
+        btn.style.borderColor=radarMaxIntensityColor;
+        btn.style.color=radarMaxIntensityColor;
+      }
+const detailClusters=clusterFociForDetailScan(foci);
+      for(let i=0;i<detailClusters.length;i++){
+        const cl=detailClusters[i];
+        document.getElementById('radarStatus').textContent='⟳ Tracking storm group '+(i+1)+' of '+detailClusters.length+' ('+cl.length+' cell'+(cl.length>1?'s':'')+')…';
+        try{ await runDetailScanAtFocus(cl,i>0); } // first cluster resets (additive=false), rest accumulate
+        catch(e){ console.warn('[radarMax] focus scan failed',e); }
+      }
+      radarMaxManualSequence=false;
+      radarMaxPending=false;
+      hideStormTrackingBanner();
+      if(_radarMaxFocusBounds){
+        const restoreBounds=_radarMaxFocusBounds;
+        document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — returning to your view…';
+        map.flyToBounds(restoreBounds,{animate:true,duration:0.8});
+        _radarMaxFocusBounds=null;
+        map.once('moveend',()=>{
+          document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+        });
+      } else {
+        document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+      }
+      startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
+      return; // multi-focus path is fully handled above — skip the single-zoom tail below
     } else {
       radarMaxFocusAreas=[];
       zoomToTrackingArea();
@@ -2375,7 +2474,7 @@ map.once('moveend',()=>{
               hideStormTrackingBanner();
             }
           });
-        } else if(radarMaxEnabled){
+} else if(radarMaxEnabled && !radarMaxManualSequence){
           startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
           runRadarMaxDetection();
 if(!radarMaxFirstRunDone){
