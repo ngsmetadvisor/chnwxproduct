@@ -1513,6 +1513,22 @@ let radarMaxFirstRunDone=false; // first detection after a fresh page/session lo
 let radarMaxTrailLines=[], radarMaxProjectionLines=[], radarMaxProjectionMarkers=[];
 let radarMaxSeparationKm=20;      // minimum separation between simultaneously-tracked storms
 let radarMaxMinIntensity=1.5;     // minimum cm/h (from RADAR_INTENSITY_LUT) — storms below this are ignored. Default: yellow band (index 7)
+let radarMaxIntensityColor='rgb(254,254,0)'; // mirrors the current min-intensity swatch — used to color the Track storms button/countdown
+function rgbToRgba(rgbStr,alpha){
+  const m=rgbStr.match(/\d+/g);
+  if(!m) return rgbStr;
+  return 'rgba('+m[0]+','+m[1]+','+m[2]+','+alpha+')';
+}
+function applyRadarMaxActiveColor(){
+  const btn=document.getElementById('radar-max-toggle');
+  if(!btn) return;
+  if(btn.classList.contains('active')){
+    btn.style.background=rgbToRgba(radarMaxIntensityColor,0.18);
+    btn.style.borderColor=radarMaxIntensityColor;
+    btn.style.color=radarMaxIntensityColor;
+  }
+  btn.style.setProperty('--cd-color', rgbToRgba(radarMaxIntensityColor,0.18));
+}
 const RADAR_INTENSITY_STEPS=[0,0.1,0.2,0.3,0.5,0.75,1.0,1.5,2.0,3.0,4.0,5.0,7.5,10.0,20.0]; // slider index -> cm/h, index 0 = Off
 // Same swatches as RADAR_INTENSITY_LUT, ordered low->high to match RADAR_INTENSITY_STEPS (index 0 = Off, no color)
 const RADAR_INTENSITY_STEP_COLORS=[null,
@@ -2086,9 +2102,9 @@ if(radarMaxPending){
           const btn=document.getElementById('radar-max-toggle');
           if(btn){
             btn.classList.add('active');
-            btn.style.background='rgba(255,255,255,0.18)';
-            btn.style.borderColor='#fff';
-            btn.style.color='#fff';
+            btn.style.background=rgbToRgba(radarMaxIntensityColor,0.18);
+            btn.style.borderColor=radarMaxIntensityColor;
+            btn.style.color=radarMaxIntensityColor;
           }
 document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — tracking started';
           runRadarMaxDetectionFast(false).then(()=>{
@@ -2112,7 +2128,7 @@ document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' 
             }
           });
         } else if(radarMaxEnabled){
-          startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, 'rgba(255,255,255,0.18)');
+          startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
           runRadarMaxDetection();
           if(!radarMaxFirstRunDone){
             radarMaxFirstRunDone=true;
@@ -2230,26 +2246,26 @@ clearRadarMaxMarkers();
       stopBtnCountdown('radar-max-toggle');
       return;
     }
-    // Turning on — zoom to a ~100km high-res view around the user's location first,
+// Turning on — zoom to a ~100km high-res view around the user's location first,
     // then start tracking once that fresh load completes.
     radarMaxBtn.classList.add('active');
-    radarMaxBtn.style.background='rgba(255,255,255,0.18)';
-    radarMaxBtn.style.borderColor='#fff';
-radarMaxBtn.style.color='#fff';
+    radarMaxBtn.style.background=rgbToRgba(radarMaxIntensityColor,0.18);
+    radarMaxBtn.style.borderColor=radarMaxIntensityColor;
+radarMaxBtn.style.color=radarMaxIntensityColor;
     startTrackingWithZoom();
-    startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, 'rgba(255,255,255,0.18)');
+    startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
     });
   })();
 document.getElementById('radar-max-recalc-btn').addEventListener('click',()=>{
   const btn=document.getElementById('radar-max-toggle');
   if(btn){
     btn.classList.add('active');
-    btn.style.background='rgba(255,255,255,0.18)';
-    btn.style.borderColor='#fff';
-    btn.style.color='#fff';
+    btn.style.background=rgbToRgba(radarMaxIntensityColor,0.18);
+    btn.style.borderColor=radarMaxIntensityColor;
+    btn.style.color=radarMaxIntensityColor;
   }
   startTrackingWithZoom(true); // additive: refresh tracked storms instead of dropping the ones outside the zoomed GPS area
-  startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, 'rgba(255,255,255,0.18)');
+  startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
 });
 
 // "+" button — track the CURRENT view (no zoom, no clearing) and add its detections
@@ -2258,17 +2274,17 @@ document.getElementById('radar-max-recalc-btn').addEventListener('click',()=>{
 document.getElementById('radar-max-addview-btn').addEventListener('click',()=>{
   const addBtn=document.getElementById('radar-max-addview-btn');
   if(addBtn.disabled||radarMaxBusy) return;
-  if(!radarMaxEnabled){
+if(!radarMaxEnabled){
     // Turn tracking on first (via the normal zoom+track flow) if it isn't already running.
     const btn=document.getElementById('radar-max-toggle');
     if(btn){
       btn.classList.add('active');
-      btn.style.background='rgba(255,255,255,0.18)';
-      btn.style.borderColor='#fff';
-      btn.style.color='#fff';
+      btn.style.background=rgbToRgba(radarMaxIntensityColor,0.18);
+      btn.style.borderColor=radarMaxIntensityColor;
+      btn.style.color=radarMaxIntensityColor;
     }
     startTrackingWithZoom();
-    startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, 'rgba(255,255,255,0.18)');
+    startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
     return;
   }
   if(!radarFramesLoaded||!radarLayers.length){
@@ -2326,6 +2342,8 @@ function updateRadarMaxIntensitySwatch(idx){
   } else {
     swatch.style.background=RADAR_INTENSITY_STEP_COLORS[idx];
     swatch.title=RADAR_INTENSITY_STEPS[idx]+' cm/h';
+    radarMaxIntensityColor=RADAR_INTENSITY_STEP_COLORS[idx];
+    applyRadarMaxActiveColor();
   }
 }
 document.getElementById('radar-max-intensity-slider').addEventListener('input',function(){
