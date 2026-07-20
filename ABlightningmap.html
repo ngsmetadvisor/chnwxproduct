@@ -1194,7 +1194,18 @@ document.getElementById('zoneZoomSelect').addEventListener('change',function(){
   if(zone&&zone.polygon) map.fitBounds(zone.polygon.getBounds(),{animate:true,maxZoom:9});
 });
 
-function exportMapViewPNG(){
+function getABBounds(){
+  if(zonePolygons.length){
+    let bounds=null;
+    zonePolygons.forEach(z=>{
+      bounds=bounds?bounds.extend(z.polygon.getBounds()):z.polygon.getBounds();
+    });
+    return bounds;
+  }
+  return L.latLngBounds([[AB.latMin,AB.lonMin],[AB.latMax,AB.lonMax]]);
+}
+
+function captureMapPNG(){
   if(typeof html2canvas==='undefined'){
     alert('Export unavailable — html2canvas failed to load.');
     return;
@@ -1202,7 +1213,6 @@ function exportMapViewPNG(){
   const mapEl=document.getElementById('map');
   const statusEl=document.getElementById('radarStatus');
   const prevText=statusEl?statusEl.textContent:'';
-  if(statusEl) statusEl.textContent='⟳ Exporting PNG…';
   html2canvas(mapEl,{useCORS:true,allowTaint:true,logging:false}).then(canvas=>{
     const ts=new Date();
     const stamp=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,'0')+String(ts.getDate()).padStart(2,'0')+'_'+String(ts.getHours()).padStart(2,'0')+String(ts.getMinutes()).padStart(2,'0');
@@ -1216,6 +1226,28 @@ function exportMapViewPNG(){
     alert('PNG export failed: '+e.message);
     if(statusEl) statusEl.textContent=prevText;
   });
+}
+
+function exportMapViewPNG(){
+  if(typeof html2canvas==='undefined'){
+    alert('Export unavailable — html2canvas failed to load.');
+    return;
+  }
+  const statusEl=document.getElementById('radarStatus');
+  if(statusEl) statusEl.textContent='⟳ Zooming to AB view…';
+  const bounds=getABBounds();
+  let fired=false;
+  const proceed=()=>{
+    if(fired) return;
+    fired=true;
+    if(statusEl) statusEl.textContent='⟳ Exporting PNG…';
+    // Extra settle delay lets tiles finish rendering after the pan/zoom completes
+    setTimeout(captureMapPNG, 600);
+  };
+  map.once('moveend', proceed);
+  map.fitBounds(bounds,{animate:true});
+  // Fallback in case the view was already framed and moveend never fires
+  setTimeout(proceed, 1200);
 }
 
 function buildZoneListUI(){
