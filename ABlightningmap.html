@@ -1574,10 +1574,17 @@ function getRadarMaxReferenceLL(){
 function zoomToTrackingArea(){
   const ref=getRadarMaxReferenceLL();
   if(!ref) return;
-  const n=_destPoint(ref.lat,ref.lng,0,100);
-  const s=_destPoint(ref.lat,ref.lng,180,100);
-  const e=_destPoint(ref.lat,ref.lng,90,100);
-  const w=_destPoint(ref.lat,ref.lng,270,100);
+  zoomToLocationTrackingArea(ref.lat,ref.lng);
+}
+
+// Same ~100km-radius fitBounds as zoomToTrackingArea, but for an arbitrary center —
+// used to force a zoom-in before tracking the current view, so storms are never
+// detected at wide/outer zoom levels (low-res tiles = unreliable pixel scoring).
+function zoomToLocationTrackingArea(lat,lng){
+  const n=_destPoint(lat,lng,0,100);
+  const s=_destPoint(lat,lng,180,100);
+  const e=_destPoint(lat,lng,90,100);
+  const w=_destPoint(lat,lng,270,100);
   const bounds=L.latLngBounds([s[0],w[1]],[n[0],e[1]]);
   map.fitBounds(bounds,{animate:true});
 }
@@ -2304,12 +2311,22 @@ if(!radarMaxEnabled){
     document.getElementById('radarStatus').textContent='⚠ Radar frames not ready yet';
     return;
   }
-  addBtn.textContent='…';
-  document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — tracking current view…';
-  runRadarMaxDetection(true).then(()=>{
-    addBtn.textContent='+';
-    document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
-  });
+addBtn.textContent='…';
+  document.getElementById('radarStatus').textContent='⟳ Zooming in for high-res tracking…';
+  const _addViewCenter=map.getCenter();
+  zoomToLocationTrackingArea(_addViewCenter.lat,_addViewCenter.lng);
+  let _addViewFired=false;
+  const _addViewProceed=()=>{
+    if(_addViewFired) return;
+    _addViewFired=true;
+    document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — tracking current view…';
+    runRadarMaxDetection(true).then(()=>{
+      addBtn.textContent='+';
+      document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+    });
+  };
+  map.once('moveend', _addViewProceed);
+  setTimeout(_addViewProceed, 700);
 });
 document.getElementById('radar-max-sep-slider').addEventListener('input',function(){
   radarMaxSeparationKm=parseInt(this.value);
