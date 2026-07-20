@@ -1205,14 +1205,13 @@ function getABBounds(){
   return L.latLngBounds([[AB.latMin,AB.lonMin],[AB.latMax,AB.lonMax]]);
 }
 
-function captureMapPNG(){
+function captureMapPNG(prevText){
   if(typeof html2canvas==='undefined'){
     alert('Export unavailable — html2canvas failed to load.');
     return;
   }
   const mapEl=document.getElementById('map');
   const statusEl=document.getElementById('radarStatus');
-  const prevText=statusEl?statusEl.textContent:'';
   html2canvas(mapEl,{useCORS:true,allowTaint:true,logging:false}).then(canvas=>{
     const ts=new Date();
     const stamp=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,'0')+String(ts.getDate()).padStart(2,'0')+'_'+String(ts.getHours()).padStart(2,'0')+String(ts.getMinutes()).padStart(2,'0');
@@ -1234,6 +1233,7 @@ function exportMapViewPNG(){
     return;
   }
   const statusEl=document.getElementById('radarStatus');
+  const origText=statusEl?statusEl.textContent:'';
   if(statusEl) statusEl.textContent='⟳ Zooming to AB view…';
   const bounds=getABBounds();
   let fired=false;
@@ -1242,7 +1242,7 @@ function exportMapViewPNG(){
     fired=true;
     if(statusEl) statusEl.textContent='⟳ Exporting PNG…';
     // Extra settle delay lets tiles finish rendering after the pan/zoom completes
-    setTimeout(captureMapPNG, 600);
+    setTimeout(()=>captureMapPNG(origText), 600);
   };
   map.once('moveend', proceed);
   map.fitBounds(bounds,{animate:true});
