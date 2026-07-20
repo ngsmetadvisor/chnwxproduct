@@ -515,9 +515,10 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   </div>
 
 <!-- Storm tracking status banner -->
-  <div id="storm-tracking-banner" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:19500;background:#f5f5f5;border:2px solid #333;border-radius:12px;padding:18px 32px;box-shadow:0 6px 24px rgba(0,0,0,0.5);font-family:'Courier New',monospace;text-align:center;pointer-events:none;">
+<div id="storm-tracking-banner" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:19500;background:#f5f5f5;border:2px solid #333;border-radius:12px;padding:18px 32px;box-shadow:0 6px 24px rgba(0,0,0,0.5);font-family:'Courier New',monospace;text-align:center;pointer-events:none;opacity:0.7;">
     <div style="font-size:15px;font-weight:800;color:#222;letter-spacing:0.04em;">⛈ Tracking storm…</div>
-    <div style="font-size:11px;color:#666;margin-top:4px;">Scanning radar for active cells</div>
+    <div id="storm-tracking-detail" style="font-size:11px;color:#666;margin-top:4px;">Scanning radar for active cells</div>
+    <div id="storm-tracking-speed" style="font-size:10px;color:#888;margin-top:3px;display:none;"></div>
   </div>
 
 </div><!-- #wrap -->
@@ -1632,6 +1633,11 @@ let radarMaxFirstRunDone=false; // first detection after a fresh page/session lo
                                  // for the newest timestep(s) — one follow-up run catches
                                  // the settled imagery instead of trusting the bad first pass
 let radarMaxTrailLines=[], radarMaxProjectionLines=[], radarMaxProjectionMarkers=[];
+let radarMaxOpacityValue=0.7;     // storm marker/trail/projection opacity — mirrors the radar-max-opacity-slider value; also applied to the center storm-tracking banner
+let radarMaxLastSpeedKmh=null;     // speed (km/h) of the closest tracked storm from the most recent detection pass — shown in the status bar since the center banner is timing-sensitive
+function stormStatusSuffix(){
+  return (radarMaxLastSpeedKmh!=null && isFinite(radarMaxLastSpeedKmh)) ? ' · storm '+radarMaxLastSpeedKmh.toFixed(0)+' km/h' : '';
+}
 let radarMaxSeparationKm=20;      // minimum separation between simultaneously-tracked storms
 let radarMaxMinIntensity=1.5;     // minimum cm/h (from RADAR_INTENSITY_LUT) — storms below this are ignored. Default: yellow band (index 7)
 let radarMaxIntensityColor='rgb(254,254,0)'; // mirrors the current min-intensity swatch — used to color the Track storms button/countdown
@@ -1890,6 +1896,7 @@ const detailClusters=clusterFociForDetailScan(foci);
       for(let i=0;i<detailClusters.length;i++){
         const cl=detailClusters[i];
         document.getElementById('radarStatus').textContent='⟳ Tracking storm group '+(i+1)+' of '+detailClusters.length+' ('+cl.length+' cell'+(cl.length>1?'s':'')+')…';
+        showStormTrackingBanner(i+1,detailClusters.length);
         try{ await runDetailScanAtFocus(cl,i>0); } // first cluster resets (additive=false), rest accumulate
         catch(e){ console.warn('[radarMax] focus scan failed',e); }
       }
@@ -1902,10 +1909,10 @@ const detailClusters=clusterFociForDetailScan(foci);
         map.flyToBounds(restoreBounds,{animate:true,duration:0.8});
         _radarMaxFocusBounds=null;
         map.once('moveend',()=>{
-          document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+          document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames'+stormStatusSuffix();
         });
       } else {
-        document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+        document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames'+stormStatusSuffix();
       }
       startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
       return; // multi-focus path is fully handled above — skip the single-zoom tail below
@@ -2109,12 +2116,13 @@ if(!el){
     el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);z-index:8900;pointer-events:none;min-width:260px;max-width:90vw;';
     document.body.appendChild(el);
   }
-  const hourLabel=status.hour===0?'now':('~'+status.hour+'h');
+const hourLabel=status.hour===0?'now':('~'+status.hour+'h');
   const dirStr=status.bearing?(' · from '+status.bearing.dir+' ('+Math.round(status.bearing.deg)+'°)'):'';
+  const speedStr=(status.speedKmh!=null&&isFinite(status.speedKmh))?(' · moving '+status.speedKmh.toFixed(0)+' km/h'):'';
   el.innerHTML=
     '<div style="border-radius:10px;padding:9px 20px;text-align:center;font-family:\'Courier New\',monospace;border:2px solid '+c.color+';background:#e8e8e8;animation:'+c.anim+';box-sizing:border-box;">'+
     '<div style="font-size:14px;font-weight:800;letter-spacing:0.07em;color:'+c.color+';">'+c.label+'</div>'+
-    '<div style="font-size:11px;font-weight:700;margin-top:3px;color:'+c.color+';">Tracked cell '+status.km.toFixed(0)+' km away'+dirStr+' · closest approach '+hourLabel+'</div>'+
+    '<div style="font-size:11px;font-weight:700;margin-top:3px;color:'+c.color+';">Tracked cell '+status.km.toFixed(0)+' km away'+dirStr+' · closest approach '+hourLabel+speedStr+'</div>'+
     '</div>';
   repositionStormBanner();
 }
@@ -2132,13 +2140,38 @@ function repositionStormBanner(){
 
 
 
-function showStormTrackingBanner(){
+function showStormTrackingBanner(current,total){
   const el=document.getElementById('storm-tracking-banner');
-  if(el) el.style.display='block';
+  if(!el) return;
+  el.style.display='block';
+  el.style.opacity=radarMaxOpacityValue;
+  const detailEl=document.getElementById('storm-tracking-detail');
+  if(detailEl){
+    detailEl.textContent=(current!=null&&total!=null)
+      ? 'Tracking storm '+current+'/'+total
+      : 'Scanning radar for active cells';
+  }
 }
+let _stormBannerHideTimer=null;
 function hideStormTrackingBanner(){
   const el=document.getElementById('storm-tracking-banner');
+  const speedEl=document.getElementById('storm-tracking-speed');
+  const detailEl=document.getElementById('storm-tracking-detail');
+  if(_stormBannerHideTimer){ clearTimeout(_stormBannerHideTimer); _stormBannerHideTimer=null; }
+  // If a speed was just computed for this pass, hold the banner up a few extra
+  // seconds so the result is actually visible instead of vanishing immediately.
+  if(speedEl && speedEl.style.display==='block' && speedEl.textContent){
+    if(el){ el.style.display='block'; el.style.opacity=radarMaxOpacityValue; }
+    if(detailEl) detailEl.textContent='Tracking complete';
+    _stormBannerHideTimer=setTimeout(()=>{
+      if(el) el.style.display='none';
+      if(speedEl){ speedEl.style.display='none'; speedEl.textContent=''; }
+      _stormBannerHideTimer=null;
+    },3000);
+    return;
+  }
   if(el) el.style.display='none';
+  if(speedEl){ speedEl.style.display='none'; speedEl.textContent=''; }
 }
 
 function clearRadarMaxMarkers(){
@@ -2272,7 +2305,7 @@ const lastFrameIdx=perFrame.length-1;
     tr.points.length>=MIN_PROJECTION_POINTS
   );
   const projEPSG=L.CRS.EPSG3857;
-let stormClosestKm=Infinity, stormClosestHour=null, stormClosestPos=null;
+let stormClosestKm=Infinity, stormClosestHour=null, stormClosestPos=null, stormClosestSpeedKmh=null;
 activeTracks.forEach(tr=>{
     const t0=tr.points[0].t;
     const regPts=tr.points.map(p=>{
@@ -2281,21 +2314,28 @@ activeTracks.forEach(tr=>{
     });
     const regX=linearRegression(regPts.map(p=>({t:p.t,v:p.x})));
     const regY=linearRegression(regPts.map(p=>({t:p.t,v:p.y})));
+    const trSpeedKmh=Math.hypot(regX.b,regY.b)*60/1000; // regX.b/regY.b are meters/minute (projected coords) -> km/h
     const lastPt=tr.points[tr.points.length-1];
     const trColor=lastPt.color||tr.color;
-    const projPts=[[lastPt.lat,lastPt.lon]];
+const projPts=[[lastPt.lat,lastPt.lon]];
+    const speedLabel=(isFinite(trSpeedKmh)?Math.round(trSpeedKmh):'--')+' km/h';
     for(let h=1;h<=RADAR_MAX_PROJECT_HOURS;h++){
       const futureT=lastPt.t+h*3600000;
       const tMin=(futureT-t0)/60000;
       const x=regX.a+regX.b*tMin, y=regY.a+regY.b*tMin;
       const ll=projEPSG.unproject(L.point(x,y));
       projPts.push([ll.lat,ll.lng]);
+      const isLast=(h===RADAR_MAX_PROJECT_HOURS);
+      const labelHtml=isLast
+        ? '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>'+
+          '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:900;text-shadow:0 0 3px #000,0 0 3px #000;white-space:nowrap;">'+speedLabel+'</div>'
+        : '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>';
       const mk=L.marker([ll.lat,ll.lng],{
         pane:'radarMax',interactive:false,
         icon:L.divIcon({
           className:'',
-          html:'<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:6px;height:6px;border-radius:50%;background:'+trColor+';box-shadow:0 0 4px #000;"></div><div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div></div>',
-          iconSize:[30,20],iconAnchor:[15,4]
+          html:'<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:6px;height:6px;border-radius:50%;background:'+trColor+';box-shadow:0 0 4px #000;"></div>'+labelHtml+'</div>',
+          iconSize:[60,isLast?32:20],iconAnchor:[isLast?30:15,4]
         })
       }).addTo(map);
       radarMaxProjectionMarkers.push(mk);
@@ -2315,8 +2355,8 @@ if(refLL){
       distByHour.forEach((dKm,hIdx)=>{
         if(dKm<trackClosestKm){ trackClosestKm=dKm; trackClosestHour=hIdx; trackClosestPos=projPts[hIdx]; }
       });
-      if(!(trackClosestHour===0 && isDeparting) && trackClosestKm<stormClosestKm){
-        stormClosestKm=trackClosestKm; stormClosestHour=trackClosestHour; stormClosestPos=trackClosestPos;
+if(!(trackClosestHour===0 && isDeparting) && trackClosestKm<stormClosestKm){
+        stormClosestKm=trackClosestKm; stormClosestHour=trackClosestHour; stormClosestPos=trackClosestPos; stormClosestSpeedKmh=trSpeedKmh;
       }
     }
   });
@@ -2325,9 +2365,20 @@ if(refLL){
   if(stormClosestKm<=PROX_WARNING_KM && stormClosestHour<=1) stormLevel='severe';
   else if(stormClosestKm<=PROX_WARNING_KM) stormLevel='warning';
   else if(stormClosestKm<=PROX_RADIUS_KM) stormLevel='caution';
-  let stormBearing=null;
+let stormBearing=null;
   if(refLL && stormClosestPos) stormBearing=bearingTo(refLL.lat,refLL.lng,stormClosestPos[0],stormClosestPos[1]);
-  updateStormProximityBanner({level:stormLevel, km:stormClosestKm, hour:stormClosestHour, bearing:stormBearing});
+  updateStormProximityBanner({level:stormLevel, km:stormClosestKm, hour:stormClosestHour, bearing:stormBearing, speedKmh:stormClosestSpeedKmh});
+
+radarMaxLastSpeedKmh=stormClosestSpeedKmh;
+  const speedEl=document.getElementById('storm-tracking-speed');
+  if(speedEl){
+    if(stormClosestSpeedKmh!=null && isFinite(stormClosestSpeedKmh)){
+      speedEl.textContent='Storm speed: '+stormClosestSpeedKmh.toFixed(0)+' km/h';
+      speedEl.style.display='block';
+    } else {
+      speedEl.style.display='none';
+    }
+  }
 
 document.getElementById('radar-max-toggle').textContent='Track storms';
   radarMaxBusy=false;
@@ -2468,15 +2519,16 @@ map.once('moveend',()=>{
                   // Runs at accelerated (x10) speed like every other tracking pass.
                   document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — refreshing your view…';
                   runRadarMaxDetectionFast(true).then(()=>{
-                    document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+                    document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames'+stormStatusSuffix();
                     hideStormTrackingBanner();
                   });
                 } else {
-                  document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+                  document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames'+stormStatusSuffix();
                   hideStormTrackingBanner();
                 }
               });
             } else {
+              document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames'+stormStatusSuffix();
               hideStormTrackingBanner();
             }
           });
@@ -2659,7 +2711,7 @@ const _addViewProceed=()=>{
     document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — tracking current view…';
     runRadarMaxDetectionFast(true).then(()=>{
       addBtn.textContent='+';
-      document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames';
+      document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames'+stormStatusSuffix();
       hideStormTrackingBanner();
     });
   };
@@ -2702,8 +2754,11 @@ document.getElementById('radar-max-speed-slider').addEventListener('change',func
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
 document.getElementById('radar-max-opacity-slider').addEventListener('input',function(){
+  radarMaxOpacityValue=parseInt(this.value)/100;
   const pane=map.getPane('radarMax');
-  if(pane) pane.style.opacity=(parseInt(this.value)/100);
+  if(pane) pane.style.opacity=radarMaxOpacityValue;
+  const bannerEl=document.getElementById('storm-tracking-banner');
+  if(bannerEl) bannerEl.style.opacity=radarMaxOpacityValue;
 });
 function updateRadarMaxIntensitySwatch(idx){
   const swatch=document.getElementById('radar-max-intensity-swatch');
