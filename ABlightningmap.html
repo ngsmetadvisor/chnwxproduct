@@ -452,6 +452,20 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       </div>
       <input id="radar-max-proj-slider" type="range" min="1" max="12" step="1" value="6" style="width:100%;accent-color:#fff;">
     </div>
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="Minimum number of consecutive detections (chain length) a track needs before it's trusted enough to produce a projection">Min chain length</span>
+        <span id="radar-max-chain-val" style="color:#fff;">4</span>
+      </div>
+      <input id="radar-max-chain-slider" type="range" min="2" max="12" step="1" value="4" style="width:100%;accent-color:#fff;">
+    </div>
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="How many trailing frames a track can miss and still be treated as current — beyond this it's dropped from projection">Max missing steps</span>
+        <span id="radar-max-missing-val" style="color:#fff;">1</span>
+      </div>
+      <input id="radar-max-missing-slider" type="range" min="0" max="6" step="1" value="1" style="width:100%;accent-color:#fff;">
+    </div>
 <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="Minimum separation between simultaneously-tracked storms">Min separation</span>
@@ -1701,6 +1715,8 @@ const FORWARD_CONE_DEG=45;        // once a track has a direction, only accept n
 let RADAR_MAX_SPEED_KMH=100;      // implied speed above this between frames is treated as noise, not real motion — link rejected
 let RADAR_MAX_PROJECT_HOURS=6;    // how far forward to project each track's best-fit line
 let RADAR_MAX_STORMS=36;          // max storms tracked at once per frame
+let RADAR_MAX_MIN_CHAIN=4;        // minimum consecutive detections (chain length) required before a track is eligible for a projection
+let RADAR_MAX_MISSING_ALLOWED=1;  // how many trailing frames a track is allowed to miss and still count as "current" for projection
 const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
 let RADAR_MAX_CANDIDATE_POOL=80; // internal detection cap per frame — larger than RADAR_MAX_STORMS so nearest-first selection has enough candidates to choose from. Raise if real cells in a dense/packed line are being missed because the pool filled up before reaching them.
 let RADAR_MAX_EDGE_MARGIN_PX=2; // pixels blanked beyond each blob's own footprint during search — small buffer against antialiased fringe re-detection. Lower if adjacent real cells are being eaten by this margin.
@@ -2411,7 +2427,7 @@ pairs.forEach(p=>{
   // get their X markers drawn white instead of a track color — flags "not enough data
   // yet" rather than implying a confirmed, colored track. Same threshold as the
   // projection eligibility check below.
-  const MIN_PROJECTION_POINTS=4;
+const MIN_PROJECTION_POINTS=RADAR_MAX_MIN_CHAIN;
   tracks.forEach(tr=>{
     if(tr.points.length<MIN_PROJECTION_POINTS){
       tr.points.forEach(pt=>{ pt.color='#ffffff'; });
@@ -2449,7 +2465,7 @@ const lastFrameIdx=perFrame.length-1;
   // only the very last frame (e.g. a momentary detection gap) can still qualify, as long
   // as it was active in the second-to-last frame and has the minimum point count.
 const activeTracks=tracks.filter(tr=>
-    (tr.lastFrameIdx===lastFrameIdx || tr.lastFrameIdx===lastFrameIdx-1) &&
+    (lastFrameIdx-tr.lastFrameIdx)<=RADAR_MAX_MISSING_ALLOWED &&
     tr.points.length>=MIN_PROJECTION_POINTS &&
     !isDiminishingTrack(tr)
   );
@@ -2888,6 +2904,20 @@ document.getElementById('radar-max-proj-slider').addEventListener('input',functi
 document.getElementById('radar-max-proj-slider').addEventListener('change',function(){
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
+document.getElementById('radar-max-chain-slider').addEventListener('input',function(){
+  RADAR_MAX_MIN_CHAIN=parseInt(this.value);
+  document.getElementById('radar-max-chain-val').textContent=RADAR_MAX_MIN_CHAIN;
+});
+document.getElementById('radar-max-chain-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-missing-slider').addEventListener('input',function(){
+  RADAR_MAX_MISSING_ALLOWED=parseInt(this.value);
+  document.getElementById('radar-max-missing-val').textContent=RADAR_MAX_MISSING_ALLOWED;
+});
+document.getElementById('radar-max-missing-slider').addEventListener('change',function(){
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
 document.getElementById('radar-max-storms-slider').addEventListener('input',function(){
   RADAR_MAX_STORMS=parseInt(this.value);
   document.getElementById('radar-max-storms-val').textContent=RADAR_MAX_STORMS;
@@ -2963,6 +2993,8 @@ document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
   RADAR_MAX_CANDIDATE_POOL=80;
   RADAR_LUT_COLOR_TOL=60;
   RADAR_MAX_EDGE_MARGIN_PX=2;
+  RADAR_MAX_MIN_CHAIN=4;
+  RADAR_MAX_MISSING_ALLOWED=1;
 
   document.getElementById('radar-max-sep-slider').value=20;
   document.getElementById('radar-max-sep-val').textContent='20km';
@@ -2972,6 +3004,10 @@ document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
   document.getElementById('radar-max-proj-val').textContent='6h';
   document.getElementById('radar-max-storms-slider').value=36;
   document.getElementById('radar-max-storms-val').textContent='36';
+  document.getElementById('radar-max-chain-slider').value=4;
+  document.getElementById('radar-max-chain-val').textContent='4';
+  document.getElementById('radar-max-missing-slider').value=1;
+  document.getElementById('radar-max-missing-val').textContent='1';
   document.getElementById('radar-max-speed-slider').value=100;
   document.getElementById('radar-max-speed-val').textContent='100km/h';
   document.getElementById('radar-max-intensity-slider').value=7;
