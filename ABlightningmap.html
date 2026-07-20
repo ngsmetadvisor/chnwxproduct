@@ -1868,6 +1868,17 @@ const openTracks=tracks.filter(tr=>tr.lastFrameIdx===frameIdx-1);
     });
   }
 
+  // Tracks that never reached the minimum timestep count for a trustworthy projection
+  // get their X markers drawn white instead of a track color — flags "not enough data
+  // yet" rather than implying a confirmed, colored track. Same threshold as the
+  // projection eligibility check below.
+  const MIN_PROJECTION_POINTS=4;
+  tracks.forEach(tr=>{
+    if(tr.points.length<MIN_PROJECTION_POINTS){
+      tr.points.forEach(pt=>{ pt.color='#ffffff'; });
+    }
+  });
+
   // X marker for every detection, colored by its track
   perFrame.forEach(framePts=>{
     framePts.forEach(pt=>{
@@ -1894,7 +1905,6 @@ const lastFrameIdx=perFrame.length-1;
   // Require at least 4 timesteps of data before trusting a projection. A track missing
   // only the very last frame (e.g. a momentary detection gap) can still qualify, as long
   // as it was active in the second-to-last frame and has the minimum point count.
-  const MIN_PROJECTION_POINTS=4;
   const activeTracks=tracks.filter(tr=>
     (tr.lastFrameIdx===lastFrameIdx || tr.lastFrameIdx===lastFrameIdx-1) &&
     tr.points.length>=MIN_PROJECTION_POINTS
