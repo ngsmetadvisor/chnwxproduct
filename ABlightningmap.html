@@ -129,6 +129,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   background: rgba(8,8,18,0.88); border: 0.5px solid rgba(100,180,255,0.25);
   border-radius: 10px; padding: 8px 10px; max-width: 230px;
   backdrop-filter: blur(6px); font-size: 10px; color: #aaa; display: none;
+  transform: scale(0.667); transform-origin: bottom left;
 }
 #precip-legend.visible { display: block; }
 #precip-legend .pl-title { font-size: 9px; color: #88ccff; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; border-bottom: 0.5px solid rgba(100,180,255,0.2); padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; cursor: default; }
@@ -3955,7 +3956,7 @@ function ecUpdateLegend(){
   if(!leg){
     leg=document.createElement('div');
     leg.id='ec-ltg-legend';
-    leg.style.cssText='position:absolute;bottom:36px;right:10px;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,220,0,0.25);border-radius:8px;padding:5px 8px;font-family:monospace;font-size:10px;color:#aaa;backdrop-filter:blur(4px);';
+    leg.style.cssText='position:absolute;bottom:36px;right:10px;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,220,0,0.25);border-radius:8px;padding:5px 8px;font-family:monospace;font-size:10px;color:#aaa;backdrop-filter:blur(4px);transform:scale(0.667);transform-origin:bottom right;';
     document.getElementById('wrap').appendChild(leg);
   }
   leg.innerHTML=
