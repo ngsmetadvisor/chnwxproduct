@@ -1240,7 +1240,7 @@ if(val==='AB'){
 const zone=zonePolygons.find(z=>z.shortId===val);
   if(zone&&zone.polygon){
     const NS_PAD_KM=20; // half north/south-only padding used by getABBounds()
-    const latPad=NS_PAD_KM/25;
+    const latPad=NS_PAD_KM/111;
     const b=zone.polygon.getBounds();
     const padded=L.latLngBounds([b.getSouth()-latPad,b.getWest()],[b.getNorth()+latPad,b.getEast()]);
     map.fitBounds(padded,{animate:true,maxZoom:9});
