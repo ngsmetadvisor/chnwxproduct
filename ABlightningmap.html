@@ -3236,7 +3236,7 @@ let compassHeading=null;
 // ── Compass Deviation Calibration (background) ─────────────────
 const DEV_DIR_NAMES=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const DEV_N_DIRS=16, DEV_DIR_STEP=360/DEV_N_DIRS;
-const DEV_STEADY_SEC=5, DEV_STEADY_TOL=5, DEV_SPEED_MIN=3;
+const DEV_STEADY_SEC=3, DEV_STEADY_TOL=12, DEV_SPEED_MIN=3;
 const DEV_DIR_TOL=5;
 const DEV_STORAGE_KEY='compass_deviations_v1'; // match CDMVT's key
 const DEV_REC_THROTTLE_MS=2000;
@@ -3297,10 +3297,14 @@ function devTryRecord(){
     _devSteadyStart=now; _devSteadyAnchor=gh;
     return;
   }
-  const steady=Math.abs(devAngDiff(gh,_devSteadyAnchor))<=DEV_STEADY_TOL;
+const diffFromAnchor=devAngDiff(gh,_devSteadyAnchor);
+  const steady=Math.abs(diffFromAnchor)<=DEV_STEADY_TOL;
   if(!steady){ _devSteadyStart=now; _devSteadyAnchor=gh; return; }
+  // Gently drift the anchor toward the current heading so slow, gradual GPS wander
+  // (not a real turn) doesn't eventually push you outside the tolerance window.
+  _devSteadyAnchor=((_devSteadyAnchor+diffFromAnchor*0.15)+360)%360;
 
-const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+  const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
   if(!onMark) return;
 
   const elapsed=(now-_devSteadyStart)/1000;
