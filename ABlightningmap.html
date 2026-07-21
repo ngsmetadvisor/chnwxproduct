@@ -2843,11 +2843,15 @@ document.getElementById('radar-max-recalc-btn').addEventListener('click',()=>{
 // "+" button — track the CURRENT view (no zoom, no clearing) and add its detections
 // on top of whatever storms are already tracked. Uses whichever frames are already
 // loaded, so it's instant if radar is already visible/tracking.
-document.getElementById('radar-max-addview-btn').addEventListener('click',()=>{
+document.getElementById('radar-max-addview-btn').addEventListener('click',async ()=>{
   const addBtn=document.getElementById('radar-max-addview-btn');
   if(addBtn.disabled||radarMaxBusy) return;
-if(!radarMaxEnabled){
-    // Turn tracking on first (via the normal zoom+track flow) if it isn't already running.
+
+  // First-ever "+" press with tracking off: just flip tracking on quietly (no AB-wide
+  // scan, no zoom-out overview, no sequential multi-cluster sequence) — the scan below
+  // covers only whatever's already on screen, same as every subsequent "+" press.
+  if(!radarMaxEnabled){
+    radarMaxEnabled=true;
     const btn=document.getElementById('radar-max-toggle');
     if(btn){
       btn.classList.add('active');
@@ -2855,14 +2859,22 @@ if(!radarMaxEnabled){
       btn.style.borderColor=radarMaxIntensityColor;
       btn.style.color=radarMaxIntensityColor;
     }
-    startTrackingWithZoom();
     startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
-    return;
   }
-  if(!radarFramesLoaded||!radarLayers.length){
+
+  // Make sure radar itself is on and has loaded frames before scanning — enable it here
+  // if needed rather than deferring to the full tracking sequence.
+  if(!radarVisible){
+    addBtn.textContent='…';
+    document.getElementById('radarStatus').textContent='⟳ Loading radar…';
+    enableRadar();
+    await waitForRadarFramesLoaded(15000);
+  } else if(!radarFramesLoaded||!radarLayers.length){
     document.getElementById('radarStatus').textContent='⚠ Radar frames not ready yet';
+    addBtn.textContent='+';
     return;
   }
+
 addBtn.textContent='…';
   showStormTrackingBanner();
   document.getElementById('radarStatus').textContent='⟳ Zooming in for high-res tracking…';
