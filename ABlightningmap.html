@@ -1232,31 +1232,37 @@ document.getElementById('zoneZoomSelect').addEventListener('change',function(){
     this.value='';
     return;
   }
-  if(val==='AB'){
-    if(zonePolygons.length){
-      let bounds=null;
-      zonePolygons.forEach(z=>{
-        bounds=bounds?bounds.extend(z.polygon.getBounds()):z.polygon.getBounds();
-      });
-      if(bounds) map.fitBounds(bounds,{animate:true});
-    } else {
-      map.fitBounds([[AB.latMin,AB.lonMin],[AB.latMax,AB.lonMax]],{animate:true});
-    }
+if(val==='AB'){
+    map.fitBounds(getABBounds(),{animate:true});
+    this.value='';
     return;
   }
-  const zone=zonePolygons.find(z=>z.shortId===val);
-  if(zone&&zone.polygon) map.fitBounds(zone.polygon.getBounds(),{animate:true,maxZoom:9});
+const zone=zonePolygons.find(z=>z.shortId===val);
+  if(zone&&zone.polygon){
+    const NS_PAD_KM=20; // half north/south-only padding used by getABBounds()
+    const latPad=NS_PAD_KM/25;
+    const b=zone.polygon.getBounds();
+    const padded=L.latLngBounds([b.getSouth()-latPad,b.getWest()],[b.getNorth()+latPad,b.getEast()]);
+    map.fitBounds(padded,{animate:true,maxZoom:9});
+  }
 });
 
 function getABBounds(){
+  const NS_PAD_KM=100; // extend AB overview view 100km north and south only (east/west unchanged)
+  const latPad=NS_PAD_KM/111; // approx deg/km for latitude
   if(zonePolygons.length){
     let bounds=null;
     zonePolygons.forEach(z=>{
       bounds=bounds?bounds.extend(z.polygon.getBounds()):z.polygon.getBounds();
     });
-    return bounds;
+    if(bounds){
+      return L.latLngBounds(
+        [bounds.getSouth()-latPad, bounds.getWest()],
+        [bounds.getNorth()+latPad, bounds.getEast()]
+      );
+    }
   }
-  return L.latLngBounds([[AB.latMin,AB.lonMin],[AB.latMax,AB.lonMax]]);
+  return L.latLngBounds([[AB.latMin-latPad,AB.lonMin],[AB.latMax+latPad,AB.lonMax]]);
 }
 
 function captureMapPNG(prevText){
