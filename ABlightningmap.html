@@ -1717,6 +1717,59 @@ let RADAR_MAX_PROJECT_HOURS=6;    // how far forward to project each track's bes
 let RADAR_MAX_STORMS=36;          // max storms tracked at once per frame
 let RADAR_MAX_MIN_CHAIN=4;        // minimum consecutive detections (chain length) required before a track is eligible for a projection
 let RADAR_MAX_MISSING_ALLOWED=1;  // how many trailing frames a track is allowed to miss and still count as "current" for projection
+let radarMaxIntensityIdx=7;       // slider index (0-14) for min-intensity — kept separately from radarMaxMinIntensity since that's derived (cm/h), this is what's persisted/restored
+
+const RADAR_MAX_SETTINGS_KEY='radar_max_settings_v1';
+
+// Persists every storm-tracking tunable to localStorage so they survive reload/restart.
+function saveRadarMaxSettings(){
+  try{
+    localStorage.setItem(RADAR_MAX_SETTINGS_KEY, JSON.stringify({
+      sep:radarMaxSeparationKm,
+      link:RADAR_MAX_LINK_KM,
+      proj:RADAR_MAX_PROJECT_HOURS,
+      storms:RADAR_MAX_STORMS,
+      speed:RADAR_MAX_SPEED_KMH,
+      intensityIdx:radarMaxIntensityIdx,
+      pool:RADAR_MAX_CANDIDATE_POOL,
+      coltol:RADAR_LUT_COLOR_TOL,
+      edge:RADAR_MAX_EDGE_MARGIN_PX,
+      chain:RADAR_MAX_MIN_CHAIN,
+      missing:RADAR_MAX_MISSING_ALLOWED
+    }));
+  }catch(e){ console.warn('[radarMaxSettings] save failed',e); }
+}
+
+// Loads any previously saved values into the live variables — called before the sliders
+// are wired up so both the JS state and the slider UI reflect the restored values.
+// Falls back silently to whatever defaults are already set if nothing is stored yet.
+function loadRadarMaxSettings(){
+  let saved=null;
+  try{ const raw=localStorage.getItem(RADAR_MAX_SETTINGS_KEY); if(raw) saved=JSON.parse(raw); }
+  catch(e){ console.warn('[radarMaxSettings] load failed',e); }
+  if(!saved) return;
+  if(typeof saved.sep==='number') radarMaxSeparationKm=saved.sep;
+  if(typeof saved.link==='number') RADAR_MAX_LINK_KM=saved.link;
+  if(typeof saved.proj==='number') RADAR_MAX_PROJECT_HOURS=saved.proj;
+  if(typeof saved.storms==='number') RADAR_MAX_STORMS=saved.storms;
+  if(typeof saved.speed==='number') RADAR_MAX_SPEED_KMH=saved.speed;
+  if(typeof saved.intensityIdx==='number') radarMaxIntensityIdx=saved.intensityIdx;
+  if(typeof saved.pool==='number') RADAR_MAX_CANDIDATE_POOL=saved.pool;
+  if(typeof saved.coltol==='number') RADAR_LUT_COLOR_TOL=saved.coltol;
+  if(typeof saved.edge==='number') RADAR_MAX_EDGE_MARGIN_PX=saved.edge;
+  if(typeof saved.chain==='number') RADAR_MAX_MIN_CHAIN=saved.chain;
+  if(typeof saved.missing==='number') RADAR_MAX_MISSING_ALLOWED=saved.missing;
+  radarMaxMinIntensity=RADAR_INTENSITY_STEPS[radarMaxIntensityIdx];
+}
+
+// Pushes the (now-restored) variable values into the slider inputs/labels themselves —
+// called once the settings panel DOM exists, right before its listeners are attached.
+function applyRadarMaxSettingsToUI(){
+  const setSlider=(id,val)=>{ const el=document.getElementById(id); if(el) el.value=val; };
+  const setLabel=(id,text)=>{ const el=document.getElementById(id); if(el) el.textContent=text; };
+  setSlider('radar-max-sep-slider',radarMaxSeparationKm);       setLabel('radar-max-sep-val',radarMaxSeparationKm+'km');
+  setSlider('radar-max-link-slider',RADAR_MAX_LINK_KM);         setLabel('radar-max-link-val',RADAR_MAX_LINK_KM+'km');
+  setSlider('radar-max-proj-slider',RADAR_MAX_PROJECT_HOURS);   setLabel('radar-max-proj-val',RADAR_MAX_PROJECT_HOURS+'h');
 const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
 let RADAR_MAX_CANDIDATE_POOL=80; // internal detection cap per frame — larger than RADAR_MAX_STORMS so nearest-first selection has enough candidates to choose from. Raise if real cells in a dense/packed line are being missed because the pool filled up before reaching them.
 let RADAR_MAX_EDGE_MARGIN_PX=2; // pixels blanked beyond each blob's own footprint during search — small buffer against antialiased fringe re-detection. Lower if adjacent real cells are being eaten by this margin.
@@ -2900,34 +2953,43 @@ document.getElementById('radar-max-sep-slider').addEventListener('input',functio
   document.getElementById('radar-max-sep-val').textContent=radarMaxSeparationKm+'km';
 });
 document.getElementById('radar-max-sep-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
-document.getElementById('radar-max-link-slider').addEventListener('input',function(){
-  RADAR_MAX_LINK_KM=parseInt(this.value);
-  document.getElementById('radar-max-link-val').textContent=RADAR_MAX_LINK_KM+'km';
 });
 document.getElementById('radar-max-link-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
-document.getElementById('radar-max-proj-slider').addEventListener('input',function(){
-  RADAR_MAX_PROJECT_HOURS=parseInt(this.value);
-  document.getElementById('radar-max-proj-val').textContent=RADAR_MAX_PROJECT_HOURS+'h';
 });
 document.getElementById('radar-max-proj-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
-document.getElementById('radar-max-chain-slider').addEventListener('input',function(){
-  RADAR_MAX_MIN_CHAIN=parseInt(this.value);
-  document.getElementById('radar-max-chain-val').textContent=RADAR_MAX_MIN_CHAIN;
 });
 document.getElementById('radar-max-chain-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
-document.getElementById('radar-max-missing-slider').addEventListener('input',function(){
-  RADAR_MAX_MISSING_ALLOWED=parseInt(this.value);
-  document.getElementById('radar-max-missing-val').textContent=RADAR_MAX_MISSING_ALLOWED;
-});
 document.getElementById('radar-max-missing-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-storms-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-pool-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-coltol-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-edge-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
+  if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-speed-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
 document.getElementById('radar-max-storms-slider').addEventListener('input',function(){
@@ -2987,12 +3049,14 @@ function updateRadarMaxIntensitySwatch(idx){
 }
 document.getElementById('radar-max-intensity-slider').addEventListener('input',function(){
   const idx=parseInt(this.value);
+  radarMaxIntensityIdx=idx;
   radarMaxMinIntensity=RADAR_INTENSITY_STEPS[idx];
   updateRadarMaxIntensitySwatch(idx);
 });
 document.getElementById('radar-max-intensity-slider').style.background=RADAR_INTENSITY_GRADIENT;
-updateRadarMaxIntensitySwatch(7);
+applyRadarMaxSettingsToUI(); // restore any saved slider positions/labels (including intensity swatch) now that the panel DOM exists
 document.getElementById('radar-max-intensity-slider').addEventListener('change',function(){
+  saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
 document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
@@ -3001,12 +3065,14 @@ document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
   RADAR_MAX_PROJECT_HOURS=6;
   RADAR_MAX_STORMS=36;
   RADAR_MAX_SPEED_KMH=100;
+  radarMaxIntensityIdx=7;
   radarMaxMinIntensity=RADAR_INTENSITY_STEPS[7];
   RADAR_MAX_CANDIDATE_POOL=80;
   RADAR_LUT_COLOR_TOL=60;
   RADAR_MAX_EDGE_MARGIN_PX=2;
   RADAR_MAX_MIN_CHAIN=4;
   RADAR_MAX_MISSING_ALLOWED=1;
+  saveRadarMaxSettings();
 
   document.getElementById('radar-max-sep-slider').value=20;
   document.getElementById('radar-max-sep-val').textContent='20km';
