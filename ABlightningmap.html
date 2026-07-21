@@ -329,8 +329,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <div id="load-bar-wrap" class="hidden"><div id="load-bar"></div></div>
 
   <!-- Precip legend -->
-  <div id="precip-legend">
-<div class="pl-title">Precip Type</div>
+<div id="precip-legend">
+<div class="pl-title"><span id="precip-legend-title-text">Precip Type</span><span id="precip-legend-hide-btn" style="cursor:pointer;color:#88ccff;font-size:11px;opacity:0.7;padding:0 2px;" title="Collapse legend">[-]</span></div>
     <div id="legend-body">
       <img id="precip-legend-img"
         src="https://geo.weather.gc.ca/geomet?version=1.3.0&service=WMS&request=GetLegendGraphic&sld_version=1.1.0&layer=Radar_1km_SfcPrecipType&format=image/png&STYLE=SfcPrecipType_Dis"
@@ -3145,29 +3145,67 @@ document.getElementById('radar-opacity').addEventListener('input',function(){
 });
 document.getElementById('radar-toggle').addEventListener('click',()=>{if(radarVisible)disableRadar();else enableRadar();});
 
+const RADAR_LEGEND_INFO={
+  'RADAR_1KM_RRAI':{title:'Rain Intensity', layer:'RADAR_1KM_RRAI', style:''},
+  'RADAR_1KM_RSNO':{title:'Snow Intensity', layer:'RADAR_1KM_RSNO', style:''},
+  'Radar_1km_SfcPrecipType':{title:'Precip Type', layer:'Radar_1km_SfcPrecipType', style:'SfcPrecipType_Dis'}
+};
+function updateLegendContent(){
+  const type=document.getElementById('radar-type').value;
+  const info=RADAR_LEGEND_INFO[type]||RADAR_LEGEND_INFO['RADAR_1KM_RRAI'];
+  const titleEl=document.getElementById('precip-legend-title-text');
+  if(titleEl) titleEl.textContent=info.title;
+  const img=document.getElementById('precip-legend-img');
+  if(img){
+    const styleParam=info.style?('&STYLE='+info.style):'';
+    img.src='https://geo.weather.gc.ca/geomet?version=1.3.0&service=WMS&request=GetLegendGraphic&sld_version=1.1.0&layer='+info.layer+'&format=image/png'+styleParam;
+    img.alt=info.title+' legend';
+  }
+}
 function updateLegendVisibility(){
-  const isPT=document.getElementById('radar-type').value==='Radar_1km_SfcPrecipType';
   const legendBtn=document.getElementById('legend-toggle-btn');
-  // Show the legend toggle button only when precip type radar is active
-  if(legendBtn) legendBtn.style.display=(isPT&&radarVisible)?'inline-block':'none';
+  // Legend toggle button is now available for any radar type, not just Precip Type
+  if(legendBtn) legendBtn.style.display=radarVisible?'inline-block':'none';
   // Only auto-show legend if it hasn't been manually hidden by the user
   const legend=document.getElementById('precip-legend');
-  if(isPT&&radarVisible){
+if(radarVisible){
+    updateLegendContent();
     if(!legend._userHidden) legend.classList.add('visible');
   } else {
     legend.classList.remove('visible');
   }
 }
-document.getElementById('legend-toggle-btn').addEventListener('click',()=>{
+function setLegendCollapsed(collapsed){
+  const legend=document.getElementById('precip-legend');
+  const body=document.getElementById('legend-body');
+  const hideBtn=document.getElementById('precip-legend-hide-btn');
+  legend.classList.toggle('collapsed',collapsed);
+  if(body) body.style.display=collapsed?'none':'block';
+  if(hideBtn){
+    hideBtn.textContent=collapsed?'[+]':'[-]';
+    hideBtn.title=collapsed?'Expand legend':'Collapse legend';
+  }
+}
+document.getElementById('precip-legend-hide-btn').addEventListener('click',()=>{
+  const legend=document.getElementById('precip-legend');
+  setLegendCollapsed(!legend.classList.contains('collapsed'));
+});
+function toggleLegendVisible(forceHide){
   const legend=document.getElementById('precip-legend');
   const btn=document.getElementById('legend-toggle-btn');
   const isVisible=legend.classList.contains('visible');
-  legend.classList.toggle('visible',!isVisible);
-  legend._userHidden=isVisible; // track manual hide so updateLegendVisibility doesn't re-open it
-  btn.style.background=isVisible?'transparent':'rgba(100,180,255,0.15)';
-  btn.style.borderColor=isVisible?'rgba(100,180,255,0.3)':'#88ccff';
-  btn.style.color=isVisible?'rgba(136,204,255,0.6)':'#88ccff';
-});
+  if(forceHide && !isVisible) return; // already hidden, nothing to do
+  const nowVisible=forceHide?false:!isVisible;
+  legend.classList.toggle('visible',nowVisible);
+  legend._userHidden=!nowVisible; // track manual hide so updateLegendVisibility doesn't re-open it
+  if(nowVisible) setLegendCollapsed(false); // reset to expanded whenever it's freshly shown
+  if(btn){
+    btn.style.background=nowVisible?'rgba(100,180,255,0.15)':'transparent';
+    btn.style.borderColor=nowVisible?'#88ccff':'rgba(100,180,255,0.3)';
+    btn.style.color=nowVisible?'#88ccff':'rgba(136,204,255,0.6)';
+  }
+}
+document.getElementById('legend-toggle-btn').addEventListener('click',()=>toggleLegendVisible(false));
 // legend title bar click removed — toolbar Legend button handles show/hide
 
 (function(){
