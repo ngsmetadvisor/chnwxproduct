@@ -1788,7 +1788,6 @@ function applyRadarMaxSettingsToUI(){
   updateRadarMaxIntensitySwatch(radarMaxIntensityIdx);
 }
 
-loadRadarMaxSettings();
 
 const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
 let RADAR_MAX_CANDIDATE_POOL=80; // internal detection cap per frame — larger than RADAR_MAX_STORMS so nearest-first selection has enough candidates to choose from. Raise if real cells in a dense/packed line are being missed because the pool filled up before reaching them.
@@ -2507,15 +2506,24 @@ const MIN_PROJECTION_POINTS=RADAR_MAX_MIN_CHAIN;
     }
   });
 
+  // Flag each track's most recent detection so the trail can highlight "this is where
+  // the track currently stands" — same point objects are shared with perFrame/r._maxPoints,
+  // so setting the flag here is visible wherever those points are drawn.
+  tracks.forEach(tr=>{
+    if(tr.points.length) tr.points[tr.points.length-1]._isLast=true;
+  });
+
 // X marker for every detection, colored by its track. White markers (tracks that
   // haven't yet reached MIN_PROJECTION_POINTS) are drawn at 50% opacity to visually
-  // read as "not enough data yet" rather than a confirmed detection.
+  // read as "not enough data yet" rather than a confirmed detection. The most recent
+  // detection in each track gets a black circle behind it to stand out from its own trail.
   perFrame.forEach(framePts=>{
     framePts.forEach(pt=>{
       const isWhite=(pt.color==='#ffffff'||pt.color==='#fff');
+      const bg=pt._isLast?'<div style="position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:#000;"></div>':'';
       const m=L.marker([pt.lat,pt.lon],{
         pane:'radarMax',interactive:false,
-        icon:L.divIcon({className:'',html:'<div style="color:'+pt.color+';font-size:13px;font-weight:900;text-shadow:0 0 2px #000,0 0 2px #000,0 0 2px #000;opacity:'+(isWhite?0.5:1)+';">✕</div>',iconSize:[16,16],iconAnchor:[8,8]})
+        icon:L.divIcon({className:'',html:'<div style="position:relative;width:16px;height:16px;">'+bg+'<div style="position:relative;color:'+pt.color+';font-size:13px;font-weight:900;text-shadow:0 0 2px #000,0 0 2px #000,0 0 2px #000;opacity:'+(isWhite?0.5:1)+';text-align:center;line-height:16px;">✕</div></div>',iconSize:[16,16],iconAnchor:[8,8]})
       }).addTo(map);
       radarMaxMarkers.push(m);
     });
@@ -2976,17 +2984,33 @@ document.getElementById('radar-max-sep-slider').addEventListener('change',functi
   saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
+document.getElementById('radar-max-link-slider').addEventListener('input',function(){
+  RADAR_MAX_LINK_KM=parseInt(this.value);
+  document.getElementById('radar-max-link-val').textContent=RADAR_MAX_LINK_KM+'km';
+});
 document.getElementById('radar-max-link-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-proj-slider').addEventListener('input',function(){
+  RADAR_MAX_PROJECT_HOURS=parseInt(this.value);
+  document.getElementById('radar-max-proj-val').textContent=RADAR_MAX_PROJECT_HOURS+'h';
 });
 document.getElementById('radar-max-proj-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
+document.getElementById('radar-max-chain-slider').addEventListener('input',function(){
+  RADAR_MAX_MIN_CHAIN=parseInt(this.value);
+  document.getElementById('radar-max-chain-val').textContent=RADAR_MAX_MIN_CHAIN;
+});
 document.getElementById('radar-max-chain-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-missing-slider').addEventListener('input',function(){
+  RADAR_MAX_MISSING_ALLOWED=parseInt(this.value);
+  document.getElementById('radar-max-missing-val').textContent=RADAR_MAX_MISSING_ALLOWED;
 });
 document.getElementById('radar-max-missing-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
@@ -3074,6 +3098,7 @@ document.getElementById('radar-max-intensity-slider').addEventListener('input',f
   updateRadarMaxIntensitySwatch(idx);
 });
 document.getElementById('radar-max-intensity-slider').style.background=RADAR_INTENSITY_GRADIENT;
+loadRadarMaxSettings(); // safe here — all RADAR_MAX_* let/const vars above are now initialized
 applyRadarMaxSettingsToUI(); // restore any saved slider positions/labels (including intensity swatch) now that the panel DOM exists
 document.getElementById('radar-max-intensity-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
