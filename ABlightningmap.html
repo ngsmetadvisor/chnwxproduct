@@ -1770,6 +1770,19 @@ function applyRadarMaxSettingsToUI(){
   setSlider('radar-max-sep-slider',radarMaxSeparationKm);       setLabel('radar-max-sep-val',radarMaxSeparationKm+'km');
   setSlider('radar-max-link-slider',RADAR_MAX_LINK_KM);         setLabel('radar-max-link-val',RADAR_MAX_LINK_KM+'km');
   setSlider('radar-max-proj-slider',RADAR_MAX_PROJECT_HOURS);   setLabel('radar-max-proj-val',RADAR_MAX_PROJECT_HOURS+'h');
+  setSlider('radar-max-storms-slider',RADAR_MAX_STORMS);        setLabel('radar-max-storms-val',RADAR_MAX_STORMS);
+  setSlider('radar-max-speed-slider',RADAR_MAX_SPEED_KMH);      setLabel('radar-max-speed-val',RADAR_MAX_SPEED_KMH+'km/h');
+  setSlider('radar-max-pool-slider',RADAR_MAX_CANDIDATE_POOL);  setLabel('radar-max-pool-val',RADAR_MAX_CANDIDATE_POOL);
+  setSlider('radar-max-coltol-slider',RADAR_LUT_COLOR_TOL);     setLabel('radar-max-coltol-val',RADAR_LUT_COLOR_TOL);
+  setSlider('radar-max-edge-slider',RADAR_MAX_EDGE_MARGIN_PX);  setLabel('radar-max-edge-val',RADAR_MAX_EDGE_MARGIN_PX+'px');
+  setSlider('radar-max-chain-slider',RADAR_MAX_MIN_CHAIN);      setLabel('radar-max-chain-val',RADAR_MAX_MIN_CHAIN);
+  setSlider('radar-max-missing-slider',RADAR_MAX_MISSING_ALLOWED); setLabel('radar-max-missing-val',RADAR_MAX_MISSING_ALLOWED);
+  setSlider('radar-max-intensity-slider',radarMaxIntensityIdx);
+  updateRadarMaxIntensitySwatch(radarMaxIntensityIdx);
+}
+
+loadRadarMaxSettings();
+
 const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
 let RADAR_MAX_CANDIDATE_POOL=80; // internal detection cap per frame — larger than RADAR_MAX_STORMS so nearest-first selection has enough candidates to choose from. Raise if real cells in a dense/packed line are being missed because the pool filled up before reaching them.
 let RADAR_MAX_EDGE_MARGIN_PX=2; // pixels blanked beyond each blob's own footprint during search — small buffer against antialiased fringe re-detection. Lower if adjacent real cells are being eaten by this margin.
