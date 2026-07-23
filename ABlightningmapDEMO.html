@@ -129,6 +129,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   background: rgba(8,8,18,0.88); border: 0.5px solid rgba(100,180,255,0.25);
   border-radius: 10px; padding: 8px 10px; max-width: 230px;
   backdrop-filter: blur(6px); font-size: 10px; color: #aaa; display: none;
+  transform: scale(0.667); transform-origin: bottom left;
 }
 #precip-legend.visible { display: block; }
 #precip-legend .pl-title { font-size: 9px; color: #88ccff; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; border-bottom: 0.5px solid rgba(100,180,255,0.2); padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; cursor: default; }
@@ -420,9 +421,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="How many candidate cells are searched per frame before picking the closest Max storms. Raise if real cells in a dense/packed line are being missed">Candidate pool</span>
-        <span id="radar-max-pool-val" style="color:#fff;">80</span>
+        <span id="radar-max-pool-val" style="color:#fff;">100</span>
       </div>
-      <input id="radar-max-pool-slider" type="range" min="20" max="200" step="10" value="80" style="width:100%;accent-color:#fff;">
+      <input id="radar-max-pool-slider" type="range" min="20" max="200" step="10" value="100" style="width:100%;accent-color:#fff;">
     </div>
     <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
@@ -462,23 +463,23 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="How many trailing frames a track can miss and still be treated as current — beyond this it's dropped from projection">Max missing steps</span>
-        <span id="radar-max-missing-val" style="color:#fff;">1</span>
+        <span id="radar-max-missing-val" style="color:#fff;">2</span>
       </div>
-      <input id="radar-max-missing-slider" type="range" min="0" max="6" step="1" value="1" style="width:100%;accent-color:#fff;">
+      <input id="radar-max-missing-slider" type="range" min="0" max="6" step="1" value="2" style="width:100%;accent-color:#fff;">
     </div>
 <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="Minimum separation between simultaneously-tracked storms">Min separation</span>
-        <span id="radar-max-sep-val" style="color:#fff;">20km</span>
+        <span id="radar-max-sep-val" style="color:#fff;">12km</span>
       </div>
-<input id="radar-max-sep-slider" type="range" min="5" max="100" step="5" value="20" style="width:100%;accent-color:#fff;">
+<input id="radar-max-sep-slider" type="range" min="5" max="100" step="5" value="12" style="width:100%;accent-color:#fff;">
     </div>
     <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="Reject a frame-to-frame link if it implies motion faster than this — filters out spurious fast jumps">Max speed</span>
-        <span id="radar-max-speed-val" style="color:#fff;">100km/h</span>
+        <span id="radar-max-speed-val" style="color:#fff;">80km/h</span>
       </div>
-      <input id="radar-max-speed-slider" type="range" min="20" max="200" step="10" value="100" style="width:100%;accent-color:#fff;">
+      <input id="radar-max-speed-slider" type="range" min="20" max="200" step="10" value="80" style="width:100%;accent-color:#fff;">
     </div>
 <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#aaa;margin-bottom:3px;">
@@ -1232,31 +1233,37 @@ document.getElementById('zoneZoomSelect').addEventListener('change',function(){
     this.value='';
     return;
   }
-  if(val==='AB'){
-    if(zonePolygons.length){
-      let bounds=null;
-      zonePolygons.forEach(z=>{
-        bounds=bounds?bounds.extend(z.polygon.getBounds()):z.polygon.getBounds();
-      });
-      if(bounds) map.fitBounds(bounds,{animate:true});
-    } else {
-      map.fitBounds([[AB.latMin,AB.lonMin],[AB.latMax,AB.lonMax]],{animate:true});
-    }
+if(val==='AB'){
+    map.fitBounds(getABBounds(),{animate:true});
+    this.value='';
     return;
   }
-  const zone=zonePolygons.find(z=>z.shortId===val);
-  if(zone&&zone.polygon) map.fitBounds(zone.polygon.getBounds(),{animate:true,maxZoom:9});
+const zone=zonePolygons.find(z=>z.shortId===val);
+  if(zone&&zone.polygon){
+    const NS_PAD_KM=20; // half north/south-only padding used by getABBounds()
+    const latPad=NS_PAD_KM/111;
+    const b=zone.polygon.getBounds();
+    const padded=L.latLngBounds([b.getSouth()-latPad,b.getWest()],[b.getNorth()+latPad,b.getEast()]);
+    map.fitBounds(padded,{animate:true,maxZoom:9});
+  }
 });
 
 function getABBounds(){
+  const NS_PAD_KM=100; // extend AB overview view 100km north and south only (east/west unchanged)
+  const latPad=NS_PAD_KM/111; // approx deg/km for latitude
   if(zonePolygons.length){
     let bounds=null;
     zonePolygons.forEach(z=>{
       bounds=bounds?bounds.extend(z.polygon.getBounds()):z.polygon.getBounds();
     });
-    return bounds;
+    if(bounds){
+      return L.latLngBounds(
+        [bounds.getSouth()-latPad, bounds.getWest()],
+        [bounds.getNorth()+latPad, bounds.getEast()]
+      );
+    }
   }
-  return L.latLngBounds([[AB.latMin,AB.lonMin],[AB.latMax,AB.lonMax]]);
+  return L.latLngBounds([[AB.latMin-latPad,AB.lonMin],[AB.latMax+latPad,AB.lonMax]]);
 }
 
 function captureMapPNG(prevText){
@@ -1501,8 +1508,10 @@ async function fetchAlertsNear(lat,lon,bufferDeg){
 let alertBannerMinimized = localStorage.getItem('alert_banner_min')==='1';
 let alertMinPill=null;
 
-function showAlertBanner(info){
-  window._lastAlertInfo=info;
+function showAlertBanner(infos){
+  const list=Array.isArray(infos)?infos:[infos];
+  if(!list.length) return;
+  window._lastAlertInfo=list;
 
   if(alertBannerMinimized){
     if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
@@ -1511,13 +1520,13 @@ function showAlertBanner(info){
   }
   if(alertMinPill){ alertMinPill.remove(); alertMinPill=null; }
 
-  if(!alertBannerEl){
+if(!alertBannerEl){
     alertBannerEl=document.createElement('div');
     alertBannerEl.id='alert-banner';
     alertBannerEl.style.cssText=`
       position:fixed;top:8px;left:50%;transform:translateX(-50%);
       z-index:9100;max-width:92vw;min-width:240px;
-      background:#3a0d0d;border:2px solid #ff3333;border-radius:10px;
+      border-radius:10px;
       padding:8px 30px 8px 16px;text-align:center;font-family:'Courier New',monospace;
       box-shadow:0 4px 16px rgba(0,0,0,0.6);cursor:pointer;
     `;
@@ -1527,11 +1536,16 @@ function showAlertBanner(info){
     });
     document.body.appendChild(alertBannerEl);
   }
+const primary=list[0];
+  const extra=list.length-1;
+  const col=severityColorInfo(primary.severity);
+  alertBannerEl.style.background=col.bg;
+  alertBannerEl.style.border='2px solid '+col.border;
   alertBannerEl.innerHTML=
-    '<button id="alert-banner-min-btn" title="Minimize" style="position:absolute;top:2px;right:4px;background:transparent;border:none;color:#ff9999;font-size:16px;cursor:pointer;padding:4px 8px;line-height:1;">─</button>'+
-    '<div style="font-size:13px;font-weight:800;color:#ff5555;letter-spacing:0.05em;">🚨 '+info.headline+'</div>'+
-    (info.area?'<div style="font-size:10px;color:#ffaaaa;margin-top:2px;">'+info.area+'</div>':'')+
-    '<div style="font-size:9px;color:#ff8888;margin-top:2px;">Tap for details</div>';
+    '<button id="alert-banner-min-btn" title="Minimize" style="position:absolute;top:2px;right:4px;background:transparent;border:none;color:'+col.light+';font-size:16px;cursor:pointer;padding:4px 8px;line-height:1;">─</button>'+
+    '<div style="font-size:13px;font-weight:800;color:'+col.text+';letter-spacing:0.05em;">🚨 '+primary.headline+(extra>0?' <span style="color:'+col.light+';font-weight:600;">+'+extra+' more</span>':'')+'</div>'+
+    (primary.area?'<div style="font-size:10px;color:'+col.light+';margin-top:2px;">'+primary.area+'</div>':'')+
+    '<div style="font-size:9px;color:'+col.dim+';margin-top:2px;">Tap for details</div>';
   document.getElementById('alert-banner-min-btn').addEventListener('click', (e)=>{
     e.stopPropagation();
     alertBannerMinimized=true;
@@ -1544,16 +1558,24 @@ function showAlertBanner(info){
 function renderAlertMinPill(){
   if(!window._lastAlertInfo) return;
   if(alertMinPill) return;
+const list=Array.isArray(window._lastAlertInfo)?window._lastAlertInfo:[window._lastAlertInfo];
+  const pillCol=severityColorInfo(list[0]&&list[0].severity);
   alertMinPill=document.createElement('div');
   alertMinPill.id='alert-min-pill';
-  alertMinPill.title='Weather alert — tap to expand';
+  alertMinPill.title='Weather alert'+(list.length>1?'s ('+list.length+')':'')+' — tap to expand';
   alertMinPill.style.cssText=`
     position:fixed;top:8px;left:8px;z-index:9100;
-    background:#3a0d0d;border:2px solid #ff3333;border-radius:20px;
+    background:${pillCol.bg};border:2px solid ${pillCol.border};border-radius:20px;
     width:34px;height:34px;display:flex;align-items:center;justify-content:center;
     font-size:16px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.5);
   `;
   alertMinPill.textContent='🚨';
+  if(list.length>1){
+    const badge=document.createElement('div');
+    badge.textContent=list.length;
+    badge.style.cssText='position:absolute;top:-4px;right:-4px;background:#ffdd00;color:#3a0d0d;font-size:9px;font-weight:800;border-radius:50%;width:15px;height:15px;display:flex;align-items:center;justify-content:center;font-family:monospace;';
+    alertMinPill.appendChild(badge);
+  }
   alertMinPill.addEventListener('click', ()=>{
     alertBannerMinimized=false;
     localStorage.setItem('alert_banner_min','0');
@@ -1563,6 +1585,38 @@ function renderAlertMinPill(){
   document.body.appendChild(alertMinPill);
 }
 
+// Severity is driven by ECCC's own risk_colour_en (Red/Orange/Yellow), not the headline
+// text — a "warning" can be Orange while a "watch" can be Yellow, and severity color is
+// what actually governs display order and highlighting per ECCC convention.
+function severityColorInfo(sev){
+  const s=(sev||'').toLowerCase();
+  if(s==='red')    return {key:'red',   border:'#ff3333', text:'#ff5555', bg:'#3a0d0d', light:'#ffaaaa', dim:'#ff8888', label:'Red'};
+  if(s==='orange') return {key:'orange',border:'#ff8c00', text:'#ffaa44', bg:'#3a1f0d', light:'#ffcc99', dim:'#ffbb77', label:'Orange'};
+  if(s==='yellow') return {key:'yellow',border:'#ffdd00', text:'#ffee66', bg:'#3a3300', light:'#ffee99', dim:'#ffe066', label:'Yellow'};
+  return {key:'none', border:'rgba(255,255,255,0.3)', text:'#ccc', bg:'#1a1a1a', light:'#aaa', dim:'#888', label:'Advisory'};
+}
+// Red first, then orange, then yellow, then anything uncolored (advisory-level) last.
+function alertSeverityRank(info){
+  const key=severityColorInfo(info&&info.severity).key;
+  return key==='red'?0:key==='orange'?1:key==='yellow'?2:3;
+}
+function sortAlertsBySeverity(infos){
+  return [...infos].sort((a,b)=>alertSeverityRank(a)-alertSeverityRank(b));
+}
+// Expiry timestamp plus a human "in Xh Ym" / "ended Xh Ym ago" suffix computed from now.
+function formatExpiresRelative(iso){
+  if(!iso) return null;
+  const exp=new Date(iso).getTime();
+  if(isNaN(exp)) return iso;
+  const diffMs=exp-Date.now();
+  const past=diffMs<0;
+  const absMs=Math.abs(diffMs);
+  const h=Math.floor(absMs/3600000);
+  const m=Math.floor((absMs%3600000)/60000);
+  const rel=(h>0?h+'h ':'')+m+'m';
+  return iso+' ('+(past?'ended '+rel+' ago':'in '+rel)+')';
+}
+
 function hideAlertBanner(){
   if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
   if(alertMinPill){ alertMinPill.remove(); alertMinPill=null; }
@@ -1570,30 +1624,63 @@ function hideAlertBanner(){
   _lastActiveAlertKey=null;
 }
 
-function showAlertModal(info){
+function showAlertModal(infos){
+  const list=Array.isArray(infos)?infos:[infos];
   const existing=document.getElementById('alert-modal-overlay');
   if(existing) existing.remove();
   const overlay=document.createElement('div');
   overlay.id='alert-modal-overlay';
   overlay.style.cssText='position:fixed;inset:0;z-index:19500;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:14px;';
+  const topColor=severityColorInfo(list[0]&&list[0].severity);
   const box=document.createElement('div');
-  box.style.cssText='background:#1a0d0d;border:1px solid #ff3333;border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;padding:16px;font-family:\'Courier New\',monospace;color:#eee;';
-  box.innerHTML=
+  box.style.cssText='background:#1a0d0d;border:1px solid '+topColor.border+';border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;padding:16px;font-family:\'Courier New\',monospace;color:#eee;';
+  const headerHtml=
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'+
-    '<div style="font-size:15px;font-weight:700;color:#ff5555;">🚨 '+info.headline+'</div>'+
-    '<button id="alert-modal-close" style="background:transparent;border:0.5px solid #ff3333;color:#ff5555;border-radius:50%;width:26px;height:26px;cursor:pointer;flex-shrink:0;">✕</button>'+
-    '</div>'+
-    (info.area?'<div style="font-size:11px;color:#ffaaaa;margin-bottom:6px;">📍 '+info.area+'</div>':'')+
-    (info.status?'<div style="font-size:10px;color:#888;">Status: <span style="color:#ccc;">'+info.status+'</span></div>':'')+
-    (info.severity?'<div style="font-size:10px;color:#888;">Severity: <span style="color:#ccc;">'+info.severity+'</span></div>':'')+
-    (info.urgency?'<div style="font-size:10px;color:#888;">Urgency: <span style="color:#ccc;">'+info.urgency+'</span></div>':'')+
-    (info.expires?'<div style="font-size:10px;color:#888;">Expires: <span style="color:#ccc;">'+info.expires+'</span></div>':'')+
-    (info.description?'<div style="font-size:12px;color:#ddd;line-height:1.6;margin-top:8px;white-space:pre-wrap;">'+info.description+'</div>':'')+
-    (info.url?'<div style="margin-top:10px;"><a href="'+info.url+'" target="_blank" style="color:#88ccff;font-size:11px;">🔗 Full alert on weather.gc.ca</a></div>':'');
+    '<div style="font-size:15px;font-weight:700;color:'+topColor.text+';">🚨 '+(list.length>1?list.length+' Active Alerts':list[0].headline)+'</div>'+
+    '<button id="alert-modal-close" style="background:transparent;border:0.5px solid '+topColor.border+';color:'+topColor.text+';border-radius:50%;width:26px;height:26px;cursor:pointer;flex-shrink:0;">✕</button>'+
+    '</div>';
+  // Each alert renders as a collapsed row (title + severity color + expiry) that
+  // expands on click to show area/status/urgency/full text.
+  const rowsHtml=list.map((info,idx)=>{
+    const ic=severityColorInfo(info.severity);
+    const expStr=formatExpiresRelative(info.expires);
+    return (
+      '<div class="alert-row" data-idx="'+idx+'" style="border:1px solid '+ic.border+';border-radius:8px;margin-top:'+(idx>0?'8px':'0')+';overflow:hidden;">'+
+        '<div class="alert-row-header" style="cursor:pointer;padding:8px 10px;background:'+ic.bg+';display:flex;justify-content:space-between;align-items:center;gap:8px;">'+
+          '<div style="min-width:0;">'+
+            '<div style="font-size:12px;font-weight:700;color:'+ic.text+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+info.headline+'</div>'+
+            (expStr?'<div style="font-size:10px;color:'+ic.light+';margin-top:2px;">Expires: '+expStr+'</div>':'')+
+          '</div>'+
+          '<span style="display:flex;align-items:center;gap:6px;flex-shrink:0;">'+
+            '<span style="font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:'+ic.text+';border:0.5px solid '+ic.border+';border-radius:8px;padding:2px 6px;">'+ic.label+'</span>'+
+            '<span class="alert-row-caret" style="color:'+ic.text+';font-size:11px;">▼</span>'+
+          '</span>'+
+        '</div>'+
+        '<div class="alert-row-body" style="display:none;padding:10px 12px;border-top:1px solid '+ic.border+';">'+
+          (info.area?'<div style="font-size:11px;color:#ffaaaa;margin-bottom:6px;">📍 '+info.area+'</div>':'')+
+          (info.status?'<div style="font-size:10px;color:#888;">Status: <span style="color:#ccc;">'+info.status+'</span></div>':'')+
+          (info.urgency?'<div style="font-size:10px;color:#888;">Urgency: <span style="color:#ccc;">'+info.urgency+'</span></div>':'')+
+          (info.description?'<div style="font-size:12px;color:#ddd;line-height:1.6;margin-top:8px;white-space:pre-wrap;">'+info.description+'</div>':'')+
+          (info.url?'<div style="margin-top:10px;"><a href="'+info.url+'" target="_blank" style="color:#88ccff;font-size:11px;">🔗 Full alert on weather.gc.ca</a></div>':'')+
+        '</div>'+
+      '</div>'
+    );
+  }).join('');
+  box.innerHTML=headerHtml+rowsHtml;
   overlay.appendChild(box);
   document.body.appendChild(overlay);
   document.getElementById('alert-modal-close').addEventListener('click',()=>overlay.remove());
   overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+  box.querySelectorAll('.alert-row-header').forEach(h=>{
+    h.addEventListener('click', ()=>{
+      const row=h.closest('.alert-row');
+      const body=row.querySelector('.alert-row-body');
+      const caret=row.querySelector('.alert-row-caret');
+      const isOpen=body.style.display!=='none';
+      body.style.display=isOpen?'none':'block';
+      caret.textContent=isOpen?'▼':'▲';
+    });
+  });
 }
 
 async function checkAlertsAtCurrentLocation(force){
@@ -1604,14 +1691,13 @@ async function checkAlertsAtCurrentLocation(force){
 const locKey=lat.toFixed(2)+','+lon.toFixed(2);
   if(!force && locKey===_alertsLastLocKey) return;
   _alertsLastLocKey=locKey;
-  const features=await fetchAlertsNear(lat,lon,0.75);
-  let hit=null;
-  for(const f of features){ if(pointInGeoJSON(lat,lon,f.geometry)){ hit=f; break; } }
-  if(hit){
-    console.log('[alerts] properties at GPS location:', hit.properties);
-    const info=extractAlertInfo(hit.properties||{});
-    const key=JSON.stringify(info);
-    if(key!==_lastActiveAlertKey){ _lastActiveAlertKey=key; showAlertBanner(info); }
+const features=await fetchAlertsNear(lat,lon,0.75);
+  const hits=features.filter(f=>pointInGeoJSON(lat,lon,f.geometry));
+if(hits.length){
+    console.log('[alerts] properties at GPS location:', hits.map(f=>f.properties));
+    const infos=sortAlertsBySeverity(hits.map(f=>extractAlertInfo(f.properties||{})));
+    const key=JSON.stringify(infos);
+    if(key!==_lastActiveAlertKey){ _lastActiveAlertKey=key; showAlertBanner(infos); }
   } else {
     hideAlertBanner();
   }
@@ -1623,11 +1709,10 @@ document.getElementById('ctxAlertInfo').addEventListener('click', async ()=>{
   document.getElementById('mapContextMenu').style.display='none';
   if(!pos) return;
   const features=await fetchAlertsNear(pos.lat,pos.lng,0.75);
-  let hit=null;
-  for(const f of features){ if(pointInGeoJSON(pos.lat,pos.lng,f.geometry)){ hit=f; break; } }
-  if(hit){
-    console.log('[alerts] properties at clicked location:', hit.properties);
-    showAlertModal(extractAlertInfo(hit.properties||{}));
+  const hits=features.filter(f=>pointInGeoJSON(pos.lat,pos.lng,f.geometry));
+if(hits.length){
+    console.log('[alerts] properties at clicked location:', hits.map(f=>f.properties));
+    showAlertModal(sortAlertsBySeverity(hits.map(f=>extractAlertInfo(f.properties||{}))));
   } else {
     L.popup({closeButton:true,className:'strike-popup',maxWidth:220})
       .setLatLng(pos)
@@ -1673,7 +1758,7 @@ let radarMaxLastSpeedKmh=null;     // speed (km/h) of the closest tracked storm 
 function stormStatusSuffix(){
   return (radarMaxLastSpeedKmh!=null && isFinite(radarMaxLastSpeedKmh)) ? ' · storm '+radarMaxLastSpeedKmh.toFixed(0)+' km/h' : '';
 }
-let radarMaxSeparationKm=20;      // minimum separation between simultaneously-tracked storms
+let radarMaxSeparationKm=12;      // minimum separation between simultaneously-tracked storms
 let radarMaxMinIntensity=1.5;     // minimum cm/h (from RADAR_INTENSITY_LUT) — storms below this are ignored. Default: yellow band (index 7)
 let radarMaxIntensityColor='rgb(254,254,0)'; // mirrors the current min-intensity swatch — used to color the Track storms button/countdown
 function rgbToRgba(rgbStr,alpha){
@@ -1712,11 +1797,11 @@ function intensityColorForScore(score){
 }
 let RADAR_MAX_LINK_KM=20;         // max distance to link the same storm between consecutive frames
 const FORWARD_CONE_DEG=45;        // once a track has a direction, only accept next-frame links within ±45° of it (90° forward cone) — stops it snapping onto a side cell
-let RADAR_MAX_SPEED_KMH=100;      // implied speed above this between frames is treated as noise, not real motion — link rejected
+let RADAR_MAX_SPEED_KMH=80;       // implied speed above this between frames is treated as noise, not real motion — link rejected
 let RADAR_MAX_PROJECT_HOURS=6;    // how far forward to project each track's best-fit line
 let RADAR_MAX_STORMS=36;          // max storms tracked at once per frame
 let RADAR_MAX_MIN_CHAIN=4;        // minimum consecutive detections (chain length) required before a track is eligible for a projection
-let RADAR_MAX_MISSING_ALLOWED=1;  // how many trailing frames a track is allowed to miss and still count as "current" for projection
+let RADAR_MAX_MISSING_ALLOWED=2;  // how many trailing frames a track is allowed to miss and still count as "current" for projection
 let radarMaxIntensityIdx=7;       // slider index (0-14) for min-intensity — kept separately from radarMaxMinIntensity since that's derived (cm/h), this is what's persisted/restored
 
 const RADAR_MAX_SETTINGS_KEY='radar_max_settings_v1';
@@ -1781,10 +1866,9 @@ function applyRadarMaxSettingsToUI(){
   updateRadarMaxIntensitySwatch(radarMaxIntensityIdx);
 }
 
-loadRadarMaxSettings();
 
 const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
-let RADAR_MAX_CANDIDATE_POOL=80; // internal detection cap per frame — larger than RADAR_MAX_STORMS so nearest-first selection has enough candidates to choose from. Raise if real cells in a dense/packed line are being missed because the pool filled up before reaching them.
+let RADAR_MAX_CANDIDATE_POOL=100; // internal detection cap per frame — larger than RADAR_MAX_STORMS so nearest-first selection has enough candidates to choose from. Raise if real cells in a dense/packed line are being missed because the pool filled up before reaching them.
 let RADAR_MAX_EDGE_MARGIN_PX=2; // pixels blanked beyond each blob's own footprint during search — small buffer against antialiased fringe re-detection. Lower if adjacent real cells are being eaten by this margin.
 
 // Reference point for "nearest storms first" — GPS fix if available, else last known
@@ -2500,15 +2584,27 @@ const MIN_PROJECTION_POINTS=RADAR_MAX_MIN_CHAIN;
     }
   });
 
-// X marker for every detection, colored by its track. White markers (tracks that
-  // haven't yet reached MIN_PROJECTION_POINTS) are drawn at 50% opacity to visually
-  // read as "not enough data yet" rather than a confirmed detection.
-  perFrame.forEach(framePts=>{
+// Flag each track's first and most recent detection — only these get an X marker
+  // drawn (see below); the dashed trail line still uses every point in between.
+  tracks.forEach(tr=>{
+    if(!tr.points.length) return;
+    tr.points[0]._isFirst=true;
+    tr.points[tr.points.length-1]._isLast=true;
+  });
+
+// X marker only for each track's first and last detection, colored by its track.
+  // White markers (tracks that haven't yet reached MIN_PROJECTION_POINTS) are drawn at
+  // 50% opacity to visually read as "not enough data yet" rather than a confirmed
+  // detection. The most recent detection in each track gets a black circle behind it
+  // to stand out from its own trail.
+perFrame.forEach(framePts=>{
     framePts.forEach(pt=>{
+      if(!pt._isFirst && !pt._isLast) return;
       const isWhite=(pt.color==='#ffffff'||pt.color==='#fff');
+      const markColor=pt._isLast?'#000':pt.color;
       const m=L.marker([pt.lat,pt.lon],{
         pane:'radarMax',interactive:false,
-        icon:L.divIcon({className:'',html:'<div style="color:'+pt.color+';font-size:13px;font-weight:900;text-shadow:0 0 2px #000,0 0 2px #000,0 0 2px #000;opacity:'+(isWhite?0.5:1)+';">✕</div>',iconSize:[16,16],iconAnchor:[8,8]})
+        icon:L.divIcon({className:'',html:'<div style="position:relative;width:16px;height:16px;"><div style="position:relative;color:'+markColor+';font-size:13px;font-weight:900;text-shadow:0 0 2px #000,0 0 2px #000,0 0 2px #000;opacity:'+(isWhite?0.5:1)+';text-align:center;line-height:16px;">✕</div></div>',iconSize:[16,16],iconAnchor:[8,8]})
       }).addTo(map);
       radarMaxMarkers.push(m);
     });
@@ -2561,12 +2657,12 @@ const projPts=[[lastPt.lat,lastPt.lon]];
         ? '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>'+
           '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:900;text-shadow:0 0 3px #000,0 0 3px #000;white-space:nowrap;">'+speedLabel+'</div>'
         : '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>';
-      const mk=L.marker([ll.lat,ll.lng],{
+const mk=L.marker([ll.lat,ll.lng],{
         pane:'radarMax',interactive:false,
         icon:L.divIcon({
           className:'',
           html:'<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:6px;height:6px;border-radius:50%;background:'+trColor+';box-shadow:0 0 4px #000;"></div>'+labelHtml+'</div>',
-          iconSize:[60,isLast?32:20],iconAnchor:[isLast?30:15,4]
+          iconSize:[60,isLast?32:20], iconAnchor:[30,4]
         })
       }).addTo(map);
       radarMaxProjectionMarkers.push(mk);
@@ -2969,17 +3065,33 @@ document.getElementById('radar-max-sep-slider').addEventListener('change',functi
   saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
+document.getElementById('radar-max-link-slider').addEventListener('input',function(){
+  RADAR_MAX_LINK_KM=parseInt(this.value);
+  document.getElementById('radar-max-link-val').textContent=RADAR_MAX_LINK_KM+'km';
+});
 document.getElementById('radar-max-link-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-proj-slider').addEventListener('input',function(){
+  RADAR_MAX_PROJECT_HOURS=parseInt(this.value);
+  document.getElementById('radar-max-proj-val').textContent=RADAR_MAX_PROJECT_HOURS+'h';
 });
 document.getElementById('radar-max-proj-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
+document.getElementById('radar-max-chain-slider').addEventListener('input',function(){
+  RADAR_MAX_MIN_CHAIN=parseInt(this.value);
+  document.getElementById('radar-max-chain-val').textContent=RADAR_MAX_MIN_CHAIN;
+});
 document.getElementById('radar-max-chain-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
+});
+document.getElementById('radar-max-missing-slider').addEventListener('input',function(){
+  RADAR_MAX_MISSING_ALLOWED=parseInt(this.value);
+  document.getElementById('radar-max-missing-val').textContent=RADAR_MAX_MISSING_ALLOWED;
 });
 document.getElementById('radar-max-missing-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
@@ -3067,28 +3179,29 @@ document.getElementById('radar-max-intensity-slider').addEventListener('input',f
   updateRadarMaxIntensitySwatch(idx);
 });
 document.getElementById('radar-max-intensity-slider').style.background=RADAR_INTENSITY_GRADIENT;
+loadRadarMaxSettings(); // safe here — all RADAR_MAX_* let/const vars above are now initialized
 applyRadarMaxSettingsToUI(); // restore any saved slider positions/labels (including intensity swatch) now that the panel DOM exists
 document.getElementById('radar-max-intensity-slider').addEventListener('change',function(){
   saveRadarMaxSettings();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
 document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
-  radarMaxSeparationKm=20;
+  radarMaxSeparationKm=12;
   RADAR_MAX_LINK_KM=20;
   RADAR_MAX_PROJECT_HOURS=6;
   RADAR_MAX_STORMS=36;
-  RADAR_MAX_SPEED_KMH=100;
+  RADAR_MAX_SPEED_KMH=80;
   radarMaxIntensityIdx=7;
   radarMaxMinIntensity=RADAR_INTENSITY_STEPS[7];
-  RADAR_MAX_CANDIDATE_POOL=80;
+  RADAR_MAX_CANDIDATE_POOL=100;
   RADAR_LUT_COLOR_TOL=60;
   RADAR_MAX_EDGE_MARGIN_PX=2;
   RADAR_MAX_MIN_CHAIN=4;
-  RADAR_MAX_MISSING_ALLOWED=1;
+  RADAR_MAX_MISSING_ALLOWED=2;
   saveRadarMaxSettings();
 
-  document.getElementById('radar-max-sep-slider').value=20;
-  document.getElementById('radar-max-sep-val').textContent='20km';
+  document.getElementById('radar-max-sep-slider').value=12;
+  document.getElementById('radar-max-sep-val').textContent='12km';
   document.getElementById('radar-max-link-slider').value=20;
   document.getElementById('radar-max-link-val').textContent='20km';
   document.getElementById('radar-max-proj-slider').value=6;
@@ -3097,14 +3210,14 @@ document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
   document.getElementById('radar-max-storms-val').textContent='36';
   document.getElementById('radar-max-chain-slider').value=4;
   document.getElementById('radar-max-chain-val').textContent='4';
-  document.getElementById('radar-max-missing-slider').value=1;
-  document.getElementById('radar-max-missing-val').textContent='1';
-  document.getElementById('radar-max-speed-slider').value=100;
-  document.getElementById('radar-max-speed-val').textContent='100km/h';
+  document.getElementById('radar-max-missing-slider').value=2;
+  document.getElementById('radar-max-missing-val').textContent='2';
+  document.getElementById('radar-max-speed-slider').value=80;
+  document.getElementById('radar-max-speed-val').textContent='80km/h';
   document.getElementById('radar-max-intensity-slider').value=7;
   updateRadarMaxIntensitySwatch(7);
-  document.getElementById('radar-max-pool-slider').value=80;
-  document.getElementById('radar-max-pool-val').textContent='80';
+  document.getElementById('radar-max-pool-slider').value=100;
+  document.getElementById('radar-max-pool-val').textContent='100';
   document.getElementById('radar-max-coltol-slider').value=60;
   document.getElementById('radar-max-coltol-val').textContent='60';
   document.getElementById('radar-max-edge-slider').value=2;
@@ -3229,7 +3342,7 @@ let compassHeading=null;
 // ── Compass Deviation Calibration (background) ─────────────────
 const DEV_DIR_NAMES=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const DEV_N_DIRS=16, DEV_DIR_STEP=360/DEV_N_DIRS;
-const DEV_STEADY_SEC=5, DEV_STEADY_TOL=5, DEV_SPEED_MIN=3;
+const DEV_STEADY_SEC=3, DEV_STEADY_TOL=12, DEV_SPEED_MIN=3;
 const DEV_DIR_TOL=5;
 const DEV_STORAGE_KEY='compass_deviations_v1'; // match CDMVT's key
 const DEV_REC_THROTTLE_MS=2000;
@@ -3290,10 +3403,14 @@ function devTryRecord(){
     _devSteadyStart=now; _devSteadyAnchor=gh;
     return;
   }
-  const steady=Math.abs(devAngDiff(gh,_devSteadyAnchor))<=DEV_STEADY_TOL;
+const diffFromAnchor=devAngDiff(gh,_devSteadyAnchor);
+  const steady=Math.abs(diffFromAnchor)<=DEV_STEADY_TOL;
   if(!steady){ _devSteadyStart=now; _devSteadyAnchor=gh; return; }
+  // Gently drift the anchor toward the current heading so slow, gradual GPS wander
+  // (not a real turn) doesn't eventually push you outside the tolerance window.
+  _devSteadyAnchor=((_devSteadyAnchor+diffFromAnchor*0.15)+360)%360;
 
-const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
+  const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
   if(!onMark) return;
 
   const elapsed=(now-_devSteadyStart)/1000;
@@ -3949,7 +4066,7 @@ function ecUpdateLegend(){
   if(!leg){
     leg=document.createElement('div');
     leg.id='ec-ltg-legend';
-    leg.style.cssText='position:absolute;bottom:36px;right:10px;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,220,0,0.25);border-radius:8px;padding:5px 8px;font-family:monospace;font-size:10px;color:#aaa;backdrop-filter:blur(4px);';
+    leg.style.cssText='position:absolute;bottom:36px;right:10px;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,220,0,0.25);border-radius:8px;padding:5px 8px;font-family:monospace;font-size:10px;color:#aaa;backdrop-filter:blur(4px);transform:scale(0.667);transform-origin:bottom right;';
     document.getElementById('wrap').appendChild(leg);
   }
   leg.innerHTML=
