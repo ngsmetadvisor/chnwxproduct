@@ -421,9 +421,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="How many candidate cells are searched per frame before picking the closest Max storms. Raise if real cells in a dense/packed line are being missed">Candidate pool</span>
-        <span id="radar-max-pool-val" style="color:#fff;">80</span>
+        <span id="radar-max-pool-val" style="color:#fff;">100</span>
       </div>
-      <input id="radar-max-pool-slider" type="range" min="20" max="200" step="10" value="80" style="width:100%;accent-color:#fff;">
+      <input id="radar-max-pool-slider" type="range" min="20" max="200" step="10" value="100" style="width:100%;accent-color:#fff;">
     </div>
     <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
@@ -463,23 +463,23 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="How many trailing frames a track can miss and still be treated as current — beyond this it's dropped from projection">Max missing steps</span>
-        <span id="radar-max-missing-val" style="color:#fff;">1</span>
+        <span id="radar-max-missing-val" style="color:#fff;">2</span>
       </div>
-      <input id="radar-max-missing-slider" type="range" min="0" max="6" step="1" value="1" style="width:100%;accent-color:#fff;">
+      <input id="radar-max-missing-slider" type="range" min="0" max="6" step="1" value="2" style="width:100%;accent-color:#fff;">
     </div>
 <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="Minimum separation between simultaneously-tracked storms">Min separation</span>
-        <span id="radar-max-sep-val" style="color:#fff;">20km</span>
+        <span id="radar-max-sep-val" style="color:#fff;">12km</span>
       </div>
-<input id="radar-max-sep-slider" type="range" min="5" max="100" step="5" value="20" style="width:100%;accent-color:#fff;">
+<input id="radar-max-sep-slider" type="range" min="5" max="100" step="5" value="12" style="width:100%;accent-color:#fff;">
     </div>
     <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
         <span title="Reject a frame-to-frame link if it implies motion faster than this — filters out spurious fast jumps">Max speed</span>
-        <span id="radar-max-speed-val" style="color:#fff;">100km/h</span>
+        <span id="radar-max-speed-val" style="color:#fff;">80km/h</span>
       </div>
-      <input id="radar-max-speed-slider" type="range" min="20" max="200" step="10" value="100" style="width:100%;accent-color:#fff;">
+      <input id="radar-max-speed-slider" type="range" min="20" max="200" step="10" value="80" style="width:100%;accent-color:#fff;">
     </div>
 <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#aaa;margin-bottom:3px;">
@@ -1680,7 +1680,7 @@ let radarMaxLastSpeedKmh=null;     // speed (km/h) of the closest tracked storm 
 function stormStatusSuffix(){
   return (radarMaxLastSpeedKmh!=null && isFinite(radarMaxLastSpeedKmh)) ? ' · storm '+radarMaxLastSpeedKmh.toFixed(0)+' km/h' : '';
 }
-let radarMaxSeparationKm=20;      // minimum separation between simultaneously-tracked storms
+let radarMaxSeparationKm=12;      // minimum separation between simultaneously-tracked storms
 let radarMaxMinIntensity=1.5;     // minimum cm/h (from RADAR_INTENSITY_LUT) — storms below this are ignored. Default: yellow band (index 7)
 let radarMaxIntensityColor='rgb(254,254,0)'; // mirrors the current min-intensity swatch — used to color the Track storms button/countdown
 function rgbToRgba(rgbStr,alpha){
@@ -1719,11 +1719,11 @@ function intensityColorForScore(score){
 }
 let RADAR_MAX_LINK_KM=20;         // max distance to link the same storm between consecutive frames
 const FORWARD_CONE_DEG=45;        // once a track has a direction, only accept next-frame links within ±45° of it (90° forward cone) — stops it snapping onto a side cell
-let RADAR_MAX_SPEED_KMH=100;      // implied speed above this between frames is treated as noise, not real motion — link rejected
+let RADAR_MAX_SPEED_KMH=80;       // implied speed above this between frames is treated as noise, not real motion — link rejected
 let RADAR_MAX_PROJECT_HOURS=6;    // how far forward to project each track's best-fit line
 let RADAR_MAX_STORMS=36;          // max storms tracked at once per frame
 let RADAR_MAX_MIN_CHAIN=4;        // minimum consecutive detections (chain length) required before a track is eligible for a projection
-let RADAR_MAX_MISSING_ALLOWED=1;  // how many trailing frames a track is allowed to miss and still count as "current" for projection
+let RADAR_MAX_MISSING_ALLOWED=2;  // how many trailing frames a track is allowed to miss and still count as "current" for projection
 let radarMaxIntensityIdx=7;       // slider index (0-14) for min-intensity — kept separately from radarMaxMinIntensity since that's derived (cm/h), this is what's persisted/restored
 
 const RADAR_MAX_SETTINGS_KEY='radar_max_settings_v1';
@@ -1790,7 +1790,7 @@ function applyRadarMaxSettingsToUI(){
 
 
 const RADAR_MAX_PALETTE=['#ff5555','#55ff99','#55aaff','#ffdd55','#ff88ff','#66ffee','#ffaa55','#bb99ff'];
-let RADAR_MAX_CANDIDATE_POOL=80; // internal detection cap per frame — larger than RADAR_MAX_STORMS so nearest-first selection has enough candidates to choose from. Raise if real cells in a dense/packed line are being missed because the pool filled up before reaching them.
+let RADAR_MAX_CANDIDATE_POOL=100; // internal detection cap per frame — larger than RADAR_MAX_STORMS so nearest-first selection has enough candidates to choose from. Raise if real cells in a dense/packed line are being missed because the pool filled up before reaching them.
 let RADAR_MAX_EDGE_MARGIN_PX=2; // pixels blanked beyond each blob's own footprint during search — small buffer against antialiased fringe re-detection. Lower if adjacent real cells are being eaten by this margin.
 
 // Reference point for "nearest storms first" — GPS fix if available, else last known
@@ -2506,24 +2506,27 @@ const MIN_PROJECTION_POINTS=RADAR_MAX_MIN_CHAIN;
     }
   });
 
-  // Flag each track's most recent detection so the trail can highlight "this is where
-  // the track currently stands" — same point objects are shared with perFrame/r._maxPoints,
-  // so setting the flag here is visible wherever those points are drawn.
+// Flag each track's first and most recent detection — only these get an X marker
+  // drawn (see below); the dashed trail line still uses every point in between.
   tracks.forEach(tr=>{
-    if(tr.points.length) tr.points[tr.points.length-1]._isLast=true;
+    if(!tr.points.length) return;
+    tr.points[0]._isFirst=true;
+    tr.points[tr.points.length-1]._isLast=true;
   });
 
-// X marker for every detection, colored by its track. White markers (tracks that
-  // haven't yet reached MIN_PROJECTION_POINTS) are drawn at 50% opacity to visually
-  // read as "not enough data yet" rather than a confirmed detection. The most recent
-  // detection in each track gets a black circle behind it to stand out from its own trail.
-  perFrame.forEach(framePts=>{
+// X marker only for each track's first and last detection, colored by its track.
+  // White markers (tracks that haven't yet reached MIN_PROJECTION_POINTS) are drawn at
+  // 50% opacity to visually read as "not enough data yet" rather than a confirmed
+  // detection. The most recent detection in each track gets a black circle behind it
+  // to stand out from its own trail.
+perFrame.forEach(framePts=>{
     framePts.forEach(pt=>{
+      if(!pt._isFirst && !pt._isLast) return;
       const isWhite=(pt.color==='#ffffff'||pt.color==='#fff');
-      const bg=pt._isLast?'<div style="position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:#000;"></div>':'';
+      const markColor=pt._isLast?'#000':pt.color;
       const m=L.marker([pt.lat,pt.lon],{
         pane:'radarMax',interactive:false,
-        icon:L.divIcon({className:'',html:'<div style="position:relative;width:16px;height:16px;">'+bg+'<div style="position:relative;color:'+pt.color+';font-size:13px;font-weight:900;text-shadow:0 0 2px #000,0 0 2px #000,0 0 2px #000;opacity:'+(isWhite?0.5:1)+';text-align:center;line-height:16px;">✕</div></div>',iconSize:[16,16],iconAnchor:[8,8]})
+        icon:L.divIcon({className:'',html:'<div style="position:relative;width:16px;height:16px;"><div style="position:relative;color:'+markColor+';font-size:13px;font-weight:900;text-shadow:0 0 2px #000,0 0 2px #000,0 0 2px #000;opacity:'+(isWhite?0.5:1)+';text-align:center;line-height:16px;">✕</div></div>',iconSize:[16,16],iconAnchor:[8,8]})
       }).addTo(map);
       radarMaxMarkers.push(m);
     });
@@ -2576,12 +2579,12 @@ const projPts=[[lastPt.lat,lastPt.lon]];
         ? '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>'+
           '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:900;text-shadow:0 0 3px #000,0 0 3px #000;white-space:nowrap;">'+speedLabel+'</div>'
         : '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>';
-      const mk=L.marker([ll.lat,ll.lng],{
+const mk=L.marker([ll.lat,ll.lng],{
         pane:'radarMax',interactive:false,
         icon:L.divIcon({
           className:'',
           html:'<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:6px;height:6px;border-radius:50%;background:'+trColor+';box-shadow:0 0 4px #000;"></div>'+labelHtml+'</div>',
-          iconSize:[60,isLast?32:20],iconAnchor:[isLast?30:15,4]
+          iconSize:[60,isLast?32:20], iconAnchor:[30,4]
         })
       }).addTo(map);
       radarMaxProjectionMarkers.push(mk);
@@ -3105,22 +3108,22 @@ document.getElementById('radar-max-intensity-slider').addEventListener('change',
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
 document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
-  radarMaxSeparationKm=20;
+  radarMaxSeparationKm=12;
   RADAR_MAX_LINK_KM=20;
   RADAR_MAX_PROJECT_HOURS=6;
   RADAR_MAX_STORMS=36;
-  RADAR_MAX_SPEED_KMH=100;
+  RADAR_MAX_SPEED_KMH=80;
   radarMaxIntensityIdx=7;
   radarMaxMinIntensity=RADAR_INTENSITY_STEPS[7];
-  RADAR_MAX_CANDIDATE_POOL=80;
+  RADAR_MAX_CANDIDATE_POOL=100;
   RADAR_LUT_COLOR_TOL=60;
   RADAR_MAX_EDGE_MARGIN_PX=2;
   RADAR_MAX_MIN_CHAIN=4;
-  RADAR_MAX_MISSING_ALLOWED=1;
+  RADAR_MAX_MISSING_ALLOWED=2;
   saveRadarMaxSettings();
 
-  document.getElementById('radar-max-sep-slider').value=20;
-  document.getElementById('radar-max-sep-val').textContent='20km';
+  document.getElementById('radar-max-sep-slider').value=12;
+  document.getElementById('radar-max-sep-val').textContent='12km';
   document.getElementById('radar-max-link-slider').value=20;
   document.getElementById('radar-max-link-val').textContent='20km';
   document.getElementById('radar-max-proj-slider').value=6;
@@ -3129,14 +3132,14 @@ document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
   document.getElementById('radar-max-storms-val').textContent='36';
   document.getElementById('radar-max-chain-slider').value=4;
   document.getElementById('radar-max-chain-val').textContent='4';
-  document.getElementById('radar-max-missing-slider').value=1;
-  document.getElementById('radar-max-missing-val').textContent='1';
-  document.getElementById('radar-max-speed-slider').value=100;
-  document.getElementById('radar-max-speed-val').textContent='100km/h';
+  document.getElementById('radar-max-missing-slider').value=2;
+  document.getElementById('radar-max-missing-val').textContent='2';
+  document.getElementById('radar-max-speed-slider').value=80;
+  document.getElementById('radar-max-speed-val').textContent='80km/h';
   document.getElementById('radar-max-intensity-slider').value=7;
   updateRadarMaxIntensitySwatch(7);
-  document.getElementById('radar-max-pool-slider').value=80;
-  document.getElementById('radar-max-pool-val').textContent='80';
+  document.getElementById('radar-max-pool-slider').value=100;
+  document.getElementById('radar-max-pool-val').textContent='100';
   document.getElementById('radar-max-coltol-slider').value=60;
   document.getElementById('radar-max-coltol-val').textContent='60';
   document.getElementById('radar-max-edge-slider').value=2;
