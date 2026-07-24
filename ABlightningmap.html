@@ -1570,12 +1570,11 @@ async function fetchAlertsNear(lat,lon,bufferDeg){
   const url = 'https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit=100&bbox='+
     minLon+','+minLat+','+maxLon+','+maxLat;
   try{
-    const res=await fetch(url,{signal:AbortSignal.timeout(12000)});
+    const res=await _fetchWithTimeout(url,12000);
     if(!res.ok){ console.warn('[alerts] bad response', res.status); return []; }
     const gj=await res.json();
-    console.log('[alerts] fetched', (gj.features||[]).length, 'features near', lat.toFixed(3), lon.toFixed(3));
     return gj.features||[];
-  }catch(e){ console.warn('[alerts]',e); return []; }
+  }catch(e){ console.warn('[alerts] fetch failed:',e.message||e); return []; }
 }
 
 // ── Alberta-wide Warnings/Watches table ─────────────────────────
@@ -1674,6 +1673,15 @@ function classifyAbAlert(props){
   return results;
 }
 
+// Manual timeout helper — AbortSignal.timeout() isn't supported on iOS Safari before
+// 15.4 and throws synchronously if called, which was silently failing the whole fetch
+// on older iOS devices (caught by the outer try/catch, returning [] with no visible error).
+function _fetchWithTimeout(url,ms){
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),ms);
+  return fetch(url,{signal:ctrl.signal}).finally(()=>clearTimeout(timer));
+}
+
 async function fetchAlbertaAlerts(){
   const buffer=0.5;
   const minLon=AB.lonMin-buffer, maxLon=AB.lonMax+buffer, minLat=AB.latMin-buffer, maxLat=AB.latMax+buffer;
@@ -1681,16 +1689,15 @@ async function fetchAlbertaAlerts(){
   const url = 'https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit='+LIMIT+'&bbox='+
     minLon+','+minLat+','+maxLon+','+maxLat;
   try{
-    const res=await fetch(url,{signal:AbortSignal.timeout(15000)});
+    const res=await _fetchWithTimeout(url,15000);
     if(!res.ok){ console.warn('[abAlerts] bad response', res.status); return []; }
     const gj=await res.json();
     const feats=gj.features||[];
-    console.log('[abAlerts] raw feature count:',feats.length,'of limit',LIMIT,'numberMatched:',gj.numberMatched,'numberReturned:',gj.numberReturned);
     if(gj.numberMatched && gj.numberMatched>feats.length){
       console.warn('[abAlerts] TRUNCATED — numberMatched('+gj.numberMatched+') > returned('+feats.length+'). Real AB alerts may be missing.');
     }
     return feats;
-  }catch(e){ console.warn('[abAlerts]',e); return []; }
+  }catch(e){ console.warn('[abAlerts] fetch failed:',e.message||e); return []; }
 }
 
 function positionAbAlertsPanel(){
