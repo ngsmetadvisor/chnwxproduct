@@ -1259,11 +1259,14 @@ zoneLayer.addTo(map);
 rebuildZoneCounts();
       assignStationsToZones();
       refreshAbAlertsPanel();
-    }).catch(e=>{document.getElementById('zoneStatus').textContent='Zones unavailable';console.error(e);});
+}).catch(e=>{document.getElementById('zoneStatus').textContent='Zones unavailable';console.error(e);});
+}
 
 // Assigns every loaded RAWS station to the fire weather zone whose polygon contains it —
 // used so alert-zone matching can test every station in a zone against the alert polygon,
-// instead of relying on a single zone centroid point.
+// instead of relying on a single zone centroid point. Top-level (not nested in loadZones)
+// so it's callable from both the zones-loaded handler and the stations-loaded handler,
+// whichever finishes second.
 function assignStationsToZones(){
   if(!zonePolygons.length || !Object.keys(stations).length) return;
   zonePolygons.forEach(z=>{ z.stations=[]; });
@@ -1274,7 +1277,6 @@ function assignStationsToZones(){
     }
   });
   console.log('[abAlerts] station-to-zone assignment complete');
-}
 }
 
 function buildZoneZoomDropdown(){
@@ -4492,6 +4494,10 @@ function onCompass(e){
 }
 
 document.getElementById('gps-btn').addEventListener('click',function(){
+  if(_gpsBtnLongPressFired){
+    _gpsBtnLongPressFired=false;
+    return;
+  }
   if(_mockGpsPicking){
     _mockGpsPicking=false;
     this.classList.remove('searching');
@@ -4534,8 +4540,7 @@ fetchAlertsNear(lat,lon,0.75).then(features=>{
     refreshAbAlertsPanel();
   });
 }
-document.getElementById('gps-btn').addEventListener('contextmenu',function(e){
-  e.preventDefault();
+function _gpsBtnEnterMockPickMode(){
   if(gpsActive) toggleGPS();
   _mockGpsPicking=!_mockGpsPicking;
   const btn=document.getElementById('gps-btn');
@@ -4547,7 +4552,39 @@ document.getElementById('gps-btn').addEventListener('contextmenu',function(e){
     btn.classList.remove('searching');
     document.getElementById('gpsStatus').textContent='';
   }
+}
+document.getElementById('gps-btn').addEventListener('contextmenu',function(e){
+  e.preventDefault();
+  _gpsBtnEnterMockPickMode();
 });
+
+// iOS (including Chrome-on-iOS, which is WebKit under the hood) does not reliably fire
+// 'contextmenu' from a touch-and-hold — that's a desktop right-click event. Detect the
+// long-press manually via touch timers instead, mirroring the map's own long-press handler.
+let _gpsBtnTouchTimer=null, _gpsBtnLongPressFired=false;
+const _gpsBtnEl=document.getElementById('gps-btn');
+_gpsBtnEl.addEventListener('touchstart',function(e){
+  _gpsBtnLongPressFired=false;
+  _gpsBtnTouchTimer=setTimeout(()=>{
+    _gpsBtnLongPressFired=true;
+    _gpsBtnEnterMockPickMode();
+    if(navigator.vibrate) navigator.vibrate(30);
+  },550);
+},{passive:true});
+_gpsBtnEl.addEventListener('touchend',function(e){
+  if(_gpsBtnTouchTimer){ clearTimeout(_gpsBtnTouchTimer); _gpsBtnTouchTimer=null; }
+  if(_gpsBtnLongPressFired){
+    // Long-press already handled the action — swallow the trailing synthetic click
+    // so it doesn't immediately toggle mock-pick mode back off.
+    e.preventDefault();
+  }
+},{passive:false});
+_gpsBtnEl.addEventListener('touchmove',function(e){
+  if(_gpsBtnTouchTimer){ clearTimeout(_gpsBtnTouchTimer); _gpsBtnTouchTimer=null; }
+},{passive:true});
+_gpsBtnEl.addEventListener('touchcancel',function(e){
+  if(_gpsBtnTouchTimer){ clearTimeout(_gpsBtnTouchTimer); _gpsBtnTouchTimer=null; }
+},{passive:true});
 map.on('click',function(e){
   if(!_mockGpsPicking) return;
   _mockGpsPicking=false;
