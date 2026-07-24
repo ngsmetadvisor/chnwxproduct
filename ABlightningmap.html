@@ -4905,6 +4905,11 @@ stationLabelMarkers.push(m);
 buildStationDropdown();
     rebuildStationIcons(); // apply correct font size for current zoom
     assignStationsToZones();
+    // Stations may finish loading after the zones fetch already rendered the alerts
+    // panel with empty station lists (assignStationsToZones no-ops until BOTH zones
+    // and stations are ready) — re-render now that assignment is actually complete.
+    refreshAbAlertsPanel();
+    refreshMockAlertsPanel();
   });
   
 function buildStationDropdown(){
