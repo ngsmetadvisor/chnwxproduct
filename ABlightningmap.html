@@ -2264,8 +2264,16 @@ let radarMaxFirstRunDone=false; // first detection after a fresh page/session lo
 let radarMaxTrailLines=[], radarMaxProjectionLines=[], radarMaxProjectionMarkers=[];
 let radarMaxOpacityValue=0.7;     // storm marker/trail/projection opacity — mirrors the radar-max-opacity-slider value; also applied to the center storm-tracking banner
 let radarMaxLastSpeedKmh=null;     // speed (km/h) of the closest tracked storm from the most recent detection pass — shown in the status bar since the center banner is timing-sensitive
+let radarMaxLastClosestKm=null;    // closest-approach distance (km) of the closest tracked storm from the most recent detection pass
+let radarMaxLastClosestHour=null;  // hour index (0=now) at which that closest approach occurs
 function stormStatusSuffix(){
-  return (radarMaxLastSpeedKmh!=null && isFinite(radarMaxLastSpeedKmh)) ? ' · storm '+radarMaxLastSpeedKmh.toFixed(0)+' km/h' : '';
+  let s='';
+  if(radarMaxLastSpeedKmh!=null && isFinite(radarMaxLastSpeedKmh)) s+=' · storm '+radarMaxLastSpeedKmh.toFixed(0)+' km/h';
+  if(radarMaxLastClosestKm!=null && isFinite(radarMaxLastClosestKm)){
+    const hourLabel=radarMaxLastClosestHour===0?'now':('~'+radarMaxLastClosestHour+'h');
+    s+=' · closest '+radarMaxLastClosestKm.toFixed(0)+'km @ '+hourLabel;
+  }
+  return s;
 }
 let radarMaxSeparationKm=12;      // minimum separation between simultaneously-tracked storms
 let radarMaxMinIntensity=1.5;     // minimum cm/h (from RADAR_INTENSITY_LUT) — storms below this are ignored. Default: yellow band (index 7)
@@ -2920,10 +2928,10 @@ if(!el){
 const hourLabel=status.hour===0?'now':('~'+status.hour+'h');
   const dirStr=status.bearing?(' · from '+status.bearing.dir+' ('+Math.round(status.bearing.deg)+'°)'):'';
   const speedStr=(status.speedKmh!=null&&isFinite(status.speedKmh))?(' · moving '+status.speedKmh.toFixed(0)+' km/h'):'';
-  el.innerHTML=
+el.innerHTML=
     '<div style="border-radius:10px;padding:9px 20px;text-align:center;font-family:\'Courier New\',monospace;border:2px solid '+c.color+';background:#e8e8e8;animation:'+c.anim+';box-sizing:border-box;">'+
     '<div style="font-size:14px;font-weight:800;letter-spacing:0.07em;color:'+c.color+';">'+c.label+'</div>'+
-    '<div style="font-size:11px;font-weight:700;margin-top:3px;color:'+c.color+';">Tracked cell '+status.km.toFixed(0)+' km away'+dirStr+' · closest approach '+hourLabel+speedStr+'</div>'+
+    '<div style="font-size:11px;font-weight:700;margin-top:3px;color:'+c.color+';">Closest approach: '+status.km.toFixed(0)+' km, '+hourLabel+dirStr+speedStr+'</div>'+
     '</div>';
   repositionStormBanner();
 }
@@ -3176,7 +3184,9 @@ const mk=L.marker([ll.lat,ll.lng],{
       }).addTo(map);
       radarMaxProjectionMarkers.push(mk);
     }
-const pline=L.polyline(projPts,{pane:'radarMax',color:trColor,weight:2,opacity:0.9,interactive:false}).addTo(map);
+const phalo=L.polyline(projPts,{pane:'radarMax',color:'#ffffff',weight:5,opacity:0.4,interactive:false}).addTo(map);
+    radarMaxProjectionLines.push(phalo);
+    const pline=L.polyline(projPts,{pane:'radarMax',color:trColor,weight:2,opacity:0.95,interactive:false}).addTo(map);
     radarMaxProjectionLines.push(pline);
 
     // Check current position (hour 0) and every hourly projection against refLL,
@@ -3206,10 +3216,18 @@ let stormBearing=null;
   updateStormProximityBanner({level:stormLevel, km:stormClosestKm, hour:stormClosestHour, bearing:stormBearing, speedKmh:stormClosestSpeedKmh});
 
 radarMaxLastSpeedKmh=stormClosestSpeedKmh;
+  radarMaxLastClosestKm=isFinite(stormClosestKm)?stormClosestKm:null;
+  radarMaxLastClosestHour=stormClosestHour;
   const speedEl=document.getElementById('storm-tracking-speed');
   if(speedEl){
-    if(stormClosestSpeedKmh!=null && isFinite(stormClosestSpeedKmh)){
-      speedEl.textContent='Storm speed: '+stormClosestSpeedKmh.toFixed(0)+' km/h';
+    const parts=[];
+    if(stormClosestSpeedKmh!=null && isFinite(stormClosestSpeedKmh)) parts.push('Speed: '+stormClosestSpeedKmh.toFixed(0)+' km/h');
+    if(radarMaxLastClosestKm!=null){
+      const hourLabel=stormClosestHour===0?'now':('~'+stormClosestHour+'h');
+      parts.push('Closest approach: '+radarMaxLastClosestKm.toFixed(0)+' km @ '+hourLabel);
+    }
+    if(parts.length){
+      speedEl.textContent=parts.join(' · ');
       speedEl.style.display='block';
     } else {
       speedEl.style.display='none';
