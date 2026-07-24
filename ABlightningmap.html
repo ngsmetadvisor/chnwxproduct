@@ -5022,6 +5022,12 @@ const charW = 6.6, padX = 6, padY = 6;
 const m = L.marker([lat, lon], {icon, interactive: true, pane: 'stations'}).addTo(map);
       m._stationId = id;
 m.on('click', function(e){
+        if(_addViewPicking){
+          L.DomEvent.stopPropagation(e);
+          _setAddViewPickingUI(false);
+          runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
+          return;
+        }
         console.log('[station click]', id);
         L.DomEvent.stopPropagation(e);
         const s = stations[id];
