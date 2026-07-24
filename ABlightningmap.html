@@ -15,6 +15,8 @@
 html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; font-family: 'Courier New', monospace; }
 #wrap { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
 #map { flex: 1; width: 100%; touch-action: pan-x pan-y; }
+.leaflet-container.leaflet-grab{cursor:crosshair;}
+.leaflet-container.leaflet-grab.leaflet-dragging{cursor:grabbing;}
 
 /* ── Toolbar ── */
 #toolbar {
@@ -39,8 +41,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 #zone-toggle { background: transparent; border: 0.5px solid rgba(255,140,0,0.5); color: #ff8c00; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 #zone-toggle.active { background: rgba(255,140,0,0.2); }
 #zone-toggle:hover { background: rgba(255,140,0,0.15); }
-#gps-btn { background: transparent; border: 0.5px solid rgba(0,255,150,0.4); color: #00ff96; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
-#gps-btn.active { background: rgba(0,255,150,0.15); border-color: #00ff96; }
+#gps-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+#gps-btn.active { background: rgba(0,255,150,0.15); border-color: #00ff96; color: #00ff96; }
 #gps-btn.searching { border-color: #ffaa00; color: #ffaa00; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
 
@@ -505,7 +507,46 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       <input id="max-strikes-slider" type="range" min="500" max="10000" step="500" value="3000">
       <span id="max-strikes-val">3000</span>
     </div>
-    <div id="zone-list"><div style="color:#555;font-size:9px;text-align:center;padding:6px 0;">Loading zones…</div></div>
+<div id="zone-list"><div style="color:#555;font-size:9px;text-align:center;padding:6px 0;">Loading zones…</div></div>
+  </div>
+
+<!-- Alberta Alerts panel -->
+<div id="ab-alerts-panel" style="display:block;position:absolute;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,80,80,0.35);border-radius:10px;padding:8px 12px;min-width:220px;max-width:280px;backdrop-filter:blur(6px);font-family:monospace;font-size:13px;color:#888;">
+    <div class="title" style="font-size:14px;color:#ff5555;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;border-bottom:0.5px solid rgba(255,80,80,0.25);padding-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+      <span>AB Warnings/Watches</span>
+      <span id="ab-alerts-collapse-btn" style="cursor:pointer;font-size:14px;color:#ff5555;margin-left:auto;">▼</span>
+    </div>
+<div id="ab-alerts-total-row" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:6px;">
+      <span style="display:flex;align-items:baseline;gap:10px;">
+        <span style="display:flex;align-items:baseline;gap:3px;">
+          <span id="ab-alerts-warn-num" style="font-size:20px;font-weight:700;color:#ff5555;line-height:1;">0</span>
+          <span style="font-size:12px;color:#888;">warnings</span>
+        </span>
+        <span style="display:flex;align-items:baseline;gap:3px;">
+          <span id="ab-alerts-watch-num" style="font-size:20px;font-weight:700;color:#ffdd00;line-height:1;">0</span>
+          <span style="font-size:12px;color:#888;">watches</span>
+        </span>
+      </span>
+      <span style="font-size:11px;color:#888;">zones</span>
+    </div>
+    <div id="ab-alerts-list" style="max-height:380px;overflow-y:auto;margin-top:4px;display:none;">
+      <div style="color:#555;font-size:11px;text-align:center;padding:6px 0;">No active alerts</div>
+    </div>
+  </div>
+
+  <!-- Mock Location Alerts panel — mirrors AB Warnings/Watches styling exactly, only visible while mock GPS is active -->
+<div id="mock-alerts-panel" style="display:none;position:absolute;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,80,80,0.35);border-radius:10px;padding:8px 12px;min-width:220px;max-width:280px;backdrop-filter:blur(6px);font-family:monospace;font-size:13px;color:#888;">
+    <div class="title" style="font-size:14px;color:#ff5555;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;border-bottom:0.5px solid rgba(255,80,80,0.25);padding-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+      <span>Mock Location Alerts</span>
+      <span id="mock-alerts-collapse-btn" style="cursor:pointer;font-size:14px;color:#ff5555;margin-left:auto;">▼</span>
+    </div>
+    <div id="mock-alerts-total-row" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+      <span id="mock-alerts-total-num" style="font-size:22px;font-weight:700;color:#ffdd00;line-height:1;">0</span>
+      <span style="font-size:11px;color:#888;">active</span>
+    </div>
+    <div id="mock-alerts-list" style="max-height:380px;overflow-y:auto;margin-top:4px;display:none;">
+      <div style="color:#555;font-size:11px;text-align:center;padding:6px 0;">No active alerts</div>
+    </div>
   </div>
 
   <!-- Status bar -->
@@ -639,6 +680,8 @@ map.getPane('strikes').style.pointerEvents = 'none';
 map.createPane('ecLightningPane'); map.getPane('ecLightningPane').style.zIndex = 640;
 map.createPane('alertsPane');      map.getPane('alertsPane').style.zIndex      = 340;
 map.getPane('alertsPane').style.pointerEvents = 'none';
+map.createPane('alertCircles');    map.getPane('alertCircles').style.zIndex    = 670;
+map.getPane('alertCircles').style.pointerEvents = 'none';
 
 
 
@@ -1197,15 +1240,34 @@ poly.bindPopup('<div style="font-family:monospace;min-width:170px;line-height:1.
   '</table></div>',{maxWidth:240,className:'strike-popup'});
 // Zone popup is now triggered from the map click handler below (zones pane has no pointer events)
 
-        poly.addTo(zoneLayer);
-        zonePolygons.push({...f,polygon:poly});
+poly.addTo(zoneLayer);
+        const _cLat=f.latlngs.reduce((s,p)=>s+p[0],0)/f.latlngs.length;
+        const _cLon=f.latlngs.reduce((s,p)=>s+p[1],0)/f.latlngs.length;
+        zonePolygons.push({...f,polygon:poly,centroid:{lat:_cLat,lon:_cLon},stations:[]});
       });
 zoneLayer.addTo(map);
       document.getElementById('zoneStatus').textContent=features.length+' fire weather zones';
       buildZoneListUI();
       buildZoneZoomDropdown();
-      rebuildZoneCounts();
+rebuildZoneCounts();
+      assignStationsToZones();
+      refreshAbAlertsPanel();
     }).catch(e=>{document.getElementById('zoneStatus').textContent='Zones unavailable';console.error(e);});
+
+// Assigns every loaded RAWS station to the fire weather zone whose polygon contains it —
+// used so alert-zone matching can test every station in a zone against the alert polygon,
+// instead of relying on a single zone centroid point.
+function assignStationsToZones(){
+  if(!zonePolygons.length || !Object.keys(stations).length) return;
+  zonePolygons.forEach(z=>{ z.stations=[]; });
+  Object.keys(stations).forEach(id=>{
+    const s=stations[id];
+    for(const z of zonePolygons){
+      if(pip(s.lat,s.lon,z.latlngs)){ z.stations.push({id,lat:s.lat,lon:s.lon}); break; }
+    }
+  });
+  console.log('[abAlerts] station-to-zone assignment complete');
+}
 }
 
 function buildZoneZoomDropdown(){
@@ -1380,6 +1442,7 @@ document.getElementById('ab-collapse-btn').addEventListener('click',()=>{
   const btn=document.getElementById('ab-collapse-btn');
   panel.classList.toggle('collapsed');
   btn.textContent=panel.classList.contains('collapsed')?'▼':'▲';
+  positionAbAlertsPanel();
 });
 
 // Inject a single stylesheet for station labels — update this instead of touching markers
@@ -1393,7 +1456,7 @@ function rebuildStationIcons(){
   const shadow = isLight ? '#fff' : '#000';
   const fontSize = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-sm').trim() || '11px';
   // Update CSS only — no DOM mutation on any marker
-  _stnStyle.textContent = '.stn-label{color:'+color+';font-size:'+fontSize+';font-family:monospace;white-space:nowrap;cursor:pointer;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';display:flex;align-items:center;justify-content:center;width:100%;height:100%;box-sizing:border-box;}';
+_stnStyle.textContent = '.stn-label{color:'+color+';font-size:'+fontSize+';font-family:monospace;white-space:nowrap;cursor:crosshair;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';display:flex;align-items:center;justify-content:center;width:100%;height:100%;box-sizing:border-box;}';
 }
 loadZones();
 map.fitBounds(getABBounds(), {animate:false}); // initial view = Alberta overview, matching the same bounds used everywhere else (zoneZoomSelect "AB", PNG export, storm-tracking overview zoom)
@@ -1423,6 +1486,7 @@ const ALERTS_GEOMET='https://geo.weather.gc.ca/geomet';
 const ALERTS_WMS_LAYER='Current-Alerts';
 let alertsWmsLayer=null, alertsVisible=false, alertsCheckTimer=null;
 let alertBannerEl=null, _alertsLastLocKey='', _lastActiveAlertKey=null;
+let tornadoHailCircleLayer=null, mockTornadoHailCircle=null;
 
 function enableAlertsLayer(){
   if(alertsWmsLayer) return;
@@ -1433,6 +1497,7 @@ function enableAlertsLayer(){
   }).addTo(map);
   alertsVisible=true;
   document.getElementById('alerts-toggle').classList.add('active');
+  refreshAbAlertsPanel();
 }
 function refreshAlertsWmsLayer(){
   if(alertsWmsLayer) alertsWmsLayer.setParams({_cb:Date.now()});
@@ -1448,7 +1513,7 @@ function disableAlertsLayer(){
 // setTimeout(...,0) because gpsMarker/_gpsLastLL are declared with `let` further
 // down in this script; calling synchronously here would hit them in the
 // temporal dead zone (silently swallowed since this is an async function).
-if(!alertsCheckTimer) alertsCheckTimer=setInterval(()=>{ checkAlertsAtCurrentLocation(true); refreshAlertsWmsLayer(); }, ALERTS_CHECK_MS);
+if(!alertsCheckTimer) alertsCheckTimer=setInterval(()=>{ checkAlertsAtCurrentLocation(true); refreshAlertsWmsLayer(); refreshAbAlertsPanel(); }, ALERTS_CHECK_MS);
 setTimeout(()=>checkAlertsAtCurrentLocation(true), 0);
 document.getElementById('alerts-toggle').addEventListener('click', ()=>{
   if(alertsVisible) disableAlertsLayer(); else enableAlertsLayer();
@@ -1504,6 +1569,441 @@ async function fetchAlertsNear(lat,lon,bufferDeg){
     return gj.features||[];
   }catch(e){ console.warn('[alerts]',e); return []; }
 }
+
+// ── Alberta-wide Warnings/Watches table ─────────────────────────
+// Priority order: 1 Tornado Warning, 2 Tornado Watch,
+// 3 SVR T-Storm Warning (>=nickel hail), 4 SVR T-Storm Watch (>=nickel hail),
+// 5 SVR T-Storm Warning (<nickel hail), 6 SVR T-Storm Watch (<nickel hail),
+// 7 Heat Warning, 8 Air Quality Warning, 9 Other. Larger hail sorts first within its bucket.
+const HAIL_SIZE_KEYWORDS=[
+  {kw:'grapefruit',mm:90},{kw:'softball',mm:90},{kw:'baseball',mm:70},
+  {kw:'tennis ball',mm:50},{kw:'ping pong',mm:38},{kw:'golf ball',mm:35},
+  {kw:'toonie',mm:28},{kw:'loonie',mm:26},{kw:'quarter',mm:24},
+  {kw:'nickel',mm:18},{kw:'dime',mm:10},{kw:'pea',mm:6}
+];
+const HAIL_LARGE_THRESHOLD_MM=18; // nickel-sized and up
+
+// Isolates only the text actually about hail — the "Hail:" structured line (ECCC's
+// common format) plus any full sentence containing the word "hail" — so size figures
+// from unrelated hazards (e.g. "Rain: heavy (15 - 50 mm)") never leak into hail sizing.
+function getHailContextSegments(text){
+  if(!text) return [];
+  const segs=[];
+  const hailLine=text.match(/Hail:\s*([^\n]*)/i);
+  if(hailLine) segs.push(hailLine[1]);
+  text.split(/(?<=[.!?])\s+/).forEach(sentence=>{
+    if(/hail/i.test(sentence)) segs.push(sentence);
+  });
+  return segs;
+}
+function extractHailSizeMM(text){
+  const segs=getHailContextSegments(text);
+  if(!segs.length) return null;
+  let maxMM=null;
+  segs.forEach(seg=>{
+    const t=seg.toLowerCase();
+    HAIL_SIZE_KEYWORDS.forEach(h=>{ if(t.includes(h.kw)){ if(maxMM===null||h.mm>maxMM) maxMM=h.mm; } });
+    const cmMatch=t.match(/(\d+(\.\d+)?)\s*cm/);
+    if(cmMatch){ const mm=parseFloat(cmMatch[1])*10; if(maxMM===null||mm>maxMM) maxMM=mm; }
+    const mmMatch=t.match(/(\d+(\.\d+)?)\s*mm/);
+    if(mmMatch){ const mm=parseFloat(mmMatch[1]); if(maxMM===null||mm>maxMM) maxMM=mm; }
+  });
+  return maxMM;
+}
+
+// Pulls the original size wording straight from the alert text — e.g. "Toonie to golf
+// ball" — so labels can show ECCC's own phrasing instead of just a converted mm figure.
+// Falls back to null (caller then falls back to the mm value) if no keyword phrase is found.
+const HAIL_KW_ALT=HAIL_SIZE_KEYWORDS.map(h=>h.kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+// Matches a size phrase (optionally a "to" range, optionally trailing "ball" for
+// keywords like "ping pong" that need it e.g. "ping pong ball") within an
+// already-hail-scoped segment — no longer requires "hail" to immediately follow,
+// since getHailContextSegments() has already confirmed the segment is about hail.
+const HAIL_TEXT_RE=new RegExp('((?:'+HAIL_KW_ALT+')(?:\\s+ball)?(?:\\s+to\\s+(?:'+HAIL_KW_ALT+')(?:\\s+ball)?)?)','i');
+function extractHailSizeText(text){
+  const segs=getHailContextSegments(text);
+  for(const seg of segs){
+    const m=seg.match(HAIL_TEXT_RE);
+    if(m){
+      const phrase=m[1].trim();
+      return phrase.charAt(0).toUpperCase()+phrase.slice(1);
+    }
+  }
+  return null;
+}
+
+// ECCC sometimes bundles multiple co-issued hazards (e.g. Heat Warning + Air Quality
+// Warning for the same area) into ONE alert feature whose alert_name_en mentions both.
+// Check for every hazard type present, not just the first match, and return an array —
+// so a bundled feature produces a classification (and table row) for each hazard.
+function classifyAbAlert(props){
+  const name=(props.alert_name_en||'').toLowerCase();
+  const text=props.alert_text_en||'';
+  const hailMM=extractHailSizeMM(text);
+  const hailText=extractHailSizeText(text);
+  const hailLabel=hailText||(hailMM?Math.round(hailMM)+'mm':null);
+  const isWarning=name.includes('warning');
+  const isWatch=name.includes('watch');
+  const results=[];
+  if(name.includes('tornado warning')) results.push({priority:1,label:'Tornado Warning'+(hailLabel?' ('+hailLabel+' hail)':''),hailMM});
+  if(name.includes('tornado watch'))   results.push({priority:2,label:'Tornado Watch'+(hailLabel?' ('+hailLabel+' hail)':''),hailMM});
+  if(name.includes('severe thunderstorm warning')){
+    results.push({priority:5,label:'Severe T-Storm Warning'+(hailLabel?' ('+hailLabel+' hail)':''),hailMM});
+  }
+  if(name.includes('severe thunderstorm watch')){
+    results.push({priority:6,label:'Severe T-Storm Watch'+(hailLabel?' ('+hailLabel+' hail)':''),hailMM});
+  }
+  // Large-hail classification is driven purely by the extracted hail size and this
+  // alert's own warning/watch tier — independent of whether the alert itself is
+  // labeled Tornado or Severe Thunderstorm, since either type's text can mention hail.
+  if(hailMM!==null && hailMM>=HAIL_LARGE_THRESHOLD_MM){
+    if(isWarning) results.push({priority:3,label:'Large Hail Warning ('+hailLabel+')',hailMM});
+    else if(isWatch) results.push({priority:4,label:'Large Hail Watch ('+hailLabel+')',hailMM});
+  }
+  if(name.includes('heat warning')) results.push({priority:7,label:'Heat Warning',hailMM});
+  if(name.includes('air quality')) results.push({priority:8,label:'Air Quality Warning',hailMM});
+  if(!results.length) results.push({priority:9,label:extractAlertInfo(props).headline,hailMM});
+  return results;
+}
+
+async function fetchAlbertaAlerts(){
+  const buffer=0.5;
+  const minLon=AB.lonMin-buffer, maxLon=AB.lonMax+buffer, minLat=AB.latMin-buffer, maxLat=AB.latMax+buffer;
+  const url = 'https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit=200&bbox='+
+    minLon+','+minLat+','+maxLon+','+maxLat;
+  try{
+    const res=await fetch(url,{signal:AbortSignal.timeout(15000)});
+    if(!res.ok){ console.warn('[abAlerts] bad response', res.status); return []; }
+    const gj=await res.json();
+    return gj.features||[];
+  }catch(e){ console.warn('[abAlerts]',e); return []; }
+}
+
+function positionAbAlertsPanel(){
+  const abPanel=document.getElementById('ab-panel');
+  const alertsPanel=document.getElementById('ab-alerts-panel');
+  if(!abPanel||!alertsPanel) return;
+  const r=abPanel.getBoundingClientRect();
+  alertsPanel.style.top=(r.bottom+8)+'px';
+  alertsPanel.style.right='10px';
+  positionMockAlertsPanel();
+}
+window.addEventListener('resize', positionAbAlertsPanel);
+
+// Stacks directly below the AB Warnings/Watches panel — only relevant while it's visible.
+function positionMockAlertsPanel(){
+  const alertsPanel=document.getElementById('ab-alerts-panel');
+  const mockPanel=document.getElementById('mock-alerts-panel');
+  if(!alertsPanel||!mockPanel) return;
+  const r=alertsPanel.getBoundingClientRect();
+  mockPanel.style.top=(r.bottom+8)+'px';
+  mockPanel.style.right='10px';
+}
+
+const AB_ALERT_CANONICAL=[
+  {group:'tornado',priorities:[1,2],label:'Tornado'},
+  {group:'hail',priorities:[3,4],label:'Large Hail'},
+  {priority:5,label:'Severe T-Storm Warning'},
+  {priority:6,label:'Severe T-Storm Watch'},
+  {priority:7,label:'Heat Warning'},
+  {priority:8,label:'Air Quality Warning'}
+];
+
+// Tornado/Large Hail circle markers — red for warning-tier (priority 1 or 3), yellow for
+// watch-tier (priority 2 or 4), drawn at each affected station's actual lat/lon. If a
+// station somehow falls under both tiers, warning (red) takes precedence.
+function updateTornadoHailCircles(rows){
+  if(!tornadoHailCircleLayer){ tornadoHailCircleLayer=L.layerGroup().addTo(map); }
+  tornadoHailCircleLayer.clearLayers();
+  const warnStations=new Set(), watchStations=new Set();
+  rows.forEach(r=>{
+    if(r.priority!==1 && r.priority!==2 && r.priority!==3 && r.priority!==4) return;
+    const target=(r.priority===1||r.priority===3)?warnStations:watchStations;
+    Object.values(r.zoneStations).forEach(list=>list.forEach(id=>target.add(id)));
+  });
+  watchStations.forEach(id=>{ if(warnStations.has(id)) watchStations.delete(id); });
+  const addCircle=(id,color)=>{
+    const s=stations[id];
+    if(!s) return;
+    L.circleMarker([s.lat,s.lon],{
+      pane:'alertCircles',radius:12,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:false
+    }).addTo(tornadoHailCircleLayer);
+  };
+  warnStations.forEach(id=>addCircle(id,'#ff2222'));
+  watchStations.forEach(id=>addCircle(id,'#ffdd00'));
+}
+
+async function refreshAbAlertsPanel(){
+  const panel=document.getElementById('ab-alerts-panel');
+  if(!panel) return;
+  panel.style.display='block';
+  positionAbAlertsPanel();
+const listEl=document.getElementById('ab-alerts-list');
+  const warnEl=document.getElementById('ab-alerts-warn-num');
+  const watchEl=document.getElementById('ab-alerts-watch-num');
+const features=await fetchAlbertaAlerts();
+  console.log('[abAlerts] fetched',features.length,'AB-region alerts');
+  // Group by alert type/label instead of one row per raw feature — ECCC often issues
+  // the same alert type as several overlapping/adjacent polygons, which would otherwise
+  // produce duplicate rows. For each matched zone, record which specific stations in that
+  // zone fall inside the alert polygon (every station is checked, no centroid shortcut),
+  // merged via Sets so overlapping features of the same alert type don't duplicate entries.
+const groups={};
+  features.forEach(f=>{
+    const props=f.properties||{};
+    const classes=classifyAbAlert(props);
+    classes.forEach(cls=>{
+      const key=cls.priority+'|'+cls.label;
+      if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null};
+      zonePolygons.forEach(z=>{
+        if(!z.stations||!z.stations.length) return;
+        const hitStations=z.stations.filter(s=>pointInGeoJSON(s.lat,s.lon,f.geometry));
+        if(!hitStations.length) return;
+        if(!groups[key].zoneStations[z.shortId]) groups[key].zoneStations[z.shortId]=new Set();
+        hitStations.forEach(s=>groups[key].zoneStations[z.shortId].add(s.id));
+      });
+    });
+  });
+  const rows=Object.values(groups)
+    .map(g=>({...g,zoneStations:Object.fromEntries(Object.entries(g.zoneStations).map(([zId,set])=>[zId,[...set].sort()]))}))
+    .filter(g=>Object.keys(g.zoneStations).length);
+rows.sort((a,b)=>{
+    if(a.priority!==b.priority) return a.priority-b.priority;
+    return (b.hailMM||0)-(a.hailMM||0);
+  });
+  updateTornadoHailCircles(rows);
+// Priorities 2, 4, 6 (Tornado Watch, Large Hail Watch, Severe T-Storm Watch) are the
+// watch tier; everything else active (1,3,5,7,8) is warning-tier — counted by distinct
+// zone, same as the row badges above.
+const WATCH_PRIORITIES=new Set([2,4,6]);
+  const warnZoneSet=new Set(), watchZoneSet=new Set();
+  rows.forEach(r=>{
+    const set=WATCH_PRIORITIES.has(r.priority)?watchZoneSet:warnZoneSet;
+    Object.keys(r.zoneStations).forEach(z=>set.add(z));
+  });
+  warnEl.textContent=warnZoneSet.size;
+  watchEl.textContent=watchZoneSet.size;
+function renderActiveRow(r,idx,styleOverride){
+    const style=styleOverride||{mode:'text',color:severityColorInfo(r.severity).text};
+    const col=style.color;
+    const isBanner=style.mode==='banner';
+    const groupId='ab-alert-grp-'+idx;
+    const zoneIds=Object.keys(r.zoneStations).sort();
+    const zoneRowsHtml=zoneIds.map((zId,zIdx)=>{
+      const stnList=r.zoneStations[zId];
+      const zoneBodyId=groupId+'-z'+zIdx;
+      return '<div style="margin-top:2px;">'+
+        '<div class="ab-alert-zone-header" data-target="'+zoneBodyId+'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:2px 0;">'+
+          '<span style="font-size:11px;color:#ccc;">'+zId+'</span>'+
+          '<span style="display:flex;align-items:center;gap:4px;">'+
+            '<span style="font-size:10px;color:#888;">'+stnList.length+'</span>'+
+            '<span class="ab-alert-zone-caret" style="font-size:10px;color:#888;">▶</span>'+
+          '</span>'+
+        '</div>'+
+        '<div id="'+zoneBodyId+'" style="display:none;font-size:10px;color:#888;padding:0 0 2px 8px;">'+stnList.join(', ')+'</div>'+
+      '</div>';
+    }).join('');
+    const wrapStyle=isBanner?'border-radius:6px;padding:4px 8px;background:'+style.bg+';':'';
+    const badgeStyle=isBanner?'color:'+col+';background:rgba(255,255,255,0.3);':'color:'+col+';background:rgba(255,255,255,0.06);';
+    return '<div style="border-bottom:0.5px solid rgba(255,255,255,0.06);padding:4px 0;'+wrapStyle+'">'+
+      '<div class="ab-alert-grp-header" data-target="'+groupId+'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">'+
+        '<span style="font-size:12px;font-weight:800;color:'+col+';">'+r.label+'</span>'+
+        '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0;">'+
+          '<span style="font-size:11px;font-weight:700;'+badgeStyle+'border-radius:8px;padding:1px 6px;">'+zoneIds.length+'</span>'+
+          '<span class="ab-alert-grp-caret" style="font-size:11px;color:'+col+';">▶</span>'+
+        '</span>'+
+      '</div>'+
+      '<div id="'+groupId+'" style="display:none;margin-top:3px;">'+zoneRowsHtml+'</div>'+
+      '</div>';
+  }
+  function renderGreyRow(label){
+    return '<div style="border-bottom:0.5px solid rgba(255,255,255,0.06);padding:4px 0;opacity:0.4;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+        '<span style="font-size:12px;font-weight:700;color:#888;">'+label+'</span>'+
+        '<span style="font-size:11px;color:#666;">none</span>'+
+      '</div></div>';
+  }
+// Groups whose presence (warning OR watch) should force the panel open — the color
+// used depends on whether a warning-tier member is present within the group.
+const usedRowIdx=new Set();
+  let html='';
+  let rIdx=0;
+  let priorityWarnActive=false, priorityWatchActive=false;
+  AB_ALERT_CANONICAL.forEach(c=>{
+    if(c.group){
+      const matches=[];
+      rows.forEach((r,i)=>{ if(!usedRowIdx.has(i) && c.priorities.includes(r.priority)) matches.push({r,i}); });
+      if(matches.length){
+        matches.forEach(m=>usedRowIdx.add(m.i));
+        const hasWarning=matches.some(m=>m.r.priority===c.priorities[0]);
+        if(hasWarning) priorityWarnActive=true; else priorityWatchActive=true;
+        const zoneStations={};
+        matches.forEach(m=>{
+          Object.entries(m.r.zoneStations).forEach(([zId,list])=>{
+            if(!zoneStations[zId]) zoneStations[zId]=new Set();
+            list.forEach(s=>zoneStations[zId].add(s));
+          });
+        });
+        const merged={label:c.label,zoneStations:Object.fromEntries(Object.entries(zoneStations).map(([zId,set])=>[zId,[...set].sort()]))};
+        html+=renderActiveRow(merged,rIdx++, alertStyleForPriority(hasWarning?c.priorities[0]:c.priorities[1]));
+      } else {
+        html+=renderGreyRow(c.label);
+      }
+      return;
+    }
+    const matchIdx=rows.findIndex((r,i)=>!usedRowIdx.has(i)&&r.priority===c.priority);
+    if(matchIdx!==-1){
+      usedRowIdx.add(matchIdx);
+      html+=renderActiveRow(rows[matchIdx],rIdx++, alertStyleForPriority(c.priority));
+    } else {
+      html+=renderGreyRow(c.label);
+    }
+  });
+  const otherRows=rows.filter((r,i)=>!usedRowIdx.has(i));
+  if(otherRows.length){
+html+='<div style="font-size:calc(var(--ui-font-sm,11px) * 0.75);color:#666;text-transform:uppercase;letter-spacing:0.06em;padding:4px 0 2px;">Other alerts</div>';
+    otherRows.forEach(r=>{ html+=renderActiveRow(r,rIdx++); });
+  } else {
+    html+=renderGreyRow('Other watches/warnings/statements');
+  }
+listEl.innerHTML=html;
+  const collapseBtn=document.getElementById('ab-alerts-collapse-btn');
+  const priorityActive=priorityWarnActive||priorityWatchActive;
+  if(priorityWarnActive){
+    warnEl.style.color='#fff'; warnEl.style.background='#cc2200';
+    warnEl.style.padding='1px 8px'; warnEl.style.borderRadius='10px';
+  } else {
+    warnEl.style.color='#ff5555'; warnEl.style.background='transparent';
+    warnEl.style.padding='0'; warnEl.style.borderRadius='0';
+  }
+  if(priorityWatchActive){
+    watchEl.style.color='#111'; watchEl.style.background='#ffdd00';
+    watchEl.style.padding='1px 8px'; watchEl.style.borderRadius='10px';
+  } else {
+    watchEl.style.color='#ffdd00'; watchEl.style.background='transparent';
+    watchEl.style.padding='0'; watchEl.style.borderRadius='0';
+  }
+  if(priorityActive){
+    listEl.style.display='block';
+    if(collapseBtn) collapseBtn.textContent='▲';
+  } else {
+    listEl.style.display='none';
+    if(collapseBtn) collapseBtn.textContent='▼';
+  }
+  listEl.querySelectorAll('.ab-alert-grp-header').forEach(h=>{
+    h.addEventListener('click',()=>{
+      const body=document.getElementById(h.dataset.target);
+      const caret=h.querySelector('.ab-alert-grp-caret');
+      const open=body.style.display!=='none';
+      body.style.display=open?'none':'block';
+      caret.textContent=open?'▶':'▼';
+    });
+  });
+  listEl.querySelectorAll('.ab-alert-zone-header').forEach(h=>{
+    h.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const body=document.getElementById(h.dataset.target);
+      const caret=h.querySelector('.ab-alert-zone-caret');
+      const open=body.style.display!=='none';
+      body.style.display=open?'none':'block';
+      caret.textContent=open?'▶':'▼';
+    });
+  });
+  positionAbAlertsPanel();
+}
+
+document.getElementById('ab-alerts-collapse-btn')?.addEventListener('click',()=>{
+  const list=document.getElementById('ab-alerts-list');
+  const btn=document.getElementById('ab-alerts-collapse-btn');
+  const collapsed=list.style.display==='none';
+  list.style.display=collapsed?'block':'none';
+  btn.textContent=collapsed?'▲':'▼';
+  positionAbAlertsPanel();
+});
+
+// Same red/yellow logic as updateTornadoHailCircles, but for the single mock GPS point —
+// red if any active classification at that point is tornado/hail warning-tier (priority
+// 1 or 3), else yellow if watch-tier (priority 2 or 4), else no circle.
+function updateMockTornadoHailCircle(){
+  if(mockTornadoHailCircle){ map.removeLayer(mockTornadoHailCircle); mockTornadoHailCircle=null; }
+  if(!window._mockLocationLL) return;
+  const mockAlerts=window._mockLocationAlerts||[];
+  let color=null;
+  mockAlerts.forEach(m=>{
+    (m.classes||[]).forEach(cls=>{
+      if(cls.priority===1||cls.priority===3) color='#ff2222';
+      else if((cls.priority===2||cls.priority===4) && color!=='#ff2222') color='#ffdd00';
+    });
+  });
+  if(!color) return;
+  mockTornadoHailCircle=L.circleMarker([window._mockLocationLL.lat,window._mockLocationLL.lon],{
+    pane:'alertCircles',radius:14,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:false
+  }).addTo(map);
+}
+
+// Same rendering/styling rules as the AB panel (per-classification, banner for
+// Tornado/Large Hail warning-or-watch, plain colored text for the rest) — but built
+// straight from the single mock point's own classifications, no zone/station grouping.
+function refreshMockAlertsPanel(){
+  const panel=document.getElementById('mock-alerts-panel');
+  if(!panel) return;
+  updateMockTornadoHailCircle();
+  if(!window._mockLocationLL){
+    panel.style.display='none';
+    return;
+  }
+  panel.style.display='block';
+  const listEl=document.getElementById('mock-alerts-list');
+  const totalEl=document.getElementById('mock-alerts-total-num');
+  const mockAlerts=window._mockLocationAlerts||[];
+  totalEl.textContent=mockAlerts.length;
+  let priorityActive=false;
+  let html='';
+  if(mockAlerts.length){
+    mockAlerts.forEach(m=>{
+      const info=m.info;
+      const classes=m.classes||[];
+      classes.forEach(cls=>{
+        const style=alertStyleForPriority(cls.priority)||{mode:'text',color:severityColorInfo(info.severity).text};
+        const isBanner=style.mode==='banner';
+        const wrapStyle=isBanner?'border-radius:6px;padding:4px 8px;background:'+style.bg+';':'';
+        if(isBanner) priorityActive=true;
+        html+='<div style="border-bottom:0.5px solid rgba(255,255,255,0.06);padding:4px 0;'+wrapStyle+'">'+
+          '<span style="font-size:12px;font-weight:800;color:'+style.color+';">'+cls.label+'</span>'+
+          (info.area?'<div style="font-size:11px;color:'+(isBanner?style.color:'#888')+';margin-top:1px;">'+info.area+'</div>':'')+
+          '</div>';
+      });
+    });
+  } else {
+    html='<div style="color:#555;font-size:9px;text-align:center;padding:6px 0;">No active alerts</div>';
+  }
+  listEl.innerHTML=html;
+  const collapseBtn=document.getElementById('mock-alerts-collapse-btn');
+  if(priorityActive){
+    listEl.style.display='block';
+    if(collapseBtn) collapseBtn.textContent='▲';
+    totalEl.style.color='#fff';
+    totalEl.style.background='#cc2200';
+    totalEl.style.padding='1px 8px';
+    totalEl.style.borderRadius='10px';
+  } else {
+    listEl.style.display='none';
+    if(collapseBtn) collapseBtn.textContent='▼';
+    totalEl.style.color='#ffdd00';
+    totalEl.style.background='transparent';
+    totalEl.style.padding='0';
+    totalEl.style.borderRadius='0';
+  }
+  positionMockAlertsPanel();
+}
+document.getElementById('mock-alerts-collapse-btn')?.addEventListener('click',()=>{
+  const list=document.getElementById('mock-alerts-list');
+  const btn=document.getElementById('mock-alerts-collapse-btn');
+  const collapsed=list.style.display==='none';
+  list.style.display=collapsed?'block':'none';
+  btn.textContent=collapsed?'▲':'▼';
+  positionMockAlertsPanel();
+});
 
 let alertBannerMinimized = localStorage.getItem('alert_banner_min')==='1';
 let alertMinPill=null;
@@ -1588,6 +2088,15 @@ const list=Array.isArray(window._lastAlertInfo)?window._lastAlertInfo:[window._l
 // Severity is driven by ECCC's own risk_colour_en (Red/Orange/Yellow), not the headline
 // text — a "warning" can be Orange while a "watch" can be Yellow, and severity color is
 // what actually governs display order and highlighting per ECCC convention.
+// Fixed styling for our own warning/watch classification (used for Tornado, Large Hail,
+// and Severe T-Storm rows) — independent of ECCC's risk_colour_en, per priority number.
+function alertStyleForPriority(priority){
+  if(priority===1||priority===3) return {mode:'banner',color:'#fff',bg:'#cc2200'}; // warning-tier: white on red
+  if(priority===2||priority===4) return {mode:'banner',color:'#111',bg:'#ffdd00'}; // watch-tier: black on yellow
+  if(priority===5) return {mode:'text',color:'#ff5555'}; // severe t-storm warning: red font
+  if(priority===6) return {mode:'text',color:'#ffdd00'}; // severe t-storm watch: yellow font
+  return null;
+}
 function severityColorInfo(sev){
   const s=(sev||'').toLowerCase();
   if(s==='red')    return {key:'red',   border:'#ff3333', text:'#ff5555', bg:'#3a0d0d', light:'#ffaaaa', dim:'#ff8888', label:'Red'};
@@ -3300,8 +3809,7 @@ function setLegendCollapsed(collapsed){
   }
 }
 document.getElementById('precip-legend-hide-btn').addEventListener('click',()=>{
-  const legend=document.getElementById('precip-legend');
-  setLegendCollapsed(!legend.classList.contains('collapsed'));
+  toggleLegendVisible(true); // fully hide (not just collapse) and sync the toolbar Legend button's color/state
 });
 function toggleLegendVisible(forceHide){
   const legend=document.getElementById('precip-legend');
@@ -3328,6 +3836,7 @@ document.getElementById('legend-toggle-btn').addEventListener('click',()=>toggle
   if(savedOpacity){document.getElementById('radar-opacity').value=savedOpacity;radarOpacity=parseInt(savedOpacity)/100;}
 })();
 
+document.getElementById('precip-legend')._userHidden=true; // legend hidden by default; user must tap the Legend button to show it
 updateRadarMaxAvailability();
 enableRadar();
 
@@ -3734,10 +4243,14 @@ function onGPSError(err){
 function toggleGPS(){
   requestNotifyPermission();
 if(!gpsActive){
-    console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarker);
+console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarker);
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
     if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
+    window._mockLocationLL=null;
+    window._mockLocationAlerts=[];
+    refreshMockAlertsPanel();
+    refreshAbAlertsPanel();
     gpsActive=true;
     document.getElementById('gps-btn').classList.add('searching');
     document.getElementById('gps-btn').textContent='⊕ …';
@@ -3892,7 +4405,69 @@ function onCompass(e){
   });
 }
 
-document.getElementById('gps-btn').addEventListener('click',toggleGPS);
+document.getElementById('gps-btn').addEventListener('click',function(){
+  if(_mockGpsPicking){
+    _mockGpsPicking=false;
+    this.classList.remove('searching');
+    document.getElementById('gpsStatus').textContent='';
+    return;
+  }
+  toggleGPS();
+});
+
+let _mockGpsPicking=false;
+function setMockGPSAt(lat,lon){
+  if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
+  if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
+  if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
+  _gpsLastLL={lat,lon};
+  const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
+  window._fakeMarker=L.marker([lat,lon],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
+  const tip=_destPoint(lat,lon,0,100);
+  window._fakeHeadingLine=L.polyline([[lat,lon],tip],{color:'#ffdd00',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+  const perp=90;
+  window._fakeTicks=[];
+  [25,50,75,100].forEach(dist=>{
+    const mid=_destPoint(lat,lon,0,dist);
+    const a=_destPoint(mid[0],mid[1],perp,10);
+    const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
+    window._fakeTicks.push(L.polyline([a,b],{color:'#ffdd00',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+    if(dist===100)window._fakeTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ffdd00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km N</span>',iconAnchor:[-4,12]})}).addTo(map));
+  });
+  _showCompassRings(lat,lon);
+  document.getElementById('gpsStatus').textContent='📍 (mock) '+lat.toFixed(4)+', '+lon.toFixed(4);
+  document.getElementById('gpsStatus').style.color='#ffdd00';
+  checkAlertsAtCurrentLocation();
+window._mockLocationLL={lat,lon};
+  window._mockLocationAlerts=[];
+  refreshMockAlertsPanel();
+fetchAlertsNear(lat,lon,0.75).then(features=>{
+    const hits=features.filter(f=>pointInGeoJSON(lat,lon,f.geometry));
+    window._mockLocationAlerts=hits.map(f=>({info:extractAlertInfo(f.properties||{}),classes:classifyAbAlert(f.properties||{})}));
+    refreshMockAlertsPanel();
+    refreshAbAlertsPanel();
+  });
+}
+document.getElementById('gps-btn').addEventListener('contextmenu',function(e){
+  e.preventDefault();
+  if(gpsActive) toggleGPS();
+  _mockGpsPicking=!_mockGpsPicking;
+  const btn=document.getElementById('gps-btn');
+  if(_mockGpsPicking){
+    btn.classList.add('searching');
+    document.getElementById('gpsStatus').textContent='⊕ Tap map to set mock GPS…';
+    document.getElementById('gpsStatus').style.color='#ffaa00';
+  } else {
+    btn.classList.remove('searching');
+    document.getElementById('gpsStatus').textContent='';
+  }
+});
+map.on('click',function(e){
+  if(!_mockGpsPicking) return;
+  _mockGpsPicking=false;
+  document.getElementById('gps-btn').classList.remove('searching');
+  setMockGPSAt(e.latlng.lat,e.latlng.lng);
+});
 
 // ── EC Past Lightning (GeoMet 3h) ─────────────────────────────
 
@@ -4309,8 +4884,9 @@ const src = gpsMarker ? gpsMarker.getLatLng() : _gpsLastLL;
       });
 stationLabelMarkers.push(m);
     });
-    buildStationDropdown();
+buildStationDropdown();
     rebuildStationIcons(); // apply correct font size for current zoom
+    assignStationsToZones();
   });
   
 function buildStationDropdown(){
