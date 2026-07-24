@@ -1755,7 +1755,18 @@ async function refreshAbAlertsPanel(){
 const listEl=document.getElementById('ab-alerts-list');
   const warnEl=document.getElementById('ab-alerts-warn-num');
   const watchEl=document.getElementById('ab-alerts-watch-num');
+  const titleEl=panel.querySelector('.title');
+  let loadingSpan=document.getElementById('ab-alerts-loading');
+  if(!loadingSpan && titleEl){
+    loadingSpan=document.createElement('span');
+    loadingSpan.id='ab-alerts-loading';
+    loadingSpan.style.cssText='font-size:9px;color:#ffaa00;margin-left:6px;letter-spacing:0.04em;';
+    loadingSpan.textContent='⟳ loading…';
+    titleEl.insertBefore(loadingSpan, document.getElementById('ab-alerts-collapse-btn'));
+  }
+  if(loadingSpan) loadingSpan.style.display='inline';
 const features=await fetchAlbertaAlerts();
+  if(loadingSpan) loadingSpan.style.display='none';
   // Group by alert type/label instead of one row per raw feature — ECCC often issues
   // the same alert type as several overlapping/adjacent polygons, which would otherwise
   // produce duplicate rows. For each matched zone, record which specific stations in that
