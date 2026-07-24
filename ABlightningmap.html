@@ -598,6 +598,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     </div>
   </div>
 
+<!-- Add-focus-area pick mode banner -->
+<div id="addview-pick-banner" style="display:none;position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:9200;background:rgba(8,8,18,0.95);border:1.5px solid #88ccff;border-radius:12px;padding:9px 18px;font-family:'Courier New',monospace;font-size:12px;color:#88ccff;text-align:center;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,0.6);white-space:nowrap;">
+  ⊕ Tap the map to add a focus area to track
+</div>
+
 <!-- Storm tracking status banner -->
 <div id="storm-tracking-banner" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:19500;background:#f5f5f5;border:2px solid #333;border-radius:12px;padding:18px 32px;box-shadow:0 6px 24px rgba(0,0,0,0.5);font-family:'Courier New',monospace;text-align:center;pointer-events:none;opacity:0.7;">
     <div style="font-size:15px;font-weight:800;color:#222;letter-spacing:0.04em;">⛈ Tracking storm…</div>
@@ -712,6 +717,7 @@ window.addEventListener('unhandledrejection', function(e){
 
 
 map.on('click', function(e){
+  if(_addViewPicking) return;
   if(!strokes.length && !ecLightningPoints.length && (!zonesVisible || !zonePolygons.length)) return;
   const clickLL=e.latlng;
   const clickPx=map.latLngToContainerPoint(clickLL);
@@ -3599,16 +3605,49 @@ document.getElementById('radar-max-recalc-btn').addEventListener('click',()=>{
   startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
 });
 
-// "+" button — track the CURRENT view (no zoom, no clearing) and add its detections
-// on top of whatever storms are already tracked. Uses whichever frames are already
-// loaded, so it's instant if radar is already visible/tracking.
-document.getElementById('radar-max-addview-btn').addEventListener('click',async ()=>{
+// "+" button — armed "pick mode": pressing it no longer tracks the current view
+// immediately. Instead it highlights the button and shows a message telling the user
+// to tap the map, and the actual tracking pass runs against wherever they tap.
+// Pressing "+" again while armed cancels pick mode without tracking anything.
+let _addViewPicking=false;
+function _setAddViewPickingUI(on){
+  const addBtn=document.getElementById('radar-max-addview-btn');
+  const banner=document.getElementById('addview-pick-banner');
+  _addViewPicking=on;
+  if(addBtn){
+    if(on){
+      addBtn.style.background='rgba(100,180,255,0.25)';
+      addBtn.style.borderColor='#88ccff';
+      addBtn.style.color='#88ccff';
+      addBtn.textContent='✕';
+      addBtn.title='Tap the map to add a focus area — tap here to cancel';
+    } else {
+      addBtn.style.background='transparent';
+      addBtn.style.borderColor='rgba(255,255,255,0.3)';
+      addBtn.style.color='rgba(255,255,255,0.6)';
+      addBtn.textContent='+';
+      addBtn.title='Track current view, keep existing storms';
+    }
+  }
+  if(banner) banner.style.display=on?'block':'none';
+}
+
+document.getElementById('radar-max-addview-btn').addEventListener('click',()=>{
+  const addBtn=document.getElementById('radar-max-addview-btn');
+  if(addBtn.disabled||radarMaxBusy) return;
+  _setAddViewPickingUI(!_addViewPicking);
+});
+
+// Runs the actual "track this location" pass against a specific lat/lng — factored out
+// from the old immediate-on-click version so it can run against wherever the user taps
+// after arming pick mode, rather than always the current map center.
+async function runAddViewTrackingAt(lat,lng){
   const addBtn=document.getElementById('radar-max-addview-btn');
   if(addBtn.disabled||radarMaxBusy) return;
 
-  // First-ever "+" press with tracking off: just flip tracking on quietly (no AB-wide
+  // First-ever "+" use with tracking off: just flip tracking on quietly (no AB-wide
   // scan, no zoom-out overview, no sequential multi-cluster sequence) — the scan below
-  // covers only whatever's already on screen, same as every subsequent "+" press.
+  // covers only the tapped location, same as every subsequent "+" use.
   if(!radarMaxEnabled){
     radarMaxEnabled=true;
     const btn=document.getElementById('radar-max-toggle');
@@ -3634,14 +3673,13 @@ document.getElementById('radar-max-addview-btn').addEventListener('click',async 
     return;
   }
 
-addBtn.textContent='…';
+  addBtn.textContent='…';
   showStormTrackingBanner();
   document.getElementById('radarStatus').textContent='⟳ Zooming in for high-res tracking…';
-  const _addViewCenter=map.getCenter();
-  radarMaxFocusAreas.push({lat:_addViewCenter.lat,lng:_addViewCenter.lng});
-  zoomToLocationTrackingArea(_addViewCenter.lat,_addViewCenter.lng);
+  radarMaxFocusAreas.push({lat,lng});
+  zoomToLocationTrackingArea(lat,lng);
   let _addViewFired=false;
-const _addViewProceed=()=>{
+  const _addViewProceed=()=>{
     if(_addViewFired) return;
     _addViewFired=true;
     document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — tracking current view…';
@@ -3653,6 +3691,13 @@ const _addViewProceed=()=>{
   };
   map.once('moveend', _addViewProceed);
   setTimeout(_addViewProceed, 700);
+}
+
+// The tap that fulfills pick mode — disarms it and kicks off tracking at that point.
+map.on('click', function(e){
+  if(!_addViewPicking) return;
+  _setAddViewPickingUI(false);
+  runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
 });
 document.getElementById('radar-max-sep-slider').addEventListener('input',function(){
   radarMaxSeparationKm=parseInt(this.value);
