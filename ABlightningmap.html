@@ -27,12 +27,15 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
 /* ── Toolbar ── */
 #toolbar {
-  position: absolute; top: 70px; right: 10px; z-index: 1000;
-  display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;
+  position: absolute; top: 70px; left: 10px; right: 10px; z-index: 1000;
+  display: flex; gap: 4px; flex-wrap: nowrap; justify-content: flex-start;
   background: rgba(8,8,18,0.9); border: 0.5px solid rgba(255,255,255,0.12);
   border-radius: 20px; padding: 5px 10px; align-items: center;
-  backdrop-filter: blur(6px); max-width: calc(100vw - 20px);
+  backdrop-filter: blur(6px);
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
 }
+#toolbar::-webkit-scrollbar { display: none; }
+#toolbar .tb-btn, #toolbar #zone-toggle, #toolbar #gps-btn { flex-shrink: 0; }
 .tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
 .tb-btn.active { background: rgba(255,220,0,0.2); border-color: #ffdd00; color: #ffdd00; }
 .tb-btn:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
@@ -677,6 +680,16 @@ function cycleBasemap(){
   localStorage.setItem('basemap',currentBasemap);
 }
 document.getElementById('basemap-btn').addEventListener('click',cycleBasemap);
+
+function positionToolbar(){
+  const radarPanel=document.getElementById('radar-panel');
+  const toolbar=document.getElementById('toolbar');
+  if(!radarPanel||!toolbar) return;
+  const r=radarPanel.getBoundingClientRect();
+  toolbar.style.top=(r.bottom+8)+'px';
+}
+window.addEventListener('resize', positionToolbar);
+setTimeout(positionToolbar, 0);
 
 map.createPane('radar');        map.getPane('radar').style.zIndex        = 350;
 map.createPane('radarMax');     map.getPane('radarMax').style.zIndex     = 700;
@@ -3515,10 +3528,12 @@ function enableRadar(){
   document.getElementById('radar-toggle').classList.add('active');
   document.getElementById('radar-controls').classList.add('visible');
   radarVisible=true; enableRadarCoverage(); buildRadarAnimLoop(); updateLegendVisibility();
+  setTimeout(positionToolbar, 0);
 }
 function disableRadar(){
   document.getElementById('radar-toggle').classList.remove('active');
   document.getElementById('radar-controls').classList.remove('visible');
+  setTimeout(positionToolbar, 0);
   document.getElementById('radarStatus').textContent='';
   stopBtnCountdown('radar-toggle');
   stopAnim();
@@ -3899,6 +3914,7 @@ document.getElementById('radar-opacity').addEventListener('input',function(){
   if(radarLayers[animFrame])radarLayers[animFrame].layer.setOpacity(radarOpacity);
 });
 document.getElementById('radar-toggle').addEventListener('click',()=>{if(radarVisible)disableRadar();else enableRadar();});
+new ResizeObserver(()=>positionToolbar()).observe(document.getElementById('radar-panel'));
 
 const RADAR_LEGEND_INFO={
   'RADAR_1KM_RRAI':{title:'Rain Intensity', layer:'RADAR_1KM_RRAI', style:''},
