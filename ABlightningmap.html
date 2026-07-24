@@ -12,6 +12,13 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
+#toolbar, #toolbar *, #radar-panel, #radar-panel *, #ab-panel, #ab-panel *,
+#gps-btn, #zone-toggle, #alerts-toggle, #station-toggle, #compass-menu-btn,
+#ec-lightning-toggle, #ec-duration-toggle, #basemap-btn, .tb-btn {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; font-family: 'Courier New', monospace; }
 #wrap { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
 #map { flex: 1; width: 100%; touch-action: pan-x pan-y; }
@@ -1670,13 +1677,19 @@ function classifyAbAlert(props){
 async function fetchAlbertaAlerts(){
   const buffer=0.5;
   const minLon=AB.lonMin-buffer, maxLon=AB.lonMax+buffer, minLat=AB.latMin-buffer, maxLat=AB.latMax+buffer;
-  const url = 'https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit=200&bbox='+
+  const LIMIT=500;
+  const url = 'https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit='+LIMIT+'&bbox='+
     minLon+','+minLat+','+maxLon+','+maxLat;
   try{
     const res=await fetch(url,{signal:AbortSignal.timeout(15000)});
     if(!res.ok){ console.warn('[abAlerts] bad response', res.status); return []; }
     const gj=await res.json();
-    return gj.features||[];
+    const feats=gj.features||[];
+    console.log('[abAlerts] raw feature count:',feats.length,'of limit',LIMIT,'numberMatched:',gj.numberMatched,'numberReturned:',gj.numberReturned);
+    if(gj.numberMatched && gj.numberMatched>feats.length){
+      console.warn('[abAlerts] TRUNCATED — numberMatched('+gj.numberMatched+') > returned('+feats.length+'). Real AB alerts may be missing.');
+    }
+    return feats;
   }catch(e){ console.warn('[abAlerts]',e); return []; }
 }
 
@@ -1743,22 +1756,28 @@ const listEl=document.getElementById('ab-alerts-list');
   const warnEl=document.getElementById('ab-alerts-warn-num');
   const watchEl=document.getElementById('ab-alerts-watch-num');
 const features=await fetchAlbertaAlerts();
-  console.log('[abAlerts] fetched',features.length,'AB-region alerts');
   // Group by alert type/label instead of one row per raw feature — ECCC often issues
   // the same alert type as several overlapping/adjacent polygons, which would otherwise
   // produce duplicate rows. For each matched zone, record which specific stations in that
   // zone fall inside the alert polygon (every station is checked, no centroid shortcut),
   // merged via Sets so overlapping features of the same alert type don't duplicate entries.
 const groups={};
-  features.forEach(f=>{
+features.forEach(f=>{
     const props=f.properties||{};
     const classes=classifyAbAlert(props);
     classes.forEach(cls=>{
       const key=cls.priority+'|'+cls.label;
       if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null};
-      zonePolygons.forEach(z=>{
+zonePolygons.forEach(z=>{
         if(!z.stations||!z.stations.length) return;
-        const hitStations=z.stations.filter(s=>pointInGeoJSON(s.lat,s.lon,f.geometry));
+        let hitStations=z.stations.filter(s=>pointInGeoJSON(s.lat,s.lon,f.geometry));
+        // Fallback: some alert polygons (e.g. Air Quality Statements) are drawn coarsely
+        // enough that no individual station point falls inside even though the zone is
+        // clearly affected. If the zone's own centroid is inside the alert polygon,
+        // treat every station in that zone as covered instead of dropping the zone.
+        if(!hitStations.length && pointInGeoJSON(z.centroid.lat,z.centroid.lon,f.geometry)){
+          hitStations=z.stations;
+        }
         if(!hitStations.length) return;
         if(!groups[key].zoneStations[z.shortId]) groups[key].zoneStations[z.shortId]=new Set();
         hitStations.forEach(s=>groups[key].zoneStations[z.shortId].add(s.id));
@@ -2233,9 +2252,8 @@ const locKey=lat.toFixed(2)+','+lon.toFixed(2);
   if(!force && locKey===_alertsLastLocKey) return;
   _alertsLastLocKey=locKey;
 const features=await fetchAlertsNear(lat,lon,0.75);
-  const hits=features.filter(f=>pointInGeoJSON(lat,lon,f.geometry));
+const hits=features.filter(f=>pointInGeoJSON(lat,lon,f.geometry));
 if(hits.length){
-    console.log('[alerts] properties at GPS location:', hits.map(f=>f.properties));
     const infos=sortAlertsBySeverity(hits.map(f=>extractAlertInfo(f.properties||{})));
     const key=JSON.stringify(infos);
     if(key!==_lastActiveAlertKey){ _lastActiveAlertKey=key; showAlertBanner(infos); }
