@@ -1487,6 +1487,7 @@ const ALERTS_WMS_LAYER='Current-Alerts';
 let alertsWmsLayer=null, alertsVisible=false, alertsCheckTimer=null;
 let alertBannerEl=null, _alertsLastLocKey='', _lastActiveAlertKey=null;
 let tornadoHailCircleLayer=null, mockTornadoHailCircle=null;
+let _alertBannerRotateIdx=0, _alertBannerRotateTimer=null;
 
 function enableAlertsLayer(){
   if(alertsWmsLayer) return;
@@ -2008,13 +2009,52 @@ document.getElementById('mock-alerts-collapse-btn')?.addEventListener('click',()
 let alertBannerMinimized = localStorage.getItem('alert_banner_min')==='1';
 let alertMinPill=null;
 
+const ALERT_BANNER_ROTATE_MS=3000; // rotate to the next alert every 3s when more than one is active
+
+function stopAlertBannerRotation(){
+  if(_alertBannerRotateTimer){ clearInterval(_alertBannerRotateTimer); _alertBannerRotateTimer=null; }
+}
+
+// Renders whichever alert is at _alertBannerRotateIdx in window._lastAlertInfo, with a
+// dot-strip indicator when there's more than one so it's clear rotation is happening.
+function renderAlertBannerFrame(){
+  if(!alertBannerEl || !window._lastAlertInfo) return;
+  const list=window._lastAlertInfo;
+  if(_alertBannerRotateIdx>=list.length) _alertBannerRotateIdx=0;
+  const current=list[_alertBannerRotateIdx];
+  const col=severityColorInfo(current.severity);
+  alertBannerEl.style.background=col.bg;
+  alertBannerEl.style.border='2px solid '+col.border;
+  const dotsHtml=list.length>1
+    ? '<div style="display:flex;justify-content:center;gap:4px;margin-top:5px;">'+
+        list.map((_,i)=>'<span style="width:5px;height:5px;border-radius:50%;background:'+(i===_alertBannerRotateIdx?col.text:'rgba(255,255,255,0.25)')+';display:inline-block;"></span>').join('')+
+      '</div>'
+    : '';
+  alertBannerEl.innerHTML=
+    '<button id="alert-banner-min-btn" title="Minimize" style="position:absolute;top:2px;right:4px;background:transparent;border:none;color:'+col.light+';font-size:16px;cursor:pointer;padding:4px 8px;line-height:1;">─</button>'+
+    '<div style="font-size:13px;font-weight:800;color:'+col.text+';letter-spacing:0.05em;">🚨 '+current.headline+(list.length>1?' <span style="color:'+col.light+';font-weight:600;">('+(_alertBannerRotateIdx+1)+'/'+list.length+')</span>':'')+'</div>'+
+    (current.area?'<div style="font-size:10px;color:'+col.light+';margin-top:2px;">'+current.area+'</div>':'')+
+    '<div style="font-size:9px;color:'+col.dim+';margin-top:2px;">Tap for details</div>'+
+    dotsHtml;
+  document.getElementById('alert-banner-min-btn').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    alertBannerMinimized=true;
+    localStorage.setItem('alert_banner_min','1');
+    stopAlertBannerRotation();
+    if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
+    renderAlertMinPill();
+  });
+}
+
 function showAlertBanner(infos){
   const list=Array.isArray(infos)?infos:[infos];
   if(!list.length) return;
   window._lastAlertInfo=list;
+  _alertBannerRotateIdx=0;
 
   if(alertBannerMinimized){
     if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
+    stopAlertBannerRotation();
     renderAlertMinPill();
     return;
   }
@@ -2036,23 +2076,14 @@ if(!alertBannerEl){
     });
     document.body.appendChild(alertBannerEl);
   }
-const primary=list[0];
-  const extra=list.length-1;
-  const col=severityColorInfo(primary.severity);
-  alertBannerEl.style.background=col.bg;
-  alertBannerEl.style.border='2px solid '+col.border;
-  alertBannerEl.innerHTML=
-    '<button id="alert-banner-min-btn" title="Minimize" style="position:absolute;top:2px;right:4px;background:transparent;border:none;color:'+col.light+';font-size:16px;cursor:pointer;padding:4px 8px;line-height:1;">─</button>'+
-    '<div style="font-size:13px;font-weight:800;color:'+col.text+';letter-spacing:0.05em;">🚨 '+primary.headline+(extra>0?' <span style="color:'+col.light+';font-weight:600;">+'+extra+' more</span>':'')+'</div>'+
-    (primary.area?'<div style="font-size:10px;color:'+col.light+';margin-top:2px;">'+primary.area+'</div>':'')+
-    '<div style="font-size:9px;color:'+col.dim+';margin-top:2px;">Tap for details</div>';
-  document.getElementById('alert-banner-min-btn').addEventListener('click', (e)=>{
-    e.stopPropagation();
-    alertBannerMinimized=true;
-    localStorage.setItem('alert_banner_min','1');
-    if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
-    renderAlertMinPill();
-  });
+renderAlertBannerFrame();
+  stopAlertBannerRotation();
+  if(list.length>1){
+    _alertBannerRotateTimer=setInterval(()=>{
+      _alertBannerRotateIdx=(_alertBannerRotateIdx+1)%list.length;
+      renderAlertBannerFrame();
+    }, ALERT_BANNER_ROTATE_MS);
+  }
 }
 
 function renderAlertMinPill(){
@@ -2076,11 +2107,11 @@ const list=Array.isArray(window._lastAlertInfo)?window._lastAlertInfo:[window._l
     badge.style.cssText='position:absolute;top:-4px;right:-4px;background:#ffdd00;color:#3a0d0d;font-size:9px;font-weight:800;border-radius:50%;width:15px;height:15px;display:flex;align-items:center;justify-content:center;font-family:monospace;';
     alertMinPill.appendChild(badge);
   }
-  alertMinPill.addEventListener('click', ()=>{
+alertMinPill.addEventListener('click', ()=>{
     alertBannerMinimized=false;
     localStorage.setItem('alert_banner_min','0');
     if(alertMinPill){ alertMinPill.remove(); alertMinPill=null; }
-    if(window._lastAlertInfo) showAlertBanner(window._lastAlertInfo);
+    if(window._lastAlertInfo){ _alertBannerRotateIdx=0; showAlertBanner(window._lastAlertInfo); }
   });
   document.body.appendChild(alertMinPill);
 }
@@ -2127,6 +2158,7 @@ function formatExpiresRelative(iso){
 }
 
 function hideAlertBanner(){
+  stopAlertBannerRotation();
   if(alertBannerEl){ alertBannerEl.remove(); alertBannerEl=null; }
   if(alertMinPill){ alertMinPill.remove(); alertMinPill=null; }
   window._lastAlertInfo=null;
