@@ -74,7 +74,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 #radar-toggle { background: transparent; border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 11px; padding: 3px 10px; border-radius: 12px; cursor: pointer; transition: all 0.15s; opacity: 0.6; flex-shrink: 0; }
 #radar-toggle.active { background: rgba(100,180,255,0.15); border-color: #88ccff; opacity: 1; }
 #radar-toggle:hover { background: rgba(100,180,255,0.1); opacity: 1; }
-#radar-controls { display: none; flex-direction: column; gap: 6px; }
+#radar-controls { display: none; flex-direction: column; gap: 6px; max-width: 260px; }
 #radar-controls.visible { display: flex; }
 #radar-panel-row { display: flex; align-items: center; gap: 7px; }
 #radar-type { background: rgba(8,8,18,0.9); border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 10px; padding: 2px 4px; border-radius: 8px; cursor: pointer; font-family: monospace; }
@@ -323,8 +323,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       <button id="radar-max-addview-btn" type="button" title="Track current view, keep existing storms" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">+</button>
       <button id="radar-max-settings-btn" type="button" title="Storm tracking parameters" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">⚙</button>
     </div>
-    <div id="radar-controls">
-      <div id="radar-panel-row">
+<div id="radar-controls" style="display:none;position:absolute;z-index:2000;background:rgba(8,8,18,0.97);border:0.5px solid rgba(100,180,255,0.3);border-radius:14px;padding:10px;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.7);">
+      <div id="radar-panel-row" style="flex-wrap:wrap;">
         <button id="anim-play-btn">▶</button>
         <select id="radar-type">
           <option value="RADAR_1KM_RRAI" selected>Rain</option>
@@ -3534,9 +3534,20 @@ function startAnim(){
 }
 function stopAnim(){ if(animTimer){clearInterval(animTimer);animTimer=null;} }
 
+function positionRadarControlsPopup(){
+  const btn=document.getElementById('radar-toggle');
+  const panel=document.getElementById('radar-controls');
+  if(!btn||!panel||window.innerWidth>600) return; // popup mode is mobile-only
+  const r=btn.getBoundingClientRect();
+  panel.style.top=(r.bottom+6)+'px';
+  panel.style.left='8px';
+}
+window.addEventListener('resize', positionRadarControlsPopup);
+
 function enableRadar(){
   document.getElementById('radar-toggle').classList.add('active');
   document.getElementById('radar-controls').classList.add('visible');
+  setTimeout(positionRadarControlsPopup, 0);
   radarVisible=true; enableRadarCoverage(); buildRadarAnimLoop(); updateLegendVisibility();
   setTimeout(positionToolbar, 0);
 }
