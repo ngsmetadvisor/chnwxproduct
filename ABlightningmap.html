@@ -1928,14 +1928,36 @@ document.getElementById('combo-ltg-btn')?.addEventListener('click',()=>openCombo
 document.getElementById('combo-alert-btn')?.addEventListener('click',()=>openComboPanel('alerts'));
 map.on('click', ()=>closeComboPanels());
 
-// Stacks directly below the AB Warnings/Watches panel — only relevant while it's visible.
+// Stacks directly below the AB Warnings/Watches panel on desktop. On mobile, the AB
+// Warnings/Watches panel is display:none unless its combo tab is open — using its
+// bounding rect unconditionally collapsed to {top:0,bottom:0} and pinned the mock
+// panel to the very top of the screen, on top of the toolbar/radar controls. On
+// mobile, anchor below the open AB alerts combo panel if it's showing, otherwise
+// below the combo bar itself, matching how the other mobile combo popups position.
 function positionMockAlertsPanel(){
-  const alertsPanel=document.getElementById('ab-alerts-panel');
   const mockPanel=document.getElementById('mock-alerts-panel');
-  if(!alertsPanel||!mockPanel) return;
+  if(!mockPanel) return;
+  if(window.innerWidth<=600){
+    const alertsPanel=document.getElementById('ab-alerts-panel');
+    const bar=document.getElementById('mobile-combo-bar');
+    const anchor=(alertsPanel&&alertsPanel.classList.contains('combo-show'))?alertsPanel:bar;
+    if(!anchor) return;
+    const r=anchor.getBoundingClientRect();
+    mockPanel.style.position='fixed';
+    mockPanel.style.top=(r.bottom+8)+'px';
+    mockPanel.style.left='10px';
+    mockPanel.style.right='10px';
+    mockPanel.style.maxWidth='none';
+    return;
+  }
+  const alertsPanel=document.getElementById('ab-alerts-panel');
+  if(!alertsPanel) return;
   const r=alertsPanel.getBoundingClientRect();
+  mockPanel.style.position='absolute';
   mockPanel.style.top=(r.bottom+8)+'px';
+  mockPanel.style.left='';
   mockPanel.style.right='10px';
+  mockPanel.style.maxWidth='280px';
 }
 
 const AB_ALERT_CANONICAL=[
