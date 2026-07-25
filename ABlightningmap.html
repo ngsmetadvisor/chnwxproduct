@@ -1653,6 +1653,7 @@ let _alertsCheckSeq=0; // bumped every time checkAlertsAtCurrentLocation is call
 let _abAlertsPriorityActive=false;
 let _abAlertsDismissedKey=null, _abAlertsLastVibrateKey=null;
 let tornadoHailCircleLayer=null, mockTornadoHailCircle=null, gpsTornadoHailCircle=null;
+let otherAlertCircleLayer=null, otherAlertCircleGroups={}; // yellow circles for non-tornado/hail alerts, shown only while their row is expanded
 let _alertBannerRotateIdx=0, _alertBannerRotateTimer=null;
 
 function enableAlertsLayer(){
@@ -2035,6 +2036,33 @@ warnStations.forEach((entries,id)=>addCircle(id,'#ff2222',entries,true));
   watchStations.forEach((entries,id)=>addCircle(id,'#ffdd00',entries,false));
 }
 
+// Shows/hides yellow circles for one alert row's affected stations — only called from
+// the row's own expand/collapse click, never automatically. Tornado/Large Hail rows are
+// skipped here since those already get automatic red/yellow circles from the function above.
+function toggleOtherAlertCircles(groupId, show){
+  if(!otherAlertCircleLayer){ otherAlertCircleLayer=L.layerGroup().addTo(map); }
+  (otherAlertCircleGroups[groupId]||[]).forEach(m=>otherAlertCircleLayer.removeLayer(m));
+  otherAlertCircleGroups[groupId]=[];
+  if(!show) return;
+  const stash=window._alertRowDataStore && window._alertRowDataStore[groupId];
+  if(!stash || stash.skip) return;
+  const r=stash.row;
+  const ids=new Set();
+  Object.values(r.zoneStations||{}).forEach(list=>list.forEach(id=>ids.add(id)));
+  ids.forEach(id=>{
+    const s=stations[id];
+    if(!s) return;
+    const m=L.circleMarker([s.lat,s.lon],{
+      pane:'alertCircles',renderer:alertCirclesRenderer,radius:12,weight:2.5,color:'#ffdd00',fillColor:'#ffdd00',fillOpacity:0.18,interactive:true
+    }).addTo(otherAlertCircleLayer);
+    m.on('click', function(e){
+      L.DomEvent.stopPropagation(e);
+      showStationAlertPopup(id,s,[{label:r.label,infos:r.infos||[]}],false,'#ffdd00');
+    });
+    otherAlertCircleGroups[groupId].push(m);
+  });
+}
+
 // Shows the full warning/watch message for a tapped alert circle — reuses the same
 // modal as the right-click "Weather alert here" action (deduped across entries) so
 // tapping the circle reads exactly like the right-click flow.
@@ -2175,11 +2203,13 @@ warnEl.textContent=warnZoneSet.size;
   const comboWatch=document.getElementById('combo-watch-count');
   if(comboWarn) comboWarn.textContent=warnZoneSet.size;
   if(comboWatch) comboWatch.textContent=watchZoneSet.size;
-function renderActiveRow(r,idx,styleOverride){
+function renderActiveRow(r,idx,styleOverride,skipCircles){
     const style=styleOverride||{mode:'text',color:severityColorInfo(r.severity).text};
     const col=style.color;
     const isBanner=style.mode==='banner';
     const groupId='ab-alert-grp-'+idx;
+    window._alertRowDataStore=window._alertRowDataStore||{};
+    window._alertRowDataStore[groupId]={row:r,skip:!!skipCircles};
 const zoneIds=Object.keys(r.zoneStations).sort();
 const zoneRowsHtml=zoneIds.map((zId,zIdx)=>{
       const stnList=r.zoneStations[zId];
@@ -2237,7 +2267,10 @@ const zoneRowsHtml=zoneIds.map((zId,zIdx)=>{
   }
 // Groups whose presence (warning OR watch) should force the panel open — the color
 // used depends on whether a warning-tier member is present within the group.
-const usedRowIdx=new Set();
+window._alertRowDataStore={};
+  if(otherAlertCircleLayer) otherAlertCircleLayer.clearLayers();
+  otherAlertCircleGroups={};
+  const usedRowIdx=new Set();
   let html='';
   let rIdx=0;
   let priorityWarnActive=false, priorityWatchActive=false;
@@ -2257,7 +2290,7 @@ const usedRowIdx=new Set();
           });
         });
         const merged={label:c.label,zoneStations:Object.fromEntries(Object.entries(zoneStations).map(([zId,set])=>[zId,[...set].sort()]))};
-        html+=renderActiveRow(merged,rIdx++, alertStyleForPriority(hasWarning?c.priorities[0]:c.priorities[1]));
+html+=renderActiveRow(merged,rIdx++, alertStyleForPriority(hasWarning?c.priorities[0]:c.priorities[1]), true);
       } else {
         html+=renderGreyRow(c.label);
       }
@@ -2323,13 +2356,14 @@ if(window._abAlertsCurrentKey!==_abAlertsLastVibrateKey){
     _abAlertsDismissedKey=null;
     _abAlertsLastVibrateKey=null;
   }
-  listEl.querySelectorAll('.ab-alert-grp-header').forEach(h=>{
+listEl.querySelectorAll('.ab-alert-grp-header').forEach(h=>{
     h.addEventListener('click',()=>{
       const body=document.getElementById(h.dataset.target);
       const caret=h.querySelector('.ab-alert-grp-caret');
       const open=body.style.display!=='none';
       body.style.display=open?'none':'block';
       caret.textContent=open?'▶':'▼';
+      toggleOtherAlertCircles(h.dataset.target, !open);
     });
   });
 listEl.querySelectorAll('.ab-alert-zone-header').forEach(h=>{
