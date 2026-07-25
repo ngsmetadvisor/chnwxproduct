@@ -1991,21 +1991,15 @@ function updateTornadoHailCircles(rows){
   tornadoHailCircleLayer.clearLayers();
   const warnStations=new Map(), watchStations=new Map(); // id -> [{label,infos}]
   rows.forEach(r=>{
-    if(r.priority===1||r.priority===2||r.priority===3||r.priority===4){
-      // Tornado / Large Hail — existing automatic red (warning) / yellow (watch) tiering
-      const target=(r.priority===1||r.priority===3)?warnStations:watchStations;
-      Object.values(r.zoneStations).forEach(list=>list.forEach(id=>{
-        if(!target.has(id)) target.set(id,[]);
-        target.get(id).push({label:r.label,infos:r.infos||[]});
-      }));
-    } else {
-      // Every other active alert (Severe T-Storm Warning/Watch, Heat Warning,
-      // Air Quality Warning, etc.) — mark affected stations yellow too.
-      Object.values(r.zoneStations).forEach(list=>list.forEach(id=>{
-        if(!watchStations.has(id)) watchStations.set(id,[]);
-        watchStations.get(id).push({label:r.label,infos:r.infos||[]});
-      }));
-    }
+    if(r.priority!==1 && r.priority!==2 && r.priority!==3 && r.priority!==4) return;
+    // Tornado / Large Hail only — automatic red (warning) / yellow (watch) tiering.
+    // Every other alert type (Severe T-Storm, Heat Warning, Air Quality, etc.) is
+    // handled exclusively by toggleOtherAlertCircles(), gated behind row expand/collapse.
+    const target=(r.priority===1||r.priority===3)?warnStations:watchStations;
+    Object.values(r.zoneStations).forEach(list=>list.forEach(id=>{
+      if(!target.has(id)) target.set(id,[]);
+      target.get(id).push({label:r.label,infos:r.infos||[]});
+    }));
   });
   watchStations.forEach((v,id)=>{ if(warnStations.has(id)) watchStations.delete(id); });
   const addCircle=(id,color,entries,isWarning)=>{
