@@ -30,7 +30,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   position: absolute; top: 70px; right: 10px; z-index: 1000;
   display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;
   background: rgba(8,8,18,0.9); border: 0.5px solid rgba(255,255,255,0.12);
-  border-radius: 20px; padding: 5px 10px; align-items: center;
+  border-radius: 16px; padding: 4px 8px; align-items: center;
   backdrop-filter: blur(6px); max-width: calc(100vw - 20px);
 }
 @media (max-width: 600px) {
@@ -38,14 +38,36 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     left: 10px; right: 10px; justify-content: flex-start;
     overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
     max-width: none;
+    gap: 4px;
   }
   #toolbar::-webkit-scrollbar { display: none; }
-  #toolbar .tb-btn, #toolbar #zone-toggle, #toolbar #gps-btn { flex-shrink: 0; }
+#toolbar .tb-btn, #toolbar #zone-toggle, #toolbar #gps-btn {
+    flex-shrink: 0; padding: 7px 10px; min-width: 32px; min-height: 32px;
+    font-size: 13px; display: inline-flex; align-items: center; justify-content: center;
+  }
+  #toolbar .tb-text { display: none; }
 }
-.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
 .tb-btn.active { background: rgba(255,220,0,0.2); border-color: #ffdd00; color: #ffdd00; }
 .tb-btn:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
-.sep { width: 1px; height: 16px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
+.sep { width: 1px; height: 12px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
+#mobile-combo-bar { display:none; }
+@media (max-width: 600px) {
+  #mobile-combo-bar {
+    display:flex; align-items:center; gap:4px;
+    position:absolute; z-index:1000; left:10px; right:10px;
+    background: rgba(8,8,18,0.9); border:0.5px solid rgba(255,255,255,0.12);
+    border-radius:14px; padding:6px 10px; font-family:'Courier New',monospace;
+    font-size:12px; color:#ccc; backdrop-filter:blur(6px);
+    overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+  }
+  #mobile-combo-bar::-webkit-scrollbar{ display:none; }
+  #mobile-combo-bar .combo-seg{ cursor:pointer; white-space:nowrap; padding:3px 6px; border-radius:8px; flex-shrink:0; }
+  #mobile-combo-bar .combo-seg.active{ background:rgba(255,255,255,0.12); }
+  #mobile-combo-bar .combo-sep{ color:#444; flex-shrink:0; }
+  #station-finder, #ab-panel, #ab-alerts-panel { display:none; }
+  #station-finder.combo-show, #ab-panel.combo-show, #ab-alerts-panel.combo-show { display:block; }
+}
 .cd-btn { position: relative; overflow: hidden; }
 .cd-btn::after {
   content:''; position:absolute; inset:0; z-index:-1;
@@ -54,10 +76,10 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   transition: none;
 }
 .cd-btn.cd-active::after { transition: width var(--cd-dur, 360000ms) linear; }
-#zone-toggle { background: transparent; border: 0.5px solid rgba(255,140,0,0.5); color: #ff8c00; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+#zone-toggle { background: transparent; border: 0.5px solid rgba(255,140,0,0.5); color: #ff8c00; font-size: var(--ui-font-sm, 11px); padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
 #zone-toggle.active { background: rgba(255,140,0,0.2); }
 #zone-toggle:hover { background: rgba(255,140,0,0.15); }
-#gps-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 6px 12px; border-radius: 12px; cursor: pointer; transition: all 0.15s; min-height: 32px; }
+#gps-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
 #gps-btn.active { background: rgba(0,255,150,0.15); border-color: #00ff96; color: #00ff96; }
 #gps-btn.searching { border-color: #ffaa00; color: #ffaa00; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
@@ -70,12 +92,32 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   border-radius: 14px; padding: 8px 12px; min-width: 180px; max-width: calc(100vw - 20px);
   backdrop-filter: blur(6px);
 }
+@media (max-width: 600px) {
+  #radar-panel { padding: 5px 10px; gap: 4px; }
+}
 #radar-top-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 #radar-toggle { background: transparent; border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 11px; padding: 3px 10px; border-radius: 12px; cursor: pointer; transition: all 0.15s; opacity: 0.6; flex-shrink: 0; }
 #radar-toggle.active { background: rgba(100,180,255,0.15); border-color: #88ccff; opacity: 1; }
 #radar-toggle:hover { background: rgba(100,180,255,0.1); opacity: 1; }
-#radar-controls { display: none; flex-direction: column; gap: 6px; max-width: 260px; }
+#radar-options-btn { background: transparent; border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 11px; padding: 3px 8px; border-radius: 12px; cursor: pointer; transition: all 0.15s; opacity: 0.6; flex-shrink: 0; }
+#radar-options-btn.active { background: rgba(100,180,255,0.15); border-color: #88ccff; opacity: 1; }
+#radar-options-btn:hover { background: rgba(100,180,255,0.1); opacity: 1; }
+#radar-controls { display: none; flex-direction: column; gap: 6px; }
 #radar-controls.visible { display: flex; }
+@media (max-width: 600px) {
+  #radar-controls.visible {
+    position: absolute; z-index: 2000; max-width: 260px;
+    background: rgba(8,8,18,0.97); border: 0.5px solid rgba(100,180,255,0.3);
+    border-radius: 14px; padding: 10px; backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+  }
+  #radar-panel-row { flex-wrap: wrap; }
+  #radar-top-row {
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  #radar-top-row::-webkit-scrollbar { display: none; }
+  #radar-top-row > * { flex-shrink: 0; }
+}
 #radar-panel-row { display: flex; align-items: center; gap: 7px; }
 #radar-type { background: rgba(8,8,18,0.9); border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 10px; padding: 2px 4px; border-radius: 8px; cursor: pointer; font-family: monospace; }
 #radar-opacity { width: 55px; accent-color: #88ccff; cursor: pointer; }
@@ -296,26 +338,36 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <!-- Toolbar -->
   <div id="toolbar">
 
-    <button id="zone-toggle" class="active">Zones</button>
+<button id="zone-toggle" class="active"><span class="tb-icon">▦</span><span class="tb-text"> Zones</span></button>
     <div class="sep"></div>
     <button id="basemap-btn" class="tb-btn">🌙 Dark</button>
     <div class="sep"></div>
-<button id="gps-btn">⊕ GPS</button>
+<button id="gps-btn"><span class="tb-icon">⊕</span><span class="tb-text"> GPS</span></button>
     <div class="sep"></div>
-    <button id="ec-lightning-toggle" class="tb-btn">⚡ 3h</button>
-    <button id="ec-duration-toggle" class="tb-btn" style="display:none;padding:6px 8px;">12h</button>
+<button id="ec-lightning-toggle" class="tb-btn"><span class="tb-icon">⚡</span><span class="tb-text"> Off</span></button>
     <div class="sep"></div>
-    <button id="station-toggle" class="tb-btn active">📡 Stns</button>
+    <button id="station-toggle" class="tb-btn active"><span class="tb-icon">📡</span><span class="tb-text"> Stns</span></button>
     <div class="sep"></div>
-<button id="compass-menu-btn" class="tb-btn active">🧭 Compass</button>
+<button id="compass-menu-btn" class="tb-btn active"><span class="tb-icon">🧭</span><span class="tb-text"> Compass</span></button>
     <div class="sep"></div>
-    <button id="alerts-toggle" class="tb-btn">🚨 Alerts</button>
+<button id="alerts-toggle" class="tb-btn"><span class="tb-icon">🚨</span><span class="tb-text"> Alerts</span></button>
+  </div>
+
+  <div id="mobile-combo-bar">
+    <span id="combo-stn-btn" class="combo-seg">Stn</span>
+    <span class="combo-sep">|</span>
+    <span id="combo-zone-btn" class="combo-seg">Zone</span>
+    <span class="combo-sep">|</span>
+    <span id="combo-ltg-btn" class="combo-seg">⚡ <span id="combo-ltg-count">0</span></span>
+    <span class="combo-sep">|</span>
+    <span id="combo-alert-btn" class="combo-seg">🚨 <span id="combo-warn-count" style="color:#ff5555;">0</span> <span id="combo-watch-count" style="color:#ffdd00;">0</span></span>
   </div>
 
   <!-- Radar panel -->
 <div id="radar-panel">
     <div id="radar-top-row">
       <button id="radar-toggle">Radar</button>
+      <button id="radar-options-btn" title="Show/hide radar options">▼</button>
       <span id="radarStatus" style="font-size:10px;color:#88ccff;flex:1;text-align:right;"></span>
 <button id="radar-max-toggle" type="button" title="Track storm maxima across frames and mark with ✕" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">Track storms</button>
 <input id="radar-max-opacity-slider" type="range" min="10" max="100" value="70" title="Storm marker/trail/projection opacity" style="width:36px;accent-color:rgba(255,255,255,0.7);">
@@ -323,8 +375,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       <button id="radar-max-addview-btn" type="button" title="Track current view, keep existing storms" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">+</button>
       <button id="radar-max-settings-btn" type="button" title="Storm tracking parameters" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">⚙</button>
     </div>
-<div id="radar-controls" style="display:none;position:absolute;z-index:2000;background:rgba(8,8,18,0.97);border:0.5px solid rgba(100,180,255,0.3);border-radius:14px;padding:10px;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.7);">
-      <div id="radar-panel-row" style="flex-wrap:wrap;">
+<div id="radar-controls">
+      <div id="radar-panel-row">
         <button id="anim-play-btn">▶</button>
         <select id="radar-type">
           <option value="RADAR_1KM_RRAI" selected>Rain</option>
@@ -661,20 +713,21 @@ const BASEMAPS = {
     attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
   })
 };
-const BASEMAP_LABELS = {dark:'🌙 Dark', sat:'🌍 Sat', street:'🗺 Street'};
+const BASEMAP_ICONS = {dark:'🌙', sat:'🌍', street:'🗺'};
+const BASEMAP_TEXT = {dark:'Dark', sat:'Sat', street:'Street'};
 const BASEMAP_ORDER = ['dark','sat','street'];
 
 let currentBasemap=localStorage.getItem('basemap')||'dark';
 BASEMAPS[currentBasemap].addTo(map);
-document.getElementById('basemap-btn').textContent=BASEMAP_LABELS[currentBasemap];
+document.getElementById('basemap-btn').innerHTML='<span class="tb-icon">'+BASEMAP_ICONS[currentBasemap]+'</span><span class="tb-text"> '+BASEMAP_TEXT[currentBasemap]+'</span>';
 
 
 function setBasemap(name){
   if(!BASEMAPS[name]||name===currentBasemap)return;
   map.removeLayer(BASEMAPS[currentBasemap]);
   currentBasemap=name;
-  BASEMAPS[currentBasemap].addTo(map);
-  document.getElementById('basemap-btn').textContent=BASEMAP_LABELS[name];
+BASEMAPS[currentBasemap].addTo(map);
+  document.getElementById('basemap-btn').innerHTML='<span class="tb-icon">'+BASEMAP_ICONS[name]+'</span><span class="tb-text"> '+BASEMAP_TEXT[name]+'</span>';
   // Rebuild station labels with correct shadow
   const isLight=currentBasemap==='street';
 rebuildStationIcons(); // just updates the CSS rule, no marker DOM changes
@@ -694,9 +747,19 @@ function positionToolbar(){
   // Dynamic below-radar-panel positioning is a mobile-only fix (narrow screens where the
   // toolbar can't fit beside the radar panel and needs to stack below it instead).
   // On desktop, leave the toolbar at its fixed CSS top:70px position.
-  if(window.innerWidth>600){ toolbar.style.top=''; return; }
-  const r=radarPanel.getBoundingClientRect();
-  toolbar.style.top=(r.bottom+8)+'px';
+  if(window.innerWidth>600){ toolbar.style.top=''; positionComboBar(); return; }
+const r=radarPanel.getBoundingClientRect();
+  toolbar.style.top=(r.bottom-4)+'px';
+  positionComboBar();
+}
+function positionComboBar(){
+  const bar=document.getElementById('mobile-combo-bar');
+  const toolbar=document.getElementById('toolbar');
+  if(!bar||!toolbar) return;
+  if(window.innerWidth>600){ bar.style.top=''; return; }
+const r=toolbar.getBoundingClientRect();
+  bar.style.top=(r.bottom-4)+'px';
+  repositionOpenComboPanel();
 }
 window.addEventListener('resize', positionToolbar);
 setTimeout(positionToolbar, 0);
@@ -710,17 +773,19 @@ map.getPane('zones').style.pointerEvents = 'none';
 map.createPane('gps');          map.getPane('gps').style.zIndex          = 600;
 map.getPane('gps').style.pointerEvents = 'none';
 map.createPane('stations');     map.getPane('stations').style.zIndex     = 660;
+map.createPane('alertCircles');    map.getPane('alertCircles').style.zIndex    = 670;
 map.createPane('strikes');      map.getPane('strikes').style.zIndex      = 650;
 map.getPane('strikes').style.pointerEvents = 'none';
 map.createPane('ecLightningPane'); map.getPane('ecLightningPane').style.zIndex = 640;
 map.createPane('alertsPane');      map.getPane('alertsPane').style.zIndex      = 340;
 map.getPane('alertsPane').style.pointerEvents = 'none';
-map.createPane('alertCircles');    map.getPane('alertCircles').style.zIndex    = 670;
-map.getPane('alertCircles').style.pointerEvents = 'none';
-
-
 
 const canvasRenderer = L.canvas({ pane:'strikes', tolerance:5 });
+// SVG (not canvas) renderer for alert circles — canvas blocks clicks across its whole
+// bounding rectangle even on transparent pixels, which was eating station clicks
+// everywhere on the map, not just under a circle. SVG only intercepts clicks on the
+// actual drawn shapes, letting empty space pass through to the stations pane below.
+const alertCirclesRenderer = L.svg({ pane:'alertCircles' });
 
 // Global error handler — catch canvas/WebGL crashes and recover
 window.addEventListener('error', function(e){
@@ -924,6 +989,8 @@ function updateABCount(){
   strokes.forEach(m=>{if(m._inAB&&(now-m._strokeTime)<=windowSec)ab++;});
   document.getElementById('ab-count').textContent=ab;
   document.getElementById('ab-total-num').textContent=ab;
+  const comboLtg=document.getElementById('combo-ltg-count');
+  if(comboLtg) comboLtg.textContent=ab;
 }
 
 
@@ -1022,8 +1089,38 @@ function sendProximityNotification(isWarning,count,closestKm){
   }catch(e){ console.warn('[notify]',e); }
 }
 
+function sendPriorityAlertNotification(title,body,tag){
+  if(!('Notification' in window)) return;
+  if(Notification.permission==='default'){
+    // Can't fire silently without a prior grant — ask now (works fine even without a
+    // gesture on most browsers when triggered from app logic like this).
+    Notification.requestPermission().then(p=>{ if(p==='granted') sendPriorityAlertNotification(title,body,tag); });
+    return;
+  }
+  if(Notification.permission!=='granted') return;
+  try{
+    const n=new Notification(title,{body,tag:tag||'priority-alert',renotify:true});
+    n.onclick=()=>{ window.focus(); n.close(); };
+  }catch(e){ console.warn('[notify]',e); }
+}
+
+let _userHasInteracted=false;
+let _pendingVibrate=false;
+['pointerdown','touchstart','click'].forEach(evt=>{
+  document.addEventListener(evt, ()=>{
+    _userHasInteracted=true;
+    if(_pendingVibrate){ _pendingVibrate=false; navigator.vibrate&&navigator.vibrate(PROX_VIBRATE_MS); }
+  }, {once:false, passive:true});
+});
+
 function triggerProximityVibrate(){
   if(!navigator.vibrate) return;
+  if(!_userHasInteracted){
+    // Mobile browsers block vibration until the page has had a user gesture —
+    // queue it so the very first tap/touch fires the buzz that was requested on load.
+    _pendingVibrate=true;
+    return;
+  }
   navigator.vibrate(PROX_VIBRATE_MS);
 }
 
@@ -1524,7 +1621,13 @@ const ALERTS_GEOMET='https://geo.weather.gc.ca/geomet';
 const ALERTS_WMS_LAYER='Current-Alerts';
 let alertsWmsLayer=null, alertsVisible=false, alertsCheckTimer=null;
 let alertBannerEl=null, _alertsLastLocKey='', _lastActiveAlertKey=null;
-let tornadoHailCircleLayer=null, mockTornadoHailCircle=null;
+let _alertsCheckSeq=0; // bumped every time checkAlertsAtCurrentLocation is called so a
+                       // slow/stale in-flight fetch (e.g. still resolving for a location
+                       // you've since switched away from) can never overwrite a newer,
+                       // already-applied result
+let _abAlertsPriorityActive=false;
+let _abAlertsDismissedKey=null, _abAlertsLastVibrateKey=null;
+let tornadoHailCircleLayer=null, mockTornadoHailCircle=null, gpsTornadoHailCircle=null;
 let _alertBannerRotateIdx=0, _alertBannerRotateTimer=null;
 
 function enableAlertsLayer(){
@@ -1735,12 +1838,70 @@ function positionAbAlertsPanel(){
   const abPanel=document.getElementById('ab-panel');
   const alertsPanel=document.getElementById('ab-alerts-panel');
   if(!abPanel||!alertsPanel) return;
+  if(window.innerWidth<=600){ positionMockAlertsPanel(); return; }
   const r=abPanel.getBoundingClientRect();
   alertsPanel.style.top=(r.bottom+8)+'px';
   alertsPanel.style.right='10px';
   positionMockAlertsPanel();
 }
 window.addEventListener('resize', positionAbAlertsPanel);
+
+// ── Mobile combo bar (Stn | Zone | ⚡ | 🚨) ──────────────────────
+let comboPanelOpen=null; // 'stn' | 'ltg' | 'alerts' | null
+
+function positionComboPopup(el){
+  const bar=document.getElementById('mobile-combo-bar');
+  if(!bar||!el) return;
+  const r=bar.getBoundingClientRect();
+  el.style.position='fixed';
+  el.style.top=(r.bottom+6)+'px';
+  el.style.left='10px';
+  el.style.right='10px';
+  el.style.maxWidth='none';
+}
+function repositionOpenComboPanel(){
+  if(!comboPanelOpen) return;
+  const map2={stn:'station-finder',ltg:'ab-panel',alerts:'ab-alerts-panel'};
+  const el=document.getElementById(map2[comboPanelOpen]);
+  if(el) positionComboPopup(el);
+}
+function closeComboPanels(userDismiss){
+  ['station-finder','ab-panel','ab-alerts-panel'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    if(id==='ab-alerts-panel' && _abAlertsPriorityActive && !userDismiss) return; // keep open — active tornado/hail warning or watch, unless the user explicitly dismissed it
+    el.classList.remove('combo-show');
+    if(window.innerWidth<=600) el.style.display='none'; // override inline display set by refreshAbAlertsPanel/others
+  });
+  ['combo-stn-btn','combo-zone-btn','combo-ltg-btn','combo-alert-btn'].forEach(id=>{
+    if(id==='combo-alert-btn' && _abAlertsPriorityActive && !userDismiss) return;
+    document.getElementById(id)?.classList.remove('active');
+  });
+  if(userDismiss) _abAlertsDismissedKey=window._abAlertsCurrentKey||null;
+  comboPanelOpen=null;
+}
+function openComboPanel(which){
+  if(window.innerWidth>600) return;
+  if(comboPanelOpen===which){ closeComboPanels(true); return; }
+  closeComboPanels(true);
+  comboPanelOpen=which;
+  const panelIds={stn:'station-finder',ltg:'ab-panel',alerts:'ab-alerts-panel'};
+  const btnIds={stn:['combo-stn-btn','combo-zone-btn'],ltg:['combo-ltg-btn'],alerts:['combo-alert-btn']};
+const el=document.getElementById(panelIds[which]);
+  if(el){
+    el.style.display=''; // clear any stale inline display so combo-show class controls it
+    el.classList.add('combo-show');
+    if(which==='ltg') el.classList.remove('collapsed');
+    positionComboPopup(el);
+  }
+  if(which==='alerts') refreshAbAlertsPanel();
+  btnIds[which].forEach(id=>document.getElementById(id)?.classList.add('active'));
+}
+document.getElementById('combo-stn-btn')?.addEventListener('click',()=>openComboPanel('stn'));
+document.getElementById('combo-zone-btn')?.addEventListener('click',()=>openComboPanel('stn'));
+document.getElementById('combo-ltg-btn')?.addEventListener('click',()=>openComboPanel('ltg'));
+document.getElementById('combo-alert-btn')?.addEventListener('click',()=>openComboPanel('alerts'));
+map.on('click', ()=>closeComboPanels());
 
 // Stacks directly below the AB Warnings/Watches panel — only relevant while it's visible.
 function positionMockAlertsPanel(){
@@ -1767,28 +1928,113 @@ const AB_ALERT_CANONICAL=[
 function updateTornadoHailCircles(rows){
   if(!tornadoHailCircleLayer){ tornadoHailCircleLayer=L.layerGroup().addTo(map); }
   tornadoHailCircleLayer.clearLayers();
-  const warnStations=new Set(), watchStations=new Set();
+  const warnStations=new Map(), watchStations=new Map(); // id -> [{label,infos}]
   rows.forEach(r=>{
     if(r.priority!==1 && r.priority!==2 && r.priority!==3 && r.priority!==4) return;
     const target=(r.priority===1||r.priority===3)?warnStations:watchStations;
-    Object.values(r.zoneStations).forEach(list=>list.forEach(id=>target.add(id)));
+    Object.values(r.zoneStations).forEach(list=>list.forEach(id=>{
+      if(!target.has(id)) target.set(id,[]);
+      target.get(id).push({label:r.label,infos:r.infos||[]});
+    }));
   });
-  watchStations.forEach(id=>{ if(warnStations.has(id)) watchStations.delete(id); });
-  const addCircle=(id,color)=>{
+  watchStations.forEach((v,id)=>{ if(warnStations.has(id)) watchStations.delete(id); });
+  const addCircle=(id,color,entries,isWarning)=>{
     const s=stations[id];
     if(!s) return;
-    L.circleMarker([s.lat,s.lon],{
-      pane:'alertCircles',radius:12,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:false
+    const m=L.circleMarker([s.lat,s.lon],{
+      pane:'alertCircles',renderer:alertCirclesRenderer,radius:12,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:true
     }).addTo(tornadoHailCircleLayer);
+m.on('click', function(e){
+      if(_addViewPicking){
+        L.DomEvent.stopPropagation(e);
+        _setAddViewPickingUI(false);
+        runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
+        return;
+      }
+      if(_mockGpsPicking){
+        L.DomEvent.stopPropagation(e);
+        _mockGpsPicking=false;
+        document.getElementById('gps-btn').classList.remove('searching');
+        setMockGPSAt(e.latlng.lat, e.latlng.lng);
+        return;
+      }
+      L.DomEvent.stopPropagation(e);
+      showStationAlertPopup(id,s,entries,isWarning,color);
+    });
   };
-  warnStations.forEach(id=>addCircle(id,'#ff2222'));
-  watchStations.forEach(id=>addCircle(id,'#ffdd00'));
+warnStations.forEach((entries,id)=>addCircle(id,'#ff2222',entries,true));
+  watchStations.forEach((entries,id)=>addCircle(id,'#ffdd00',entries,false));
 }
 
+// Shows the full warning/watch message for a tapped alert circle — reuses the same
+// modal as the right-click "Weather alert here" action (deduped across entries) so
+// tapping the circle reads exactly like the right-click flow.
+function showStationAlertPopup(stationId, station, entries, isWarning, color){
+  const infos = [];
+  const seen = new Set();
+  (entries||[]).forEach(e=>{
+    (e.infos||[]).forEach(info=>{
+      const key = JSON.stringify(info);
+      if(!seen.has(key)){ seen.add(key); infos.push(info); }
+    });
+  });
+  // Distance from current GPS fix (or mock location) to the tapped station/point —
+  // same source and formatting used by the lightning-strike and station popups.
+  const src = gpsMarker ? gpsMarker.getLatLng() : _gpsLastLL;
+  let distStr = '';
+  if(src){
+    const slat = src.lat, slon = src.lng ?? src.lon;
+    const km = haversineKm(slat, slon, station.lat, station.lon);
+    distStr = km < 1 ? (km*1000).toFixed(0)+' m' : km.toFixed(1)+' km';
+  }
+
+  // Station detail block — same fields as the plain station popup — included whenever
+  // this is a real RAWS station (not the synthetic mock-location point). Circles sit in
+  // a pane above the station markers, so this is now the only way to see a covered
+  // station's details; show both the station info and the active alert(s) together.
+  const s = stations[stationId];
+  let stationHtml = '';
+  if(s){
+    const elevStr = (s.elev !== null && !isNaN(s.elev)) ? s.elev.toFixed(1) + ' m' : '—';
+    const typeStr = s.type || '—';
+    stationHtml =
+      '<div style="font-size:13px;font-weight:700;color:#00ff96;margin-bottom:4px;">📡 ' + stationId + '</div>' +
+      '<div><span style="color:#666;">Name&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.name + '</div>' +
+      '<div><span style="color:#666;">Type&nbsp;&nbsp;&nbsp;&nbsp;</span>' + typeStr + '</div>' +
+      '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
+      (distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
+      '<div style="margin-top:6px;margin-bottom:6px;"><a href="https://www.google.com/maps?q=' + s.lat.toFixed(5) + ',' + s.lon.toFixed(5) + '" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>' +
+      '<div style="height:0.5px;background:rgba(255,255,255,0.12);margin:4px 0 6px;"></div>';
+  }
+
+  const labels = (entries||[]).map(e=>e.label||e).join(', ');
+  const alertKey = 'stnalert_'+stationId+'_'+Date.now();
+  window._alertPopupStore = window._alertPopupStore || {};
+  window._alertPopupStore[alertKey] = {infos, distStr};
+  const alertHtml =
+    '<div style="font-size:12px;font-weight:800;color:'+color+';margin-bottom:3px;">🚨 '+labels+'</div>'+
+    (infos.length
+      ? '<div style="margin-top:2px;"><button onclick="showFullStationAlert(\''+alertKey+'\')" style="background:transparent;border:0.5px solid '+color+';color:'+color+';font-size:10px;padding:3px 8px;border-radius:8px;cursor:pointer;font-family:monospace;">View full alert</button></div>'
+      : '');
+
+  L.popup({closeButton:true,className:'strike-popup',maxWidth:260})
+    .setLatLng([station.lat,station.lon])
+    .setContent('<div style="font-family:monospace;font-size:11px;line-height:1.8;color:#ccc;min-width:190px;">'+stationHtml+alertHtml+'</div>')
+    .openOn(map);
+}
+
+// Opens the full alert modal (with distance) for a popup's "View full alert" button —
+// looked up by key since inline onclick can't carry the infos array directly.
+function showFullStationAlert(key){
+  const entry = window._alertPopupStore && window._alertPopupStore[key];
+  if(!entry) return;
+  showAlertModal(entry.infos, entry.distStr);
+}
 async function refreshAbAlertsPanel(){
   const panel=document.getElementById('ab-alerts-panel');
   if(!panel) return;
-  panel.style.display='block';
+  if(window.innerWidth<=600 && !_abAlertsPriorityActive){ panel.style.display=(comboPanelOpen==='alerts')?'block':'none'; }
+  else { panel.style.display='block'; }
   positionAbAlertsPanel();
 const listEl=document.getElementById('ab-alerts-list');
   const warnEl=document.getElementById('ab-alerts-warn-num');
@@ -1816,7 +2062,10 @@ features.forEach(f=>{
     const classes=classifyAbAlert(props);
     classes.forEach(cls=>{
       const key=cls.priority+'|'+cls.label;
-      if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null};
+      if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null,infos:[],_infoKeySet:new Set()};
+      const infoObj=extractAlertInfo(props);
+      const infoKey=JSON.stringify(infoObj);
+      if(!groups[key]._infoKeySet.has(infoKey)){ groups[key]._infoKeySet.add(infoKey); groups[key].infos.push(infoObj); }
 zonePolygons.forEach(z=>{
         if(!z.stations||!z.stations.length) return;
         let hitStations=z.stations.filter(s=>pointInGeoJSON(s.lat,s.lon,f.geometry));
@@ -1841,6 +2090,7 @@ rows.sort((a,b)=>{
     return (b.hailMM||0)-(a.hailMM||0);
   });
   updateTornadoHailCircles(rows);
+  window._abAlertsCurrentKey=JSON.stringify(rows.filter(r=>r.priority<=4).map(r=>({p:r.priority,z:Object.keys(r.zoneStations).sort()})));
 // Priorities 2, 4, 6 (Tornado Watch, Large Hail Watch, Severe T-Storm Watch) are the
 // watch tier; everything else active (1,3,5,7,8) is warning-tier — counted by distinct
 // zone, same as the row badges above.
@@ -1850,22 +2100,27 @@ const WATCH_PRIORITIES=new Set([2,4,6]);
     const set=WATCH_PRIORITIES.has(r.priority)?watchZoneSet:warnZoneSet;
     Object.keys(r.zoneStations).forEach(z=>set.add(z));
   });
-  warnEl.textContent=warnZoneSet.size;
+warnEl.textContent=warnZoneSet.size;
   watchEl.textContent=watchZoneSet.size;
+  const comboWarn=document.getElementById('combo-warn-count');
+  const comboWatch=document.getElementById('combo-watch-count');
+  if(comboWarn) comboWarn.textContent=warnZoneSet.size;
+  if(comboWatch) comboWatch.textContent=watchZoneSet.size;
 function renderActiveRow(r,idx,styleOverride){
     const style=styleOverride||{mode:'text',color:severityColorInfo(r.severity).text};
     const col=style.color;
     const isBanner=style.mode==='banner';
     const groupId='ab-alert-grp-'+idx;
     const zoneIds=Object.keys(r.zoneStations).sort();
-    const zoneRowsHtml=zoneIds.map((zId,zIdx)=>{
+const zoneRowsHtml=zoneIds.map((zId,zIdx)=>{
       const stnList=r.zoneStations[zId];
       const zoneBodyId=groupId+'-z'+zIdx;
+      const stnLabel=stnList.length+' station'+(stnList.length!==1?'s':'');
       return '<div style="margin-top:2px;">'+
         '<div class="ab-alert-zone-header" data-target="'+zoneBodyId+'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:2px 0;">'+
           '<span style="font-size:11px;color:#ccc;">'+zId+'</span>'+
           '<span style="display:flex;align-items:center;gap:4px;">'+
-            '<span style="font-size:10px;color:#888;">'+stnList.length+'</span>'+
+            '<span style="font-size:10px;color:#888;">'+stnLabel+'</span>'+
             '<span class="ab-alert-zone-caret" style="font-size:10px;color:#888;">▶</span>'+
           '</span>'+
         '</div>'+
@@ -1874,11 +2129,12 @@ function renderActiveRow(r,idx,styleOverride){
     }).join('');
     const wrapStyle=isBanner?'border-radius:6px;padding:4px 8px;background:'+style.bg+';':'';
     const badgeStyle=isBanner?'color:'+col+';background:rgba(255,255,255,0.3);':'color:'+col+';background:rgba(255,255,255,0.06);';
+    const zoneLabel=zoneIds.length+' zone'+(zoneIds.length!==1?'s':'');
     return '<div style="border-bottom:0.5px solid rgba(255,255,255,0.06);padding:4px 0;'+wrapStyle+'">'+
       '<div class="ab-alert-grp-header" data-target="'+groupId+'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">'+
         '<span style="font-size:12px;font-weight:800;color:'+col+';">'+r.label+'</span>'+
         '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0;">'+
-          '<span style="font-size:11px;font-weight:700;'+badgeStyle+'border-radius:8px;padding:1px 6px;">'+zoneIds.length+'</span>'+
+          '<span style="font-size:11px;font-weight:700;'+badgeStyle+'border-radius:8px;padding:1px 6px;white-space:nowrap;">'+zoneLabel+'</span>'+
           '<span class="ab-alert-grp-caret" style="font-size:11px;color:'+col+';">▶</span>'+
         '</span>'+
       '</div>'+
@@ -1952,12 +2208,33 @@ listEl.innerHTML=html;
     watchEl.style.color='#ffdd00'; watchEl.style.background='transparent';
     watchEl.style.padding='0'; watchEl.style.borderRadius='0';
   }
+_abAlertsPriorityActive=priorityActive;
   if(priorityActive){
     listEl.style.display='block';
     if(collapseBtn) collapseBtn.textContent='▲';
+if(_abAlertsDismissedKey!==window._abAlertsCurrentKey){
+      panel.style.display='block';
+      if(window.innerWidth<=600){
+        panel.classList.add('combo-show');
+        document.getElementById('combo-alert-btn')?.classList.add('active');
+        comboPanelOpen='alerts'; // so the combo button's own click handler knows it's already open and closes it on first tap
+        positionComboPopup(panel); // same spot the combo tab normally opens it at, not the browser default corner
+      }
+    }
+if(window._abAlertsCurrentKey!==_abAlertsLastVibrateKey){
+      triggerProximityVibrate(); // buzz like a lightning proximity hit on new priority alert (also fires on first load if one's already active; Android only — iOS Safari has no Vibration API)
+      const topRow=rows.find(r=>r.priority<=4);
+      if(topRow){
+        const zoneCount=Object.keys(topRow.zoneStations).length;
+        sendPriorityAlertNotification('🚨 '+topRow.label, zoneCount+' zone'+(zoneCount>1?'s':'')+' affected — tap for details', 'ab-priority-alert');
+      }
+      _abAlertsLastVibrateKey=window._abAlertsCurrentKey;
+    }
   } else {
     listEl.style.display='none';
     if(collapseBtn) collapseBtn.textContent='▼';
+    _abAlertsDismissedKey=null;
+    _abAlertsLastVibrateKey=null;
   }
   listEl.querySelectorAll('.ab-alert-grp-header').forEach(h=>{
     h.addEventListener('click',()=>{
@@ -1997,19 +2274,76 @@ function updateMockTornadoHailCircle(){
   if(mockTornadoHailCircle){ map.removeLayer(mockTornadoHailCircle); mockTornadoHailCircle=null; }
   if(!window._mockLocationLL) return;
   const mockAlerts=window._mockLocationAlerts||[];
-  let color=null;
-  mockAlerts.forEach(m=>{
+  let color=null, isWarning=false, labels=[];
+mockAlerts.forEach(m=>{
     (m.classes||[]).forEach(cls=>{
-      if(cls.priority===1||cls.priority===3) color='#ff2222';
-      else if((cls.priority===2||cls.priority===4) && color!=='#ff2222') color='#ffdd00';
+      if(cls.priority===1||cls.priority===3){ color='#ff2222'; isWarning=true; labels.push({label:cls.label,infos:[m.info]}); }
+      else if(cls.priority===2||cls.priority===4){ if(color!=='#ff2222'){ color='#ffdd00'; } labels.push({label:cls.label,infos:[m.info]}); }
     });
   });
   if(!color) return;
   mockTornadoHailCircle=L.circleMarker([window._mockLocationLL.lat,window._mockLocationLL.lon],{
-    pane:'alertCircles',radius:14,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:false
+    pane:'alertCircles',renderer:alertCirclesRenderer,radius:14,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:true
   }).addTo(map);
+mockTornadoHailCircle.on('click', function(e){
+    if(_addViewPicking){
+      L.DomEvent.stopPropagation(e);
+      _setAddViewPickingUI(false);
+      runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
+      return;
+    }
+    if(_mockGpsPicking){
+      L.DomEvent.stopPropagation(e);
+      _mockGpsPicking=false;
+      document.getElementById('gps-btn').classList.remove('searching');
+      setMockGPSAt(e.latlng.lat, e.latlng.lng);
+      return;
+    }
+    L.DomEvent.stopPropagation(e);
+    const fakeStation={lat:window._mockLocationLL.lat,lon:window._mockLocationLL.lon};
+    showStationAlertPopup('Mock Location',fakeStation,labels,isWarning,color);
+  });
 }
 
+// Same logic as updateMockTornadoHailCircle, but at the real GPS fix — this was
+// previously mock-only, so switching from mock back to real GPS never drew a
+// per-location warning circle at all, even when the real position was inside one.
+function updateGpsTornadoHailCircle(){
+  if(gpsTornadoHailCircle){ map.removeLayer(gpsTornadoHailCircle); gpsTornadoHailCircle=null; }
+  const src=gpsActive?(gpsMarker?gpsMarker.getLatLng():_gpsLastLL):null;
+  if(!src) return;
+  const lat=src.lat, lon=src.lng??src.lon;
+  const gpsAlerts=window._gpsLocationAlerts||[];
+  let color=null, isWarning=false, labels=[];
+  gpsAlerts.forEach(m=>{
+    (m.classes||[]).forEach(cls=>{
+      if(cls.priority===1||cls.priority===3){ color='#ff2222'; isWarning=true; labels.push({label:cls.label,infos:[m.info]}); }
+      else if(cls.priority===2||cls.priority===4){ if(color!=='#ff2222'){ color='#ffdd00'; } labels.push({label:cls.label,infos:[m.info]}); }
+    });
+  });
+  if(!color) return;
+  gpsTornadoHailCircle=L.circleMarker([lat,lon],{
+    pane:'alertCircles',renderer:alertCirclesRenderer,radius:14,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:true
+  }).addTo(map);
+  gpsTornadoHailCircle.on('click', function(e){
+    if(_addViewPicking){
+      L.DomEvent.stopPropagation(e);
+      _setAddViewPickingUI(false);
+      runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
+      return;
+    }
+    if(_mockGpsPicking){
+      L.DomEvent.stopPropagation(e);
+      _mockGpsPicking=false;
+      document.getElementById('gps-btn').classList.remove('searching');
+      setMockGPSAt(e.latlng.lat, e.latlng.lng);
+      return;
+    }
+    L.DomEvent.stopPropagation(e);
+    const fakeStation={lat,lon};
+    showStationAlertPopup('My Location',fakeStation,labels,isWarning,color);
+  });
+}
 // Same rendering/styling rules as the AB panel (per-classification, banner for
 // Tornado/Large Hail warning-or-watch, plain colored text for the rest) — but built
 // straight from the single mock point's own classifications, no zone/station grouping.
@@ -2090,7 +2424,8 @@ function renderAlertBannerFrame(){
   const list=window._lastAlertInfo;
   if(_alertBannerRotateIdx>=list.length) _alertBannerRotateIdx=0;
   const current=list[_alertBannerRotateIdx];
-  const col=severityColorInfo(current.severity);
+  const col=severityColorInfoForAlert(current);
+  const headline=current._abPriorityLabel||current.headline;
   alertBannerEl.style.background=col.bg;
   alertBannerEl.style.border='2px solid '+col.border;
   const dotsHtml=list.length>1
@@ -2100,7 +2435,7 @@ function renderAlertBannerFrame(){
     : '';
   alertBannerEl.innerHTML=
     '<button id="alert-banner-min-btn" title="Minimize" style="position:absolute;top:2px;right:4px;background:transparent;border:none;color:'+col.light+';font-size:16px;cursor:pointer;padding:4px 8px;line-height:1;">─</button>'+
-    '<div style="font-size:13px;font-weight:800;color:'+col.text+';letter-spacing:0.05em;">🚨 '+current.headline+(list.length>1?' <span style="color:'+col.light+';font-weight:600;">('+(_alertBannerRotateIdx+1)+'/'+list.length+')</span>':'')+'</div>'+
+    '<div style="font-size:13px;font-weight:800;color:'+col.text+';letter-spacing:0.05em;">🚨 '+headline+(list.length>1?' <span style="color:'+col.light+';font-weight:600;">('+(_alertBannerRotateIdx+1)+'/'+list.length+')</span>':'')+'</div>'+
     (current.area?'<div style="font-size:10px;color:'+col.light+';margin-top:2px;">'+current.area+'</div>':'')+
     '<div style="font-size:9px;color:'+col.dim+';margin-top:2px;">Tap for details</div>'+
     dotsHtml;
@@ -2158,7 +2493,7 @@ function renderAlertMinPill(){
   if(!window._lastAlertInfo) return;
   if(alertMinPill) return;
 const list=Array.isArray(window._lastAlertInfo)?window._lastAlertInfo:[window._lastAlertInfo];
-  const pillCol=severityColorInfo(list[0]&&list[0].severity);
+  const pillCol=list[0]?severityColorInfoForAlert(list[0]):severityColorInfo(null);
   alertMinPill=document.createElement('div');
   alertMinPill.id='alert-min-pill';
   alertMinPill.title='Weather alert'+(list.length>1?'s ('+list.length+')':'')+' — tap to expand';
@@ -2203,6 +2538,16 @@ function severityColorInfo(sev){
   if(s==='yellow') return {key:'yellow',border:'#ffdd00', text:'#ffee66', bg:'#3a3300', light:'#ffee99', dim:'#ffe066', label:'Yellow'};
   return {key:'none', border:'rgba(255,255,255,0.3)', text:'#ccc', bg:'#1a1a1a', light:'#aaa', dim:'#888', label:'Advisory'};
 }
+// Tornado/Large-Hail Warning always forces red styling regardless of ECCC's own
+// risk_colour_en (which can otherwise be Orange/Yellow) — Watch tier forces yellow.
+// info._abPriorityLabel is set only for our own priority classifications (see
+// checkAlertsAtCurrentLocation), so this is a no-op for every other alert type.
+function severityColorInfoForAlert(info){
+  if(info && info._abPriorityLabel){
+    return info._abPriorityIsWarning ? severityColorInfo('red') : severityColorInfo('yellow');
+  }
+  return severityColorInfo(info && info.severity);
+}
 // Red first, then orange, then yellow, then anything uncolored (advisory-level) last.
 function alertSeverityRank(info){
   const key=severityColorInfo(info&&info.severity).key;
@@ -2210,6 +2555,12 @@ function alertSeverityRank(info){
 }
 function sortAlertsBySeverity(infos){
   return [...infos].sort((a,b)=>alertSeverityRank(a)-alertSeverityRank(b));
+}
+// Lowest classifyAbAlert() priority for a raw feature (1=Tornado Warning ... 9=other),
+// or 99 if it doesn't match any of our own tornado/hail/severe-tstorm classes.
+function minAbPriorityForFeature(props){
+  const classes=classifyAbAlert(props);
+  return classes.length?Math.min(...classes.map(c=>c.priority)):99;
 }
 // Expiry timestamp plus a human "in Xh Ym" / "ended Xh Ym ago" suffix computed from now.
 function formatExpiresRelative(iso){
@@ -2233,19 +2584,22 @@ function hideAlertBanner(){
   _lastActiveAlertKey=null;
 }
 
-function showAlertModal(infos){
-  const list=Array.isArray(infos)?infos:[infos];
-  const existing=document.getElementById('alert-modal-overlay');
-  if(existing) existing.remove();
-  const overlay=document.createElement('div');
-  overlay.id='alert-modal-overlay';
-  overlay.style.cssText='position:fixed;inset:0;z-index:19500;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:14px;';
-  const topColor=severityColorInfo(list[0]&&list[0].severity);
-  const box=document.createElement('div');
-  box.style.cssText='background:#1a0d0d;border:1px solid '+topColor.border+';border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;padding:16px;font-family:\'Courier New\',monospace;color:#eee;';
-  const headerHtml=
+function showAlertModal(infos, distanceStr) {
+  const list = Array.isArray(infos) ? infos : [infos];
+  const existing = document.getElementById('alert-modal-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'alert-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:19500;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:14px;';
+  const topColor = severityColorInfo(list[0] && list[0].severity);
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#1a0d0d;border:1px solid '+topColor.border+';border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;padding:16px;font-family:\'Courier New\',monospace;color:#eee;';
+  const headerHtml =
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'+
+    '<div>'+
     '<div style="font-size:15px;font-weight:700;color:'+topColor.text+';">🚨 '+(list.length>1?list.length+' Active Alerts':list[0].headline)+'</div>'+
+    (distanceStr?'<div style="font-size:11px;color:#ffaaaa;margin-top:2px;">📏 '+distanceStr+' from you</div>':'')+
+    '</div>'+
     '<button id="alert-modal-close" style="background:transparent;border:0.5px solid '+topColor.border+';color:'+topColor.text+';border-radius:50%;width:26px;height:26px;cursor:pointer;flex-shrink:0;">✕</button>'+
     '</div>';
   // Each alert renders as a collapsed row (title + severity color + expiry) that
@@ -2300,12 +2654,52 @@ async function checkAlertsAtCurrentLocation(force){
 const locKey=lat.toFixed(2)+','+lon.toFixed(2);
   if(!force && locKey===_alertsLastLocKey) return;
   _alertsLastLocKey=locKey;
+  const _seq=++_alertsCheckSeq; // any later call immediately invalidates this one
 const features=await fetchAlertsNear(lat,lon,0.75);
+  if(_seq!==_alertsCheckSeq) return; // a newer location check started while this fetch was in flight — stale, discard it
 const hits=features.filter(f=>pointInGeoJSON(lat,lon,f.geometry));
+window._gpsLocationAlerts = hits.map(f=>({info:extractAlertInfo(f.properties||{}), classes:classifyAbAlert(f.properties||{})}));
+  updateGpsTornadoHailCircle();
 if(hits.length){
-    const infos=sortAlertsBySeverity(hits.map(f=>extractAlertInfo(f.properties||{})));
+    // Sort so a tornado/large-hail warning-or-watch (our own priority classification)
+    // always leads the banner rotation, ahead of anything ranked only by ECCC's own
+    // severity color — this is what makes the top banner show the priority alert for
+    // your current/mock location first, not whichever alert happens to sort highest
+    // by color alone.
+    const sortedHits=[...hits].sort((a,b)=>{
+      const pa=minAbPriorityForFeature(a.properties||{}), pb=minAbPriorityForFeature(b.properties||{});
+      if(pa!==pb) return pa-pb;
+      return alertSeverityRank(extractAlertInfo(a.properties||{}))-alertSeverityRank(extractAlertInfo(b.properties||{}));
+    });
+const infos=sortedHits.map(f=>{
+      const info=extractAlertInfo(f.properties||{});
+      const classes=classifyAbAlert(f.properties||{});
+      const topPriorityClass=classes.filter(c=>c.priority<=4).sort((a,b)=>a.priority-b.priority)[0];
+      if(topPriorityClass){
+        info._abPriorityLabel=topPriorityClass.label;
+        info._abPriorityIsWarning=(topPriorityClass.priority===1||topPriorityClass.priority===3);
+      }
+      return info;
+    });
+    // Priority = tornado/large-hail warning-or-watch tier, or ECCC's own Red severity —
+    // forces the banner fully open even if the user had minimized it to the small pill.
+    const hasPriority=sortedHits.some(f=>minAbPriorityForFeature(f.properties||{})<=4)
+      || infos.some(i=>severityColorInfo(i.severity).key==='red');
+if(hasPriority && alertBannerMinimized){
+      alertBannerMinimized=false;
+      localStorage.setItem('alert_banner_min','0');
+      if(alertMinPill){ alertMinPill.remove(); alertMinPill=null; }
+      _lastActiveAlertKey=null; // force a fresh render even if this alert set was already seen while minimized
+    }
     const key=JSON.stringify(infos);
-    if(key!==_lastActiveAlertKey){ _lastActiveAlertKey=key; showAlertBanner(infos); }
+    if(key!==_lastActiveAlertKey){
+      _lastActiveAlertKey=key;
+      showAlertBanner(infos);
+      if(hasPriority){
+        triggerProximityVibrate(); // buzz like a lightning proximity hit on new priority alert at your location (Android only)
+        sendPriorityAlertNotification('🚨 '+infos[0].headline, infos[0].area||'Active at your location', 'gps-priority-alert');
+      }
+    }
   } else {
     hideAlertBanner();
   }
@@ -3535,7 +3929,7 @@ function startAnim(){
 function stopAnim(){ if(animTimer){clearInterval(animTimer);animTimer=null;} }
 
 function positionRadarControlsPopup(){
-  const btn=document.getElementById('radar-toggle');
+  const btn=document.getElementById('radar-options-btn');
   const panel=document.getElementById('radar-controls');
   if(!btn||!panel||window.innerWidth>600) return; // popup mode is mobile-only
   const r=btn.getBoundingClientRect();
@@ -3546,7 +3940,14 @@ window.addEventListener('resize', positionRadarControlsPopup);
 
 function enableRadar(){
   document.getElementById('radar-toggle').classList.add('active');
-  document.getElementById('radar-controls').classList.add('visible');
+  const _optBtn=document.getElementById('radar-options-btn');
+  const _isMobile=window.innerWidth<=600;
+  if(!_isMobile){
+    document.getElementById('radar-controls').classList.add('visible');
+    if(_optBtn){ _optBtn.classList.add('active'); _optBtn.textContent='▲'; }
+  } else {
+    if(_optBtn){ _optBtn.classList.remove('active'); _optBtn.textContent='▼'; }
+  }
   setTimeout(positionRadarControlsPopup, 0);
   radarVisible=true; enableRadarCoverage(); buildRadarAnimLoop(); updateLegendVisibility();
   setTimeout(positionToolbar, 0);
@@ -3554,6 +3955,8 @@ function enableRadar(){
 function disableRadar(){
   document.getElementById('radar-toggle').classList.remove('active');
   document.getElementById('radar-controls').classList.remove('visible');
+  const _optBtn=document.getElementById('radar-options-btn');
+  if(_optBtn){ _optBtn.classList.remove('active'); _optBtn.textContent='▼'; }
   setTimeout(positionToolbar, 0);
   document.getElementById('radarStatus').textContent='';
   stopBtnCountdown('radar-toggle');
@@ -3564,7 +3967,7 @@ disableRadarCoverage(); radarVisible=false; updateLegendVisibility();
 radarFramesLoaded=false;
   radarMaxPending=false;
   clearRadarMaxMarkers();
-  stopRadarMaxRecalcTimer();
+  stopBtnCountdown('radar-max-toggle');
 }
 
 document.getElementById('anim-play-btn').addEventListener('click',()=>{animPlaying=!animPlaying;if(animPlaying)startAnim();else stopAnim();updateAnimUI();});
@@ -3935,6 +4338,16 @@ document.getElementById('radar-opacity').addEventListener('input',function(){
   if(radarLayers[animFrame])radarLayers[animFrame].layer.setOpacity(radarOpacity);
 });
 document.getElementById('radar-toggle').addEventListener('click',()=>{if(radarVisible)disableRadar();else enableRadar();});
+document.getElementById('radar-options-btn').addEventListener('click',()=>{
+  const panel=document.getElementById('radar-controls');
+  const btn=document.getElementById('radar-options-btn');
+  const nowVisible=!panel.classList.contains('visible');
+  panel.classList.toggle('visible',nowVisible);
+  btn.classList.toggle('active',nowVisible);
+  btn.textContent=nowVisible?'▲':'▼';
+  setTimeout(positionRadarControlsPopup,0);
+  setTimeout(positionToolbar,0);
+});
 new ResizeObserver(()=>positionToolbar()).observe(document.getElementById('radar-panel'));
 
 const RADAR_LEGEND_INFO={
@@ -4336,9 +4749,9 @@ function _destPoint(lat,lon,bearingDeg,distKm){
 
 function onGPSSuccess(pos){
   const{latitude:lat,longitude:lon,accuracy,heading,speed}=pos.coords;
-  document.getElementById('gps-btn').classList.remove('searching');
+document.getElementById('gps-btn').classList.remove('searching');
   document.getElementById('gps-btn').classList.add('active');
-  document.getElementById('gps-btn').textContent='⊕ GPS';
+  document.getElementById('gps-btn').innerHTML='<span class="tb-icon">⊕</span><span class="tb-text"> GPS</span>';
   const accStr=accuracy<1000?'±'+Math.round(accuracy)+'m':'±'+(accuracy/1000).toFixed(1)+'km';
   let bear=null;
   if(heading!==null&&!isNaN(heading)&&heading>=0){
@@ -4403,7 +4816,7 @@ const perpBear=(bear+90)%360;
 }
 function onGPSError(err){
   document.getElementById('gps-btn').classList.remove('searching','active');
-  document.getElementById('gps-btn').textContent='⊕ GPS';
+  document.getElementById('gps-btn').innerHTML='<span class="tb-icon">⊕</span><span class="tb-text"> GPS</span>';
   const msg=err.code===1?'GPS denied':err.code===2?'GPS unavailable':'GPS timeout';
   document.getElementById('gpsStatus').textContent='⚠ '+msg;
   document.getElementById('gpsStatus').style.color='#ff8844';
@@ -4414,6 +4827,7 @@ function toggleGPS(){
   requestNotifyPermission();
 if(!gpsActive){
 console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarker);
+console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarker);
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
     if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
@@ -4421,12 +4835,34 @@ console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarke
     window._mockLocationAlerts=[];
     refreshMockAlertsPanel();
     refreshAbAlertsPanel();
-    gpsActive=true;
+// Clear stale location-based alert state left over from the mock location — the
+// mock's warning banner/key would otherwise linger (or falsely dedupe against) the
+// real GPS fix once it arrives, since the location hasn't actually been rechecked yet.
+// Deliberately do NOT reuse the mock's coordinates here — that just re-fetches the
+// same alert and makes the warning reappear immediately. Fall back to Edmonton
+// instead, same default used when GPS is switched fully off.
+_gpsLastLL = {lat:53.5461, lon:-113.4938};
+    _alertsLastLocKey='';
+    _lastActiveAlertKey=null;
+    hideAlertBanner();
+    // Also clear a minimized banner state left over from the mock demo — otherwise
+    // a real active alert at your actual GPS location would only render as the small
+    // corner pill instead of the full warning banner, since alertBannerMinimized
+    // persists across mock/real switches (and in localStorage).
+    alertBannerMinimized=false;
+    localStorage.setItem('alert_banner_min','0');
+gpsActive=true;
     document.getElementById('gps-btn').classList.add('searching');
-    document.getElementById('gps-btn').textContent='⊕ …';
+    document.getElementById('gps-btn').innerHTML='<span class="tb-icon">⊕</span><span class="tb-text"> …</span>';
     document.getElementById('gpsStatus').textContent='⌛ Locating…';
     document.getElementById('gpsStatus').style.color='#ffaa00';
     if(!navigator.geolocation){onGPSError({code:2});gpsActive=false;return;}
+    // Same call setMockGPSAt() makes right after setting a location — forces an
+    // immediate alert check against the last known position. This also bumps
+    // _alertsCheckSeq, so it's guaranteed to win over any stale mock-location fetch
+    // that might still be in flight, instead of waiting on a real GPS fix that may
+    // be slow or may never come.
+    checkAlertsAtCurrentLocation(true);
 gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHighAccuracy:true,maximumAge:10000,timeout:15000});
 updateRosePanel();
     if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
@@ -4458,15 +4894,23 @@ updateRosePanel();
     if(gpsRing){map.removeLayer(gpsRing);gpsRing=null;}
     if(gpsAccCircle){map.removeLayer(gpsAccCircle);gpsAccCircle=null;}
     if(gpsHeadingLine){gpsHeadingLine._ticks&&gpsHeadingLine._ticks.forEach(t=>map.removeLayer(t));map.removeLayer(gpsHeadingLine);gpsHeadingLine=null;}
+    if(gpsTornadoHailCircle){ map.removeLayer(gpsTornadoHailCircle); gpsTornadoHailCircle=null; }
+    window._gpsLocationAlerts=[];
     _hideCompassRings();
     _gpsPrev=null;
-    document.getElementById('gps-btn').classList.remove('active','searching');
-    document.getElementById('gps-btn').textContent='⊕ GPS';
+document.getElementById('gps-btn').classList.remove('active','searching');
+    document.getElementById('gps-btn').innerHTML='<span class="tb-icon">⊕</span><span class="tb-text"> GPS</span>';
     document.getElementById('gpsStatus').textContent='';
     document.getElementById('gpsStatus').style.color='#00ff96';
-    const fallbackLL=lastLL?{lat:lastLL.lat,lon:lastLL.lng}:{lat:53.5461,lon:-113.4938};
+const fallbackLL={lat:53.5461,lon:-113.4938}; // always default to Edmonton on GPS off, regardless of last real fix
 
     _gpsLastLL=fallbackLL;
+    // Force a fresh alert check at the fallback location too — this branch previously
+    // never re-ran checkAlertsAtCurrentLocation at all, so the banner just kept showing
+    // whatever the last check happened to render (e.g. a mock location's alert) instead
+    // of reflecting the location GPS is actually falling back to now.
+    _alertsLastLocKey='';
+    checkAlertsAtCurrentLocation(true);
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
     if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
@@ -4622,7 +5066,11 @@ fetchAlertsNear(lat,lon,0.75).then(features=>{
     refreshAbAlertsPanel();
   });
 }
+let _gpsBtnLastTriggerAt=0;
 function _gpsBtnEnterMockPickMode(){
+  const now=Date.now();
+  if(now-_gpsBtnLastTriggerAt<600) return; // Android fires BOTH a synthetic 'contextmenu' AND our own touch-timer on one long-press — this collapses the resulting double-call into a single toggle
+  _gpsBtnLastTriggerAt=now;
   if(gpsActive) toggleGPS();
   _mockGpsPicking=!_mockGpsPicking;
   const btn=document.getElementById('gps-btn');
@@ -4854,34 +5302,46 @@ function ecUpdateLegend(){
     '<div style="display:flex;flex-direction:column;gap:2px;">'+ecLegendRowsHTML()+'</div>';
   return leg;
 }
+function updateECLightningBtnUI(){
+  const btn=document.getElementById('ec-lightning-toggle');
+  if(!btn) return;
+  if(!ecLightningEnabled){
+    btn.classList.remove('active');
+    btn.innerHTML='<span class="tb-icon">⚡</span><span class="tb-text"> Off</span>';
+  } else {
+    btn.classList.add('active');
+    btn.innerHTML='<span class="tb-icon">⚡</span><span class="tb-text"> '+ecLightningWindowH+'h</span>';
+  }
+}
 function enableECLightning(){
   ecLightningEnabled=true;
-  document.getElementById('ec-lightning-toggle').classList.add('active');
-  document.getElementById('ec-lightning-toggle').textContent='⚡ '+ecLightningWindowH+'h';
-  document.getElementById('ec-duration-toggle').style.display='inline-block';
   loadECLightning();
   if(!ecLightningTimer) ecLightningTimer=setInterval(loadECLightning,10*60*1000);
   ecUpdateLegend().style.display='block';
+  updateECLightningBtnUI();
 }
 function disableECLightning(){
   ecLightningEnabled=false;
-  document.getElementById('ec-lightning-toggle').classList.remove('active');
-  document.getElementById('ec-duration-toggle').style.display='none';
   ecLightningLayers.forEach(l=>{try{map.removeLayer(l);}catch(e){}});
   ecLightningLayers=[];
   if(ecLightningTimer){clearInterval(ecLightningTimer);ecLightningTimer=null;}
   const leg=document.getElementById('ec-ltg-legend');
   if(leg) leg.style.display='none';
+  updateECLightningBtnUI();
 }
 
 document.getElementById('ec-lightning-toggle').addEventListener('click',()=>{
-  if(ecLightningEnabled) disableECLightning(); else enableECLightning();
-});
-document.getElementById('ec-duration-toggle').addEventListener('click',()=>{
-  ecLightningWindowH = ecLightningWindowH===3 ? 12 : 3;
-  document.getElementById('ec-duration-toggle').textContent = ecLightningWindowH===3 ? '12h' : '3h';
-  document.getElementById('ec-lightning-toggle').textContent='⚡ '+ecLightningWindowH+'h';
-  if(ecLightningEnabled){ loadECLightning(); ecUpdateLegend(); }
+  if(!ecLightningEnabled){
+    ecLightningWindowH=3;
+    enableECLightning();
+  } else if(ecLightningWindowH===3){
+    ecLightningWindowH=12;
+    loadECLightning();
+    ecUpdateLegend();
+    updateECLightningBtnUI();
+  } else {
+    disableECLightning();
+  }
 });
 
 // ── WebSocket ─────────────────────────────────────────────────
@@ -5063,6 +5523,13 @@ m.on('click', function(e){
           L.DomEvent.stopPropagation(e);
           _setAddViewPickingUI(false);
           runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
+          return;
+        }
+        if(_mockGpsPicking){
+          L.DomEvent.stopPropagation(e);
+          _mockGpsPicking=false;
+          document.getElementById('gps-btn').classList.remove('searching');
+          setMockGPSAt(e.latlng.lat, e.latlng.lng);
           return;
         }
         console.log('[station click]', id);
@@ -5730,7 +6197,7 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
       panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     }
   });
-})();  
+})();
 </script>
 </body>
 </html>
