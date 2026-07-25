@@ -1722,6 +1722,16 @@ function extractAlertInfo(props){
   };
 }
 
+// True once an alert's own end/expiration timestamp has passed — a safety net for cases
+// where the OGC API feed still returns a feature briefly after ECCC has actually retired
+// it (its WMS raster layer and this JSON feed don't always update in lockstep).
+function isAlertExpired(props){
+  const iso = props.event_end_datetime || props.expiration_datetime;
+  if(!iso) return false;
+  const t=new Date(iso).getTime();
+  return !isNaN(t) && t<Date.now();
+}
+
 async function fetchAlertsNear(lat,lon,bufferDeg){
   bufferDeg = bufferDeg || 0.75;
   const minLon=lon-bufferDeg, maxLon=lon+bufferDeg, minLat=lat-bufferDeg, maxLat=lat+bufferDeg;
@@ -1732,7 +1742,7 @@ async function fetchAlertsNear(lat,lon,bufferDeg){
     const res=await _fetchWithTimeout(url,12000);
     if(!res.ok){ console.warn('[alerts] bad response', res.status); return []; }
     const gj=await res.json();
-    return gj.features||[];
+    return (gj.features||[]).filter(f=>!isAlertExpired(f.properties||{}));
   }catch(e){ console.warn('[alerts] fetch failed:',e.message||e); return []; }
 }
 
@@ -1838,7 +1848,10 @@ function classifyAbAlert(props){
 function _fetchWithTimeout(url,ms){
   const ctrl=new AbortController();
   const timer=setTimeout(()=>ctrl.abort(),ms);
-  return fetch(url,{signal:ctrl.signal}).finally(()=>clearTimeout(timer));
+  // no-store: api.weather.gc.ca (or a proxy in front of it) can serve a cached response
+  // for an unchanged bbox query, showing an alert as still active after ECCC has already
+  // retired it — force a real network hit every time instead of trusting HTTP cache.
+  return fetch(url,{signal:ctrl.signal,cache:'no-store'}).finally(()=>clearTimeout(timer));
 }
 
 async function fetchAlbertaAlerts(){
@@ -1855,7 +1868,7 @@ async function fetchAlbertaAlerts(){
     if(gj.numberMatched && gj.numberMatched>feats.length){
       console.warn('[abAlerts] TRUNCATED — numberMatched('+gj.numberMatched+') > returned('+feats.length+'). Real AB alerts may be missing.');
     }
-    return feats;
+    return feats.filter(f=>!isAlertExpired(f.properties||{}));
   }catch(e){ console.warn('[abAlerts] fetch failed:',e.message||e); return []; }
 }
 
@@ -2158,11 +2171,29 @@ function renderActiveRow(r,idx,styleOverride){
     const col=style.color;
     const isBanner=style.mode==='banner';
     const groupId='ab-alert-grp-'+idx;
-    const zoneIds=Object.keys(r.zoneStations).sort();
+const zoneIds=Object.keys(r.zoneStations).sort();
 const zoneRowsHtml=zoneIds.map((zId,zIdx)=>{
       const stnList=r.zoneStations[zId];
       const zoneBodyId=groupId+'-z'+zIdx;
       const stnLabel=stnList.length+' station'+(stnList.length!==1?'s':'');
+      // Each station id is clickable — stashes this group's alert infos (+ distance
+      // from current GPS/mock location, if available) keyed by a unique id, so the
+      // click handler wired up after listEl.innerHTML= below can look it up and open
+      // the same full-alert modal used by the map's warning circles.
+      const stnHtml=stnList.map(sid=>{
+        const key='abzone_'+groupId+'-z'+zIdx+'_'+sid;
+        window._alertPopupStore=window._alertPopupStore||{};
+        const s=stations[sid];
+        let distStr='';
+        const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
+        if(src&&s){
+          const slat=src.lat, slon=src.lng??src.lon;
+          const km=haversineKm(slat,slon,s.lat,s.lon);
+          distStr=km<1?(km*1000).toFixed(0)+' m':km.toFixed(1)+' km';
+        }
+        window._alertPopupStore[key]={infos:r.infos||[],distStr};
+        return '<span class="ab-alert-station-link" data-key="'+key+'" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">'+sid+'</span>';
+      }).join(', ');
       return '<div style="margin-top:2px;">'+
         '<div class="ab-alert-zone-header" data-target="'+zoneBodyId+'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:2px 0;">'+
           '<span style="font-size:11px;color:#ccc;">'+zId+'</span>'+
@@ -2171,7 +2202,7 @@ const zoneRowsHtml=zoneIds.map((zId,zIdx)=>{
             '<span class="ab-alert-zone-caret" style="font-size:10px;color:#888;">▶</span>'+
           '</span>'+
         '</div>'+
-        '<div id="'+zoneBodyId+'" style="display:none;font-size:10px;color:#888;padding:0 0 2px 8px;">'+stnList.join(', ')+'</div>'+
+        '<div id="'+zoneBodyId+'" style="display:none;font-size:10px;color:#888;padding:0 0 2px 8px;">'+stnHtml+'</div>'+
       '</div>';
     }).join('');
     const wrapStyle=isBanner?'border-radius:6px;padding:4px 8px;background:'+style.bg+';':'';
@@ -2292,7 +2323,7 @@ if(window._abAlertsCurrentKey!==_abAlertsLastVibrateKey){
       caret.textContent=open?'▶':'▼';
     });
   });
-  listEl.querySelectorAll('.ab-alert-zone-header').forEach(h=>{
+listEl.querySelectorAll('.ab-alert-zone-header').forEach(h=>{
     h.addEventListener('click',(e)=>{
       e.stopPropagation();
       const body=document.getElementById(h.dataset.target);
@@ -2300,6 +2331,13 @@ if(window._abAlertsCurrentKey!==_abAlertsLastVibrateKey){
       const open=body.style.display!=='none';
       body.style.display=open?'none':'block';
       caret.textContent=open?'▶':'▼';
+    });
+  });
+  listEl.querySelectorAll('.ab-alert-station-link').forEach(el=>{
+    el.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const entry=window._alertPopupStore&&window._alertPopupStore[el.dataset.key];
+      if(entry) showAlertModal(entry.infos, entry.distStr);
     });
   });
   positionAbAlertsPanel();
@@ -3711,15 +3749,15 @@ const projPts=[[lastPt.lat,lastPt.lon]];
       projPts.push([ll.lat,ll.lng]);
       const isLast=(h===RADAR_MAX_PROJECT_HOURS);
       const labelHtml=isLast
-        ? '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>'+
-          '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:900;text-shadow:0 0 3px #000,0 0 3px #000;white-space:nowrap;">'+speedLabel+'</div>'
+        ? '<div style="color:'+trColor+';font-size:10px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:2px;white-space:nowrap;">+'+h+'h</div>'+
+          '<div style="color:'+trColor+';font-size:15px;font-family:monospace;font-weight:900;text-shadow:0 0 3px #000,0 0 3px #000,0 0 3px #000;white-space:nowrap;">'+speedLabel+'</div>'
         : '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>';
 const mk=L.marker([ll.lat,ll.lng],{
         pane:'radarMax',interactive:false,
         icon:L.divIcon({
           className:'',
           html:'<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:6px;height:6px;border-radius:50%;background:'+trColor+';box-shadow:0 0 4px #000;"></div>'+labelHtml+'</div>',
-          iconSize:[60,isLast?32:20], iconAnchor:[30,4]
+          iconSize:[90,isLast?46:20], iconAnchor:[45,4]
         })
       }).addTo(map);
       radarMaxProjectionMarkers.push(mk);
