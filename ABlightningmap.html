@@ -1059,7 +1059,21 @@ function updateNotifyStatusUI(){
 function requestNotifyPermission(){
   if(!('Notification' in window)){ updateNotifyStatusUI(); return; }
   if(Notification.permission==='default'){
-    Notification.requestPermission().then(()=>updateNotifyStatusUI());
+    Notification.requestPermission().then((perm)=>{
+      updateNotifyStatusUI();
+      if(perm==='granted'){
+        // Permission was just granted (via this tap) — re-fire the alert checks with
+        // their "already notified" keys cleared. On page load, checkAlertsAtCurrentLocation
+        // and refreshAbAlertsPanel already tried to notify for anything active at that
+        // point, but silently failed since permission wasn't granted yet — and without
+        // this reset, they'd never retry since the key already "matched". This also
+        // covers vibration, since a fresh user gesture just happened.
+        _proxNotifiedKey=null;
+        _abAlertsLastVibrateKey=null;
+        checkAlertsAtCurrentLocation(true);
+        refreshAbAlertsPanel();
+      }
+    });
   } else {
     updateNotifyStatusUI();
   }
@@ -1338,6 +1352,16 @@ function pip(lat,lon,ll){
 // ── Fire Weather Zones ────────────────────────────────────────
 let zoneLayer=null, zonesVisible=true;
 const zonePolygons=[];
+// Zones (KML) and stations (CSV) load via two independent fetches that can resolve in
+// either order. refreshAbAlertsPanel() needs BOTH to be loaded before it can correctly
+// match stations to alert polygons — calling it after only one is ready produces empty
+// rows (no vibrate/notify fires, which is fine), but that risked the "complete" call
+// never actually happening depending on timing. Gate it so refreshAbAlertsPanel() only
+// runs, exactly once, once both are confirmed ready.
+let _zonesLoadedReady=false, _stationsLoadedReady=false;
+function _maybeRefreshAbAlertsOnLoad(){
+  if(_zonesLoadedReady && _stationsLoadedReady) refreshAbAlertsPanel();
+}
 let ecLightningEnabled=false, ecLightningWindowH=3, ecLightningLayers=[], ecLightningTimer=null;
 
 function parseKMLCoords(str){
@@ -1384,7 +1408,8 @@ zoneLayer.addTo(map);
       buildZoneZoomDropdown();
 rebuildZoneCounts();
       assignStationsToZones();
-      refreshAbAlertsPanel();
+      _zonesLoadedReady=true;
+      _maybeRefreshAbAlertsOnLoad();
 }).catch(e=>{document.getElementById('zoneStatus').textContent='Zones unavailable';console.error(e);});
 }
 
@@ -3825,7 +3850,13 @@ stopAnim();
   document.getElementById('anim-scrub').max=times.length-1;
   document.getElementById('anim-scrub').value=times.length-1;
 radarLayers=times.map(time=>{
-    const layer=L.tileLayer.wms(GEOMET+'?',{layers:layerName,styles:radarStyleFor(layerName),version:'1.3.0',transparent:true,format:'image/png',TIME:time,opacity:0,pane:'radar',attribution:'ECCC / MSC GeoMet'});
+    const layer=L.tileLayer.wms(GEOMET+'?',{layers:layerName,styles:radarStyleFor(layerName),version:'1.3.0',transparent:true,format:'image/png',TIME:time,opacity:0,pane:'radar',attribution:'ECCC / MSC GeoMet',
+      // Only fetch tiles once a zoom gesture settles, not continuously during it — with
+      // 12 stacked radar frames + zoomSnap:0.25, every intermediate pinch-zoom step was
+      // otherwise firing a fresh tile request across ALL 12 layers simultaneously, which
+      // is what was crashing the tab on iOS (limited per-tab memory).
+      updateWhenZooming:false, updateWhenIdle:true, keepBuffer:1
+    });
     layer.addTo(map);
     return{time,layer,loaded:false};
   });
@@ -5565,10 +5596,11 @@ stationLabelMarkers.push(m);
 buildStationDropdown();
     rebuildStationIcons(); // apply correct font size for current zoom
     assignStationsToZones();
-    // Stations may finish loading after the zones fetch already rendered the alerts
-    // panel with empty station lists (assignStationsToZones no-ops until BOTH zones
-    // and stations are ready) — re-render now that assignment is actually complete.
-    refreshAbAlertsPanel();
+    // Stations may finish loading before or after the zones fetch — refreshAbAlertsPanel()
+    // (and the vibrate/notify it fires) only runs once both are confirmed ready, via
+    // _maybeRefreshAbAlertsOnLoad(), instead of racing two independent partial calls.
+    _stationsLoadedReady=true;
+    _maybeRefreshAbAlertsOnLoad();
     refreshMockAlertsPanel();
   });
   
