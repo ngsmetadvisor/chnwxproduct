@@ -1652,7 +1652,8 @@ let _alertsCheckSeq=0; // bumped every time checkAlertsAtCurrentLocation is call
                        // you've since switched away from) can never overwrite a newer,
                        // already-applied result
 let _abAlertsPriorityActive=false;
-let _collapsedAlertGroups=new Set(); // stable keys 'tornado'/'hail' — collapsing a group's row also hides its red/yellow circles on the map
+let _collapsedAlertGroups=new Set(); // stable keys 'tornado'/'hail' — controls ONLY circle visibility (via the Hide/Show circles button), independent of row expand/collapse
+let _openAlertRowGroups=new Set(); // stable keys — tracks which rows are manually expanded, independent of _collapsedAlertGroups
 let _abAlertsDismissedKey=null, _abAlertsLastVibrateKey=null;
 let tornadoHailCircleLayer=null, mockTornadoHailCircle=null, gpsTornadoHailCircle=null;
 let alertPolygonLayer=null;
@@ -1794,10 +1795,10 @@ function extractAlertInfo(props){
 function extractAlertInfoWithPriority(props){
   const info=extractAlertInfo(props);
   const classes=classifyAbAlert(props);
-  const topPriorityClass=classes.filter(c=>c.priority<=4).sort((a,b)=>a.priority-b.priority)[0];
-  if(topPriorityClass){
-    info._abPriorityLabel=topPriorityClass.label;
-    info._abPriorityIsWarning=(topPriorityClass.priority===1||topPriorityClass.priority===3);
+  const topClass=classes.sort((a,b)=>a.priority-b.priority)[0];
+  if(topClass){
+    info._abPriorityLabel=topClass.label;
+    info._abPriority=topClass.priority;
   }
   return info;
 }
@@ -1907,11 +1908,11 @@ function classifyAbAlert(props){
   const results=[];
   if(name.includes('tornado warning')) results.push({priority:1,label:'Tornado Warning'+(hailLabel?' ('+hailLabel+' hail)':''),hailMM});
   if(name.includes('tornado watch'))   results.push({priority:2,label:'Tornado Watch'+(hailLabel?' ('+hailLabel+' hail)':''),hailMM});
-  if(name.includes('severe thunderstorm warning')){
-    results.push({priority:5,label:'Severe T-Storm Warning'+(hailLabel?' ('+hailLabel+' hail)':''),hailMM});
+if(name.includes('severe thunderstorm warning')){
+    results.push({priority:5,label:'Severe T-Storm Warning',hailMM});
   }
   if(name.includes('severe thunderstorm watch')){
-    results.push({priority:6,label:'Severe T-Storm Watch'+(hailLabel?' ('+hailLabel+' hail)':''),hailMM});
+    results.push({priority:6,label:'Severe T-Storm Watch',hailMM});
   }
   // Large-hail classification is driven purely by the extracted hail size and this
   // alert's own warning/watch tier — independent of whether the alert itself is
@@ -2216,7 +2217,9 @@ features.forEach(f=>{
     classes.forEach(cls=>{
       const key=cls.priority+'|'+cls.label;
 if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null,infos:[],_infoKeySet:new Set(),stationInfos:{}};
-      const infoObj=extractAlertInfo(props);
+const infoObj=extractAlertInfo(props);
+      infoObj._abPriorityLabel=cls.label;
+      infoObj._abPriority=cls.priority;
       const infoKey=JSON.stringify(infoObj);
       if(!groups[key]._infoKeySet.has(infoKey)){ groups[key]._infoKeySet.add(infoKey); groups[key].infos.push(infoObj); }
 const _fBBox=geometryBBox(f.geometry);
@@ -2279,8 +2282,8 @@ function renderActiveRow(r,idx,styleOverride,skipCircles,explicitGroupId){
     const style=styleOverride||{mode:'text',color:severityColorInfo(r.severity).text};
     const col=style.color;
     const isBanner=style.mode==='banner';
-    const groupId=explicitGroupId||('ab-alert-grp-'+idx);
-    const defaultOpen=explicitGroupId?!_collapsedAlertGroups.has(explicitGroupId):false;
+const groupId=explicitGroupId||('ab-alert-grp-lbl-'+r.label);
+    const defaultOpen=_openAlertRowGroups.has(groupId);
     window._alertRowDataStore=window._alertRowDataStore||{};
     window._alertRowDataStore[groupId]={row:r,skip:!!skipCircles};
 const zoneIds=Object.keys(r.zoneStations).sort();
@@ -2433,17 +2436,18 @@ if(window._abAlertsCurrentKey!==_abAlertsLastVibrateKey){
 listEl.querySelectorAll('.ab-alert-grp-header').forEach(h=>{
     h.addEventListener('click',(e)=>{
       if(e.target.closest('.ab-alert-hide-circles-btn')) return; // handled by its own listener below
-      const body=document.getElementById(h.dataset.target);
-      const caret=h.querySelector('.ab-alert-grp-caret');
-      const open=body.style.display!=='none';
-      body.style.display=open?'none':'block';
-      caret.textContent=open?'▶':'▼';
       const gid=h.dataset.target;
+      const body=document.getElementById(gid);
+      const caret=h.querySelector('.ab-alert-grp-caret');
+      const willOpen=!_openAlertRowGroups.has(gid);
+      if(willOpen) _openAlertRowGroups.add(gid); else _openAlertRowGroups.delete(gid);
+      body.style.display=willOpen?'block':'none';
+      caret.textContent=willOpen?'▼':'▶';
       // Tornado/Hail circle visibility is controlled ONLY by the explicit Hide/Show
       // circles button now — expanding/collapsing the station detail list here no
       // longer touches the map circles for those two groups.
       if(gid!=='tornado' && gid!=='hail'){
-        toggleOtherAlertCircles(gid, !open);
+        toggleOtherAlertCircles(gid, willOpen);
       }
     });
   });
@@ -2766,8 +2770,12 @@ function severityColorInfo(sev){
 // info._abPriorityLabel is set only for our own priority classifications (see
 // checkAlertsAtCurrentLocation), so this is a no-op for every other alert type.
 function severityColorInfoForAlert(info){
-  if(info && info._abPriorityLabel){
-    return info._abPriorityIsWarning ? severityColorInfo('red') : severityColorInfo('yellow');
+  if(info && info._abPriority!=null){
+    const style=alertStyleForPriority(info._abPriority);
+    if(style){
+      const isRed=(style.mode==='banner' ? style.bg==='#cc2200' : style.color==='#ff5555');
+      return isRed?severityColorInfo('red'):severityColorInfo('yellow');
+    }
   }
   return severityColorInfo(info && info.severity);
 }
@@ -2820,7 +2828,7 @@ const topColor = severityColorInfoForAlert(list[0]);
   const headerHtml =
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'+
     '<div>'+
-    '<div style="font-size:15px;font-weight:700;color:'+topColor.text+';">🚨 '+(list.length>1?list.length+' Active Alerts':list[0].headline)+'</div>'+
+    '<div style="font-size:15px;font-weight:700;color:'+topColor.text+';">🚨 '+(list.length>1?list.length+' Active Alerts':(list[0]._abPriorityLabel||list[0].headline))+'</div>'+
     (distanceStr?'<div style="font-size:11px;color:#ffaaaa;margin-top:2px;">📏 '+distanceStr+' from you</div>':'')+
     '</div>'+
     '<button id="alert-modal-close" style="background:transparent;border:0.5px solid '+topColor.border+';color:'+topColor.text+';border-radius:50%;width:26px;height:26px;cursor:pointer;flex-shrink:0;">✕</button>'+
@@ -2834,7 +2842,7 @@ const rowsHtml=list.map((info,idx)=>{
       '<div class="alert-row" data-idx="'+idx+'" style="border:1px solid '+ic.border+';border-radius:8px;margin-top:'+(idx>0?'8px':'0')+';overflow:hidden;">'+
         '<div class="alert-row-header" style="cursor:pointer;padding:8px 10px;background:'+ic.bg+';display:flex;justify-content:space-between;align-items:center;gap:8px;">'+
           '<div style="min-width:0;">'+
-            '<div style="font-size:12px;font-weight:700;color:'+ic.text+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+info.headline+'</div>'+
+'<div style="font-size:12px;font-weight:700;color:'+ic.text+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(info._abPriorityLabel||info.headline)+'</div>'+
             (expStr?'<div style="font-size:10px;color:'+ic.light+';margin-top:2px;">Expires: '+expStr+'</div>':'')+
           '</div>'+
           '<span style="display:flex;align-items:center;gap:6px;flex-shrink:0;">'+
@@ -2911,7 +2919,7 @@ if(hasPriority && alertBannerMinimized){
       showAlertBanner(infos);
       if(hasPriority){
         triggerProximityVibrate(); // buzz like a lightning proximity hit on new priority alert at your location (Android only)
-        sendPriorityAlertNotification('🚨 '+infos[0].headline, infos[0].area||'Active at your location', 'gps-priority-alert');
+sendPriorityAlertNotification('🚨 '+(infos[0]._abPriorityLabel||infos[0].headline), infos[0].area||'Active at your location', 'gps-priority-alert');
       }
     }
   } else {
