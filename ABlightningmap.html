@@ -774,6 +774,7 @@ map.createPane('gps');          map.getPane('gps').style.zIndex          = 600;
 map.getPane('gps').style.pointerEvents = 'none';
 map.createPane('stations');     map.getPane('stations').style.zIndex     = 660;
 map.createPane('alertCircles');    map.getPane('alertCircles').style.zIndex    = 670;
+map.createPane('alertPolygons');   map.getPane('alertPolygons').style.zIndex   = 410;
 map.createPane('strikes');      map.getPane('strikes').style.zIndex      = 650;
 map.getPane('strikes').style.pointerEvents = 'none';
 map.createPane('ecLightningPane'); map.getPane('ecLightningPane').style.zIndex = 640;
@@ -1398,9 +1399,11 @@ poly.bindPopup('<div style="font-family:monospace;min-width:170px;line-height:1.
 // Zone popup is now triggered from the map click handler below (zones pane has no pointer events)
 
 poly.addTo(zoneLayer);
-        const _cLat=f.latlngs.reduce((s,p)=>s+p[0],0)/f.latlngs.length;
+const _cLat=f.latlngs.reduce((s,p)=>s+p[0],0)/f.latlngs.length;
         const _cLon=f.latlngs.reduce((s,p)=>s+p[1],0)/f.latlngs.length;
-        zonePolygons.push({...f,polygon:poly,centroid:{lat:_cLat,lon:_cLon},stations:[]});
+        const _lats=f.latlngs.map(p=>p[0]), _lons=f.latlngs.map(p=>p[1]);
+        const _bbox={minLat:Math.min(..._lats),maxLat:Math.max(..._lats),minLon:Math.min(..._lons),maxLon:Math.max(..._lons)};
+        zonePolygons.push({...f,polygon:poly,centroid:{lat:_cLat,lon:_cLon},bbox:_bbox,stations:[]});
       });
 zoneLayer.addTo(map);
       document.getElementById('zoneStatus').textContent=features.length+' fire weather zones';
@@ -1642,59 +1645,118 @@ function stopBtnCountdown(id){
   btn.style.setProperty('--cd-w','0%');
 }
 
-const ALERTS_GEOMET='https://geo.weather.gc.ca/geomet';
-const ALERTS_WMS_LAYER='Current-Alerts';
-let alertsWmsLayer=null, alertsVisible=false, alertsCheckTimer=null;
+let alertsVisible=false, alertsCheckTimer=null, alertsScope='AB'; // 'AB' or 'CA' — which polygon set is drawn when alertsVisible is true
 let alertBannerEl=null, _alertsLastLocKey='', _lastActiveAlertKey=null;
 let _alertsCheckSeq=0; // bumped every time checkAlertsAtCurrentLocation is called so a
                        // slow/stale in-flight fetch (e.g. still resolving for a location
                        // you've since switched away from) can never overwrite a newer,
                        // already-applied result
 let _abAlertsPriorityActive=false;
+let _collapsedAlertGroups=new Set(); // stable keys 'tornado'/'hail' — collapsing a group's row also hides its red/yellow circles on the map
 let _abAlertsDismissedKey=null, _abAlertsLastVibrateKey=null;
 let tornadoHailCircleLayer=null, mockTornadoHailCircle=null, gpsTornadoHailCircle=null;
+let alertPolygonLayer=null;
 let otherAlertCircleLayer=null, otherAlertCircleGroups={}; // yellow circles for non-tornado/hail alerts, shown only while their row is expanded
 let _alertBannerRotateIdx=0, _alertBannerRotateTimer=null;
 
-function enableAlertsLayer(){
-  if(alertsWmsLayer) return;
-  alertsWmsLayer=L.tileLayer.wms(ALERTS_GEOMET+'?',{
-    layers:ALERTS_WMS_LAYER, version:'1.3.0', format:'image/png',
-    transparent:true, opacity:0.7, pane:'alertsPane',
-    attribution:'⚠ ECCC / MSC GeoMet', _cb:Date.now()
-  }).addTo(map);
+function updateAlertsToggleUI(){
+  const btn=document.getElementById('alerts-toggle');
+  if(!btn) return;
+  if(!alertsVisible){
+    btn.classList.remove('active');
+    btn.innerHTML='<span class="tb-icon">🚨</span><span class="tb-text"> Off</span>';
+  } else {
+    btn.classList.add('active');
+    btn.innerHTML='<span class="tb-icon">🚨</span><span class="tb-text"> '+alertsScope+'</span>';
+  }
+}
+function enableAlertsLayer(scope){
   alertsVisible=true;
-  document.getElementById('alerts-toggle').classList.add('active');
+  alertsScope=scope||'AB';
+  updateAlertsToggleUI();
   refreshAbAlertsPanel();
 }
-function refreshAlertsWmsLayer(){
-  if(alertsWmsLayer) alertsWmsLayer.setParams({_cb:Date.now()});
-}
 function disableAlertsLayer(){
-  if(alertsWmsLayer){ map.removeLayer(alertsWmsLayer); alertsWmsLayer=null; }
   alertsVisible=false;
-  document.getElementById('alerts-toggle').classList.remove('active');
+  updateAlertsToggleUI();
+  if(alertPolygonLayer) alertPolygonLayer.clearLayers();
 }
-
 // Location-based alert banner runs continuously, independent of the visual
 // overlay toggle above — rechecks every 5 min. The first call is deferred with
 // setTimeout(...,0) because gpsMarker/_gpsLastLL are declared with `let` further
 // down in this script; calling synchronously here would hit them in the
 // temporal dead zone (silently swallowed since this is an async function).
-if(!alertsCheckTimer) alertsCheckTimer=setInterval(()=>{ checkAlertsAtCurrentLocation(true); refreshAlertsWmsLayer(); refreshAbAlertsPanel(); }, ALERTS_CHECK_MS);
+if(!alertsCheckTimer) alertsCheckTimer=setInterval(()=>{ checkAlertsAtCurrentLocation(true); refreshAbAlertsPanel(); }, ALERTS_CHECK_MS);
 setTimeout(()=>checkAlertsAtCurrentLocation(true), 0);
 document.getElementById('alerts-toggle').addEventListener('click', ()=>{
-  if(alertsVisible) disableAlertsLayer(); else enableAlertsLayer();
+  if(!alertsVisible){
+    enableAlertsLayer('AB');
+  } else if(alertsScope==='AB'){
+    enableAlertsLayer('CA');
+  } else {
+    disableAlertsLayer();
+  }
 });
 
 // GeoJSON ring [lon,lat] -> pip()-friendly [lat,lon]
 function geojsonRingToLatLon(ring){ return ring.map(c=>[c[1],c[0]]); }
 
+// Normalizes any GeoJSON geometry (Polygon, MultiPolygon, or a GeometryCollection
+// bundling either) into a flat array of ring-arrays — shared by every geometry
+// consumer below so Polygon/MultiPolygon/GeometryCollection handling lives in one
+// place. GeometryCollection support matters because some ECCC storm-based warnings
+// bundle a Polygon inside a GeometryCollection — without this, code that only
+// recognized bare Polygon/MultiPolygon silently matched nothing against those alerts.
+function geometryToPolygonsArray(geometry){
+  if(!geometry) return [];
+  if(geometry.type==='Polygon') return [geometry.coordinates];
+  if(geometry.type==='MultiPolygon') return geometry.coordinates;
+  if(geometry.type==='GeometryCollection') return (geometry.geometries||[]).flatMap(geometryToPolygonsArray);
+  return [];
+}
+
+// Cheap min/max lat/lon bounding box for a GeoJSON Polygon/MultiPolygon geometry.
+function geometryBBox(geometry){
+  if(!geometry) return null;
+  const polys = geometryToPolygonsArray(geometry);
+  let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+  for(const rings of polys){
+    for(const ring of rings){
+      for(const c of ring){
+        const lon=c[0], lat=c[1];
+        if(lat<minLat)minLat=lat; if(lat>maxLat)maxLat=lat;
+        if(lon<minLon)minLon=lon; if(lon>maxLon)maxLon=lon;
+      }
+    }
+  }
+  if(minLat===Infinity) return null;
+  return {minLat,maxLat,minLon,maxLon};
+}
+function bboxOverlap(a,b){
+  if(!a||!b) return false;
+  return a.minLat<=b.maxLat && a.maxLat>=b.minLat && a.minLon<=b.maxLon && a.maxLon>=b.minLon;
+}
+// Reverse of pointInGeoJSON: true if any vertex of a GeoJSON Polygon/MultiPolygon geometry
+// falls inside a zone's own polygon ring. Catches small, localized alert polygons (e.g. a
+// storm-based tornado warning box) that sit entirely inside a zone without containing any
+// individual station point or the zone's centroid. Only called after a bbox pre-check.
+function geometryHasVertexInZone(geometry, zoneLatLngs){
+  if(!geometry) return false;
+  const polys = geometryToPolygonsArray(geometry);
+  for(const rings of polys){
+    for(const ring of rings){
+      for(const c of ring){
+        if(pip(c[1],c[0],zoneLatLngs)) return true;
+      }
+    }
+  }
+  return false;
+}
+
 // Point-in-polygon with holes for a GeoJSON Polygon or MultiPolygon geometry
 function pointInGeoJSON(lat,lon,geometry){
   if(!geometry) return false;
-  const polys = geometry.type==='Polygon' ? [geometry.coordinates] :
-                geometry.type==='MultiPolygon' ? geometry.coordinates : [];
+  const polys = geometryToPolygonsArray(geometry);
   for(const rings of polys){
     if(!rings.length) continue;
     if(!pip(lat,lon,geojsonRingToLatLon(rings[0]))) continue;
@@ -1706,6 +1768,8 @@ function pointInGeoJSON(lat,lon,geometry){
   }
   return false;
 }
+
+
 
 // Confirmed field names from a live api.weather.gc.ca/collections/weather-alerts/items response.
 function extractAlertInfo(props){
@@ -1723,10 +1787,29 @@ function extractAlertInfo(props){
   };
 }
 
-// True once an alert's own end/expiration timestamp has passed — a safety net for cases
-// where the OGC API feed still returns a feature briefly after ECCC has actually retired
-// it (its WMS raster layer and this JSON feed don't always update in lockstep).
+// Same as extractAlertInfo(), but also runs our own tornado/large-hail classification
+// (which reads hail size out of the alert text, e.g. "ping pong ball") and stamps
+// _abPriorityLabel/_abPriorityIsWarning onto the result — shared by every caller that
+// needs the info object to reflect OUR classification, not just ECCC's own risk_colour_en.
+function extractAlertInfoWithPriority(props){
+  const info=extractAlertInfo(props);
+  const classes=classifyAbAlert(props);
+  const topPriorityClass=classes.filter(c=>c.priority<=4).sort((a,b)=>a.priority-b.priority)[0];
+  if(topPriorityClass){
+    info._abPriorityLabel=topPriorityClass.label;
+    info._abPriorityIsWarning=(topPriorityClass.priority===1||topPriorityClass.priority===3);
+  }
+  return info;
+}
+
+// True once an alert's own end/expiration timestamp has passed, OR once ECCC's own
+// status field says it's over — a safety net for cases where the OGC API feed still
+// returns a feature briefly after ECCC has actually retired it (its WMS raster layer
+// and this JSON feed don't always update in lockstep, and status_en can flip to
+// "Ended" before event_end_datetime is actually in the past).
 function isAlertExpired(props){
+  const statusStr=(props.status_en||'').toLowerCase();
+  if(statusStr.includes('ended')) return true;
   const iso = props.event_end_datetime || props.expiration_datetime;
   if(!iso) return false;
   const t=new Date(iso).getTime();
@@ -1855,22 +1938,40 @@ function _fetchWithTimeout(url,ms){
   return fetch(url,{signal:ctrl.signal,cache:'no-store'}).finally(()=>clearTimeout(timer));
 }
 
-async function fetchAlbertaAlerts(){
-  const buffer=0.5;
-  const minLon=AB.lonMin-buffer, maxLon=AB.lonMax+buffer, minLat=AB.latMin-buffer, maxLat=AB.latMax+buffer;
-  const LIMIT=500;
-  const url = 'https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit='+LIMIT+'&bbox='+
-    minLon+','+minLat+','+maxLon+','+maxLat;
+async function fetchAlertsInBbox(minLon,minLat,maxLon,maxLat,label){
+  const PAGE_SIZE=500;
+  const MAX_PAGES=30; // Canada-wide can have far more concurrent alerts than AB alone
+  const bboxParam='&bbox='+minLon+','+minLat+','+maxLon+','+maxLat;
+  let allFeats=[], offset=0, page=0;
   try{
-    const res=await _fetchWithTimeout(url,15000);
-    if(!res.ok){ console.warn('[abAlerts] bad response', res.status); return []; }
-    const gj=await res.json();
-    const feats=gj.features||[];
-    if(gj.numberMatched && gj.numberMatched>feats.length){
-      console.warn('[abAlerts] TRUNCATED — numberMatched('+gj.numberMatched+') > returned('+feats.length+'). Real AB alerts may be missing.');
+    while(page<MAX_PAGES){
+      const url='https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit='+PAGE_SIZE+'&offset='+offset+bboxParam;
+      const res=await _fetchWithTimeout(url,15000);
+      if(!res.ok){ console.warn('['+(label||'alerts')+'] bad response', res.status); break; }
+      const gj=await res.json();
+      const feats=gj.features||[];
+      if(!feats.length) break; // no more results
+      allFeats=allFeats.concat(feats);
+      page++;
+      if(feats.length<PAGE_SIZE) break; // short page = last page, no point requesting another
+      offset+=feats.length;
     }
-    return feats.filter(f=>!isAlertExpired(f.properties||{}));
-  }catch(e){ console.warn('[abAlerts] fetch failed:',e.message||e); return []; }
+    if(page>=MAX_PAGES) console.warn('['+(label||'alerts')+'] hit MAX_PAGES safety cap — some alerts may still be missing.');
+    return allFeats.filter(f=>!isAlertExpired(f.properties||{}));
+  }catch(e){ console.warn('['+(label||'alerts')+'] fetch failed:',e.message||e); return allFeats.filter(f=>!isAlertExpired(f.properties||{})); }
+}
+function fetchAlbertaAlerts(){
+  const buffer=0.5;
+  return fetchAlertsInbbox_AB(buffer);
+}
+function fetchAlbertaAlerts_impl(buffer){
+  return fetchAlertsInBbox(AB.lonMin-buffer, AB.latMin-buffer, AB.lonMax+buffer, AB.latMax+buffer, 'abAlerts');
+}
+fetchAlbertaAlerts = function(){ return fetchAlbertaAlerts_impl(0.5); };
+// Canada-wide bbox — covers all provinces/territories including offshore/Arctic alert zones
+const CANADA_BBOX={minLon:-141.5,minLat:41.5,maxLon:-51.5,maxLat:83.5};
+function fetchCanadaAlerts(){
+  return fetchAlertsInBbox(CANADA_BBOX.minLon,CANADA_BBOX.minLat,CANADA_BBOX.maxLon,CANADA_BBOX.maxLat,'canadaAlerts');
 }
 
 function positionAbAlertsPanel(){
@@ -1989,45 +2090,38 @@ const AB_ALERT_CANONICAL=[
 function updateTornadoHailCircles(rows){
   if(!tornadoHailCircleLayer){ tornadoHailCircleLayer=L.layerGroup().addTo(map); }
   tornadoHailCircleLayer.clearLayers();
-  const warnStations=new Map(), watchStations=new Map(); // id -> [{label,infos}]
-  rows.forEach(r=>{
-    if(r.priority!==1 && r.priority!==2 && r.priority!==3 && r.priority!==4) return;
-    // Tornado / Large Hail only — automatic red (warning) / yellow (watch) tiering.
-    // Every other alert type (Severe T-Storm, Heat Warning, Air Quality, etc.) is
-    // handled exclusively by toggleOtherAlertCircles(), gated behind row expand/collapse.
-    const target=(r.priority===1||r.priority===3)?warnStations:watchStations;
-    Object.values(r.zoneStations).forEach(list=>list.forEach(id=>{
-      if(!target.has(id)) target.set(id,[]);
-      target.get(id).push({label:r.label,infos:r.infos||[]});
-    }));
-  });
-  watchStations.forEach((v,id)=>{ if(warnStations.has(id)) watchStations.delete(id); });
-  const addCircle=(id,color,entries,isWarning)=>{
+  // Tornado / Large Hail only — automatic red (warning) / yellow (watch) tiering.
+  // Every other alert type (Severe T-Storm, Heat Warning, Air Quality, etc.) is
+  // handled exclusively by toggleOtherAlertCircles(), gated behind row expand/collapse.
+  // Grouped separately (tornado vs hail) so collapsing one row's details also hides
+  // only that group's circles, not both.
+  const GROUPS={tornado:[1,2],hail:[3,4]};
+const addCircle=(id,color)=>{
     const s=stations[id];
     if(!s) return;
-    const m=L.circleMarker([s.lat,s.lon],{
+    const cm=L.circleMarker([s.lat,s.lon],{
       pane:'alertCircles',renderer:alertCirclesRenderer,radius:12,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:true
     }).addTo(tornadoHailCircleLayer);
-m.on('click', function(e){
-      if(_addViewPicking){
-        L.DomEvent.stopPropagation(e);
-        _setAddViewPickingUI(false);
-        runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
-        return;
-      }
-      if(_mockGpsPicking){
-        L.DomEvent.stopPropagation(e);
-        _mockGpsPicking=false;
-        document.getElementById('gps-btn').classList.remove('searching');
-        setMockGPSAt(e.latlng.lat, e.latlng.lng);
-        return;
-      }
+    cm.on('click', e=>{
       L.DomEvent.stopPropagation(e);
-      showStationAlertPopup(id,s,entries,isWarning,color);
+      showStationPopup(id);
     });
   };
-warnStations.forEach((entries,id)=>addCircle(id,'#ff2222',entries,true));
-  watchStations.forEach((entries,id)=>addCircle(id,'#ffdd00',entries,false));
+  Object.entries(GROUPS).forEach(([groupKey,priorities])=>{
+    if(_collapsedAlertGroups.has(groupKey)) return; // row collapsed — don't draw this group's circles
+    const warnStations=new Map(), watchStations=new Map(); // id -> [{label,infos}]
+    rows.forEach(r=>{
+      if(!priorities.includes(r.priority)) return;
+      const target=(r.priority===priorities[0])?warnStations:watchStations;
+Object.values(r.zoneStations).forEach(list=>list.forEach(id=>{
+        if(!target.has(id)) target.set(id,[]);
+        target.get(id).push({label:r.label,infos:(r.stationInfos&&r.stationInfos[id])||r.infos||[]});
+      }));
+    });
+watchStations.forEach((v,id)=>{ if(warnStations.has(id)) watchStations.delete(id); });
+    warnStations.forEach((entries,id)=>addCircle(id,'#ff2222'));
+    watchStations.forEach((entries,id)=>addCircle(id,'#ffdd00'));
+  });
 }
 
 // Shows/hides yellow circles for one alert row's affected stations — only called from
@@ -2046,81 +2140,39 @@ function toggleOtherAlertCircles(groupId, show){
   ids.forEach(id=>{
     const s=stations[id];
     if(!s) return;
-    const m=L.circleMarker([s.lat,s.lon],{
-      pane:'alertCircles',renderer:alertCirclesRenderer,radius:12,weight:2.5,color:'#ffdd00',fillColor:'#ffdd00',fillOpacity:0.18,interactive:true
+const m=L.circleMarker([s.lat,s.lon],{
+      pane:'alertCircles',renderer:alertCirclesRenderer,radius:12,weight:2.5,color:'#ffdd00',fillColor:'#ffdd00',fillOpacity:0.18,interactive:false
     }).addTo(otherAlertCircleLayer);
-    m.on('click', function(e){
-      L.DomEvent.stopPropagation(e);
-      showStationAlertPopup(id,s,[{label:r.label,infos:r.infos||[]}],false,'#ffdd00');
-    });
     otherAlertCircleGroups[groupId].push(m);
   });
 }
 
-// Shows the full warning/watch message for a tapped alert circle — reuses the same
-// modal as the right-click "Weather alert here" action (deduped across entries) so
-// tapping the circle reads exactly like the right-click flow.
-function showStationAlertPopup(stationId, station, entries, isWarning, color){
-  const infos = [];
-  const seen = new Set();
-  (entries||[]).forEach(e=>{
-    (e.infos||[]).forEach(info=>{
-      const key = JSON.stringify(info);
-      if(!seen.has(key)){ seen.add(key); infos.push(info); }
-    });
+
+// Draws the actual ECCC alert polygon geometry on the map — colored by our own
+// tornado/hail warning-vs-watch classification where it applies, otherwise by ECCC's
+// own risk_colour_en. Only shown while the Alerts toolbar toggle is on.
+function updateAlertPolygons(features){
+  if(!alertPolygonLayer){ alertPolygonLayer=L.layerGroup().addTo(map); }
+  alertPolygonLayer.clearLayers();
+  if(!alertsVisible || !features) return;
+  features.forEach(f=>{
+    if(!f.geometry) return;
+    const props=f.properties||{};
+    const classes=classifyAbAlert(props);
+    const top=classes.filter(c=>c.priority<=6).sort((a,b)=>a.priority-b.priority)[0];
+    const style=top?alertStyleForPriority(top.priority):null;
+    const sev=severityColorInfo(props.risk_colour_en);
+    const color=style?(style.mode==='banner'?style.bg:style.color):sev.border;
+    const info=extractAlertInfoWithPriority(props);
+    let gj;
+    try{
+      gj=L.geoJSON(f.geometry,{pane:'alertPolygons',style:{color,weight:2,opacity:0.85,fillColor:color,fillOpacity:0.12}});
+    }catch(e){ console.warn('[alertPolygons] bad geometry',e); return; }
+    gj.on('click',e=>{ L.DomEvent.stopPropagation(e); showAlertModal([info]); });
+    gj.addTo(alertPolygonLayer);
   });
-  // Distance from current GPS fix (or mock location) to the tapped station/point —
-  // same source and formatting used by the lightning-strike and station popups.
-  const src = gpsMarker ? gpsMarker.getLatLng() : _gpsLastLL;
-  let distStr = '';
-  if(src){
-    const slat = src.lat, slon = src.lng ?? src.lon;
-    const km = haversineKm(slat, slon, station.lat, station.lon);
-    distStr = km < 1 ? (km*1000).toFixed(0)+' m' : km.toFixed(1)+' km';
-  }
-
-  // Station detail block — same fields as the plain station popup — included whenever
-  // this is a real RAWS station (not the synthetic mock-location point). Circles sit in
-  // a pane above the station markers, so this is now the only way to see a covered
-  // station's details; show both the station info and the active alert(s) together.
-  const s = stations[stationId];
-  let stationHtml = '';
-  if(s){
-    const elevStr = (s.elev !== null && !isNaN(s.elev)) ? s.elev.toFixed(1) + ' m' : '—';
-    const typeStr = s.type || '—';
-    stationHtml =
-      '<div style="font-size:13px;font-weight:700;color:#00ff96;margin-bottom:4px;">📡 ' + stationId + '</div>' +
-      '<div><span style="color:#666;">Name&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.name + '</div>' +
-      '<div><span style="color:#666;">Type&nbsp;&nbsp;&nbsp;&nbsp;</span>' + typeStr + '</div>' +
-      '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
-      (distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
-      '<div style="margin-top:6px;margin-bottom:6px;"><a href="https://www.google.com/maps?q=' + s.lat.toFixed(5) + ',' + s.lon.toFixed(5) + '" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>' +
-      '<div style="height:0.5px;background:rgba(255,255,255,0.12);margin:4px 0 6px;"></div>';
-  }
-
-  const labels = (entries||[]).map(e=>e.label||e).join(', ');
-  const alertKey = 'stnalert_'+stationId+'_'+Date.now();
-  window._alertPopupStore = window._alertPopupStore || {};
-  window._alertPopupStore[alertKey] = {infos, distStr};
-  const alertHtml =
-    '<div style="font-size:12px;font-weight:800;color:'+color+';margin-bottom:3px;">🚨 '+labels+'</div>'+
-    (infos.length
-      ? '<div style="margin-top:2px;"><button onclick="showFullStationAlert(\''+alertKey+'\')" style="background:transparent;border:0.5px solid '+color+';color:'+color+';font-size:10px;padding:3px 8px;border-radius:8px;cursor:pointer;font-family:monospace;">View full alert</button></div>'
-      : '');
-
-  L.popup({closeButton:true,className:'strike-popup',maxWidth:260})
-    .setLatLng([station.lat,station.lon])
-    .setContent('<div style="font-family:monospace;font-size:11px;line-height:1.8;color:#ccc;min-width:190px;">'+stationHtml+alertHtml+'</div>')
-    .openOn(map);
 }
 
-// Opens the full alert modal (with distance) for a popup's "View full alert" button —
-// looked up by key since inline onclick can't carry the infos array directly.
-function showFullStationAlert(key){
-  const entry = window._alertPopupStore && window._alertPopupStore[key];
-  if(!entry) return;
-  showAlertModal(entry.infos, entry.distStr);
-}
 async function refreshAbAlertsPanel(){
   const panel=document.getElementById('ab-alerts-panel');
   if(!panel) return;
@@ -2141,6 +2193,16 @@ const listEl=document.getElementById('ab-alerts-list');
   }
   if(loadingSpan) loadingSpan.style.display='inline';
 const features=await fetchAlbertaAlerts();
+  window._lastAbAlertsFeatures=features;
+  if(alertsVisible && alertsScope==='CA'){
+    const canadaFeatures=await fetchCanadaAlerts();
+    window._lastCanadaAlertsFeatures=canadaFeatures;
+    updateAlertPolygons(canadaFeatures);
+  } else if(alertsVisible && alertsScope==='AB'){
+    updateAlertPolygons(features);
+  } else {
+    updateAlertPolygons(null);
+  }
   if(loadingSpan) loadingSpan.style.display='none';
   // Group by alert type/label instead of one row per raw feature — ECCC often issues
   // the same alert type as several overlapping/adjacent polygons, which would otherwise
@@ -2153,23 +2215,38 @@ features.forEach(f=>{
     const classes=classifyAbAlert(props);
     classes.forEach(cls=>{
       const key=cls.priority+'|'+cls.label;
-      if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null,infos:[],_infoKeySet:new Set()};
+if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null,infos:[],_infoKeySet:new Set(),stationInfos:{}};
       const infoObj=extractAlertInfo(props);
       const infoKey=JSON.stringify(infoObj);
       if(!groups[key]._infoKeySet.has(infoKey)){ groups[key]._infoKeySet.add(infoKey); groups[key].infos.push(infoObj); }
-zonePolygons.forEach(z=>{
+const _fBBox=geometryBBox(f.geometry);
+      zonePolygons.forEach(z=>{
         if(!z.stations||!z.stations.length) return;
-        let hitStations=z.stations.filter(s=>pointInGeoJSON(s.lat,s.lon,f.geometry));
-        // Fallback: some alert polygons (e.g. Air Quality Statements) are drawn coarsely
-        // enough that no individual station point falls inside even though the zone is
-        // clearly affected. If the zone's own centroid is inside the alert polygon,
-        // treat every station in that zone as covered instead of dropping the zone.
-        if(!hitStations.length && pointInGeoJSON(z.centroid.lat,z.centroid.lon,f.geometry)){
-          hitStations=z.stations;
+        // Fast reject: skip every expensive check below if the alert's bbox doesn't even
+        // overlap this zone's bbox — this is what keeps a province-wide, many-vertex alert
+        // from re-walking all 19 zone polygons on every refresh.
+        if(_fBBox && z.bbox && !bboxOverlap(_fBBox,z.bbox)) return;
+// Strict match only — a station is only considered covered by an alert if its
+        // own exact coordinates fall inside that alert's real polygon. No zone-centroid
+        // or polygon-vertex fallback, so circles/dashboard entries never appear for a
+        // station the alert doesn't actually reach, even if other stations in the same
+        // zone are genuinely covered.
+let hitStations=z.stations.filter(s=>pointInGeoJSON(s.lat,s.lon,f.geometry));
+        // Fallback for small/localized polygons (e.g. a storm-based tornado warning box)
+        // that fall inside a zone without containing any actual station point — still
+        // register the zone (with an empty station list) instead of dropping it entirely.
+        const polyInZone = !hitStations.length && geometryHasVertexInZone(f.geometry, z.latlngs);
+if(cls.priority<=6){
+          console.log('[abAlerts-debug]',cls.label,'vs zone',z.shortId,'geomType:',f.geometry&&f.geometry.type,'bboxOverlap:',_fBBox&&z.bbox?bboxOverlap(_fBBox,z.bbox):'n/a','match:',hitStations.length?'station':'NONE');
         }
-        if(!hitStations.length) return;
+if(!hitStations.length && !polyInZone) return;
         if(!groups[key].zoneStations[z.shortId]) groups[key].zoneStations[z.shortId]=new Set();
-        hitStations.forEach(s=>groups[key].zoneStations[z.shortId].add(s.id));
+        if(!groups[key].zoneStations[z.shortId]) groups[key].zoneStations[z.shortId]=new Set();
+        hitStations.forEach(s=>{
+          groups[key].zoneStations[z.shortId].add(s.id);
+          if(!groups[key].stationInfos[s.id]) groups[key].stationInfos[s.id]=[];
+          if(!groups[key].stationInfos[s.id].some(x=>x===infoObj)) groups[key].stationInfos[s.id].push(infoObj);
+        });
       });
     });
   });
@@ -2180,6 +2257,7 @@ rows.sort((a,b)=>{
     if(a.priority!==b.priority) return a.priority-b.priority;
     return (b.hailMM||0)-(a.hailMM||0);
   });
+window._lastAbAlertsRows=rows;
   updateTornadoHailCircles(rows);
   window._abAlertsCurrentKey=JSON.stringify(rows.filter(r=>r.priority<=4).map(r=>({p:r.priority,z:Object.keys(r.zoneStations).sort()})));
 // Priorities 2, 4, 6 (Tornado Watch, Large Hail Watch, Severe T-Storm Watch) are the
@@ -2197,11 +2275,12 @@ warnEl.textContent=warnZoneSet.size;
   const comboWatch=document.getElementById('combo-watch-count');
   if(comboWarn) comboWarn.textContent=warnZoneSet.size;
   if(comboWatch) comboWatch.textContent=watchZoneSet.size;
-function renderActiveRow(r,idx,styleOverride,skipCircles){
+function renderActiveRow(r,idx,styleOverride,skipCircles,explicitGroupId){
     const style=styleOverride||{mode:'text',color:severityColorInfo(r.severity).text};
     const col=style.color;
     const isBanner=style.mode==='banner';
-    const groupId='ab-alert-grp-'+idx;
+    const groupId=explicitGroupId||('ab-alert-grp-'+idx);
+    const defaultOpen=explicitGroupId?!_collapsedAlertGroups.has(explicitGroupId):false;
     window._alertRowDataStore=window._alertRowDataStore||{};
     window._alertRowDataStore[groupId]={row:r,skip:!!skipCircles};
 const zoneIds=Object.keys(r.zoneStations).sort();
@@ -2213,20 +2292,7 @@ const zoneRowsHtml=zoneIds.map((zId,zIdx)=>{
       // from current GPS/mock location, if available) keyed by a unique id, so the
       // click handler wired up after listEl.innerHTML= below can look it up and open
       // the same full-alert modal used by the map's warning circles.
-      const stnHtml=stnList.map(sid=>{
-        const key='abzone_'+groupId+'-z'+zIdx+'_'+sid;
-        window._alertPopupStore=window._alertPopupStore||{};
-        const s=stations[sid];
-        let distStr='';
-        const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
-        if(src&&s){
-          const slat=src.lat, slon=src.lng??src.lon;
-          const km=haversineKm(slat,slon,s.lat,s.lon);
-          distStr=km<1?(km*1000).toFixed(0)+' m':km.toFixed(1)+' km';
-        }
-        window._alertPopupStore[key]={infos:r.infos||[],distStr};
-        return '<span class="ab-alert-station-link" data-key="'+key+'" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">'+sid+'</span>';
-      }).join(', ');
+const stnHtml=stnList.map(id=>'<span class="ab-alert-stn-id" data-stnid="'+id+'" style="cursor:pointer;text-decoration:underline dotted;">'+id+'</span>').join(', ');
       return '<div style="margin-top:2px;">'+
         '<div class="ab-alert-zone-header" data-target="'+zoneBodyId+'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:2px 0;">'+
           '<span style="font-size:11px;color:#ccc;">'+zId+'</span>'+
@@ -2241,15 +2307,21 @@ const zoneRowsHtml=zoneIds.map((zId,zIdx)=>{
     const wrapStyle=isBanner?'border-radius:6px;padding:4px 8px;background:'+style.bg+';':'';
     const badgeStyle=isBanner?'color:'+col+';background:rgba(255,255,255,0.3);':'color:'+col+';background:rgba(255,255,255,0.06);';
     const zoneLabel=zoneIds.length+' zone'+(zoneIds.length!==1?'s':'');
+const isCircleGroup=(groupId==='tornado'||groupId==='hail');
+    const circlesHidden=isCircleGroup && _collapsedAlertGroups.has(groupId);
+    const hideBtnHtml=isCircleGroup
+      ? '<button class="ab-alert-hide-circles-btn" data-gid="'+groupId+'" style="font-size:9px;font-weight:700;background:rgba(0,0,0,0.25);border:0.5px solid '+col+';color:'+col+';border-radius:8px;padding:1px 6px;cursor:pointer;white-space:nowrap;font-family:monospace;">'+(circlesHidden?'Show circles':'Hide circles')+'</button>'
+      : '';
     return '<div style="border-bottom:0.5px solid rgba(255,255,255,0.06);padding:4px 0;'+wrapStyle+'">'+
-      '<div class="ab-alert-grp-header" data-target="'+groupId+'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">'+
+      '<div class="ab-alert-grp-header" data-target="'+groupId+'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px;">'+
         '<span style="font-size:12px;font-weight:800;color:'+col+';">'+r.label+'</span>'+
         '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0;">'+
+          hideBtnHtml+
           '<span style="font-size:11px;font-weight:700;'+badgeStyle+'border-radius:8px;padding:1px 6px;white-space:nowrap;">'+zoneLabel+'</span>'+
-          '<span class="ab-alert-grp-caret" style="font-size:11px;color:'+col+';">▶</span>'+
+          '<span class="ab-alert-grp-caret" style="font-size:11px;color:'+col+';">'+(defaultOpen?'▼':'▶')+'</span>'+
         '</span>'+
       '</div>'+
-      '<div id="'+groupId+'" style="display:none;margin-top:3px;">'+zoneRowsHtml+'</div>'+
+      '<div id="'+groupId+'" style="display:'+(defaultOpen?'block':'none')+';margin-top:3px;">'+zoneRowsHtml+'</div>'+
       '</div>';
   }
   function renderGreyRow(label){
@@ -2272,19 +2344,27 @@ window._alertRowDataStore={};
     if(c.group){
       const matches=[];
       rows.forEach((r,i)=>{ if(!usedRowIdx.has(i) && c.priorities.includes(r.priority)) matches.push({r,i}); });
-      if(matches.length){
+if(matches.length){
         matches.forEach(m=>usedRowIdx.add(m.i));
+        console.log('[abAlerts-debug] rendering group', c.group, 'as groupId');
         const hasWarning=matches.some(m=>m.r.priority===c.priorities[0]);
         if(hasWarning) priorityWarnActive=true; else priorityWatchActive=true;
-        const zoneStations={};
+const zoneStations={};
         matches.forEach(m=>{
           Object.entries(m.r.zoneStations).forEach(([zId,list])=>{
             if(!zoneStations[zId]) zoneStations[zId]=new Set();
             list.forEach(s=>zoneStations[zId].add(s));
           });
         });
-        const merged={label:c.label,zoneStations:Object.fromEntries(Object.entries(zoneStations).map(([zId,set])=>[zId,[...set].sort()]))};
-html+=renderActiveRow(merged,rIdx++, alertStyleForPriority(hasWarning?c.priorities[0]:c.priorities[1]), true);
+        const stationInfos={};
+        matches.forEach(m=>{
+          Object.entries(m.r.stationInfos||{}).forEach(([sid,infos])=>{
+            if(!stationInfos[sid]) stationInfos[sid]=[];
+            infos.forEach(info=>{ if(!stationInfos[sid].includes(info)) stationInfos[sid].push(info); });
+          });
+        });
+const merged={label:c.label,priorities:c.priorities,zoneStations:Object.fromEntries(Object.entries(zoneStations).map(([zId,set])=>[zId,[...set].sort()])),stationInfos};
+html+=renderActiveRow(merged,rIdx++, alertStyleForPriority(hasWarning?c.priorities[0]:c.priorities[1]), true, c.group);
       } else {
         html+=renderGreyRow(c.label);
       }
@@ -2351,13 +2431,30 @@ if(window._abAlertsCurrentKey!==_abAlertsLastVibrateKey){
     _abAlertsLastVibrateKey=null;
   }
 listEl.querySelectorAll('.ab-alert-grp-header').forEach(h=>{
-    h.addEventListener('click',()=>{
+    h.addEventListener('click',(e)=>{
+      if(e.target.closest('.ab-alert-hide-circles-btn')) return; // handled by its own listener below
       const body=document.getElementById(h.dataset.target);
       const caret=h.querySelector('.ab-alert-grp-caret');
       const open=body.style.display!=='none';
       body.style.display=open?'none':'block';
       caret.textContent=open?'▶':'▼';
-      toggleOtherAlertCircles(h.dataset.target, !open);
+      const gid=h.dataset.target;
+      // Tornado/Hail circle visibility is controlled ONLY by the explicit Hide/Show
+      // circles button now — expanding/collapsing the station detail list here no
+      // longer touches the map circles for those two groups.
+      if(gid!=='tornado' && gid!=='hail'){
+        toggleOtherAlertCircles(gid, !open);
+      }
+    });
+  });
+listEl.querySelectorAll('.ab-alert-hide-circles-btn').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const gid=btn.dataset.gid;
+      const nowHidden=!_collapsedAlertGroups.has(gid);
+      if(nowHidden) _collapsedAlertGroups.add(gid); else _collapsedAlertGroups.delete(gid);
+      btn.textContent=nowHidden?'Show circles':'Hide circles';
+      updateTornadoHailCircles(window._lastAbAlertsRows||[]);
     });
   });
 listEl.querySelectorAll('.ab-alert-zone-header').forEach(h=>{
@@ -2370,13 +2467,17 @@ listEl.querySelectorAll('.ab-alert-zone-header').forEach(h=>{
       caret.textContent=open?'▶':'▼';
     });
   });
-  listEl.querySelectorAll('.ab-alert-station-link').forEach(el=>{
+listEl.querySelectorAll('.ab-alert-stn-id').forEach(el=>{
     el.addEventListener('click',(e)=>{
       e.stopPropagation();
-      const entry=window._alertPopupStore&&window._alertPopupStore[el.dataset.key];
-      if(entry) showAlertModal(entry.infos, entry.distStr);
+      const id=el.dataset.stnid;
+      const s=stations[id];
+      if(!s) return;
+      window._ecFcLatLng={lat:s.lat,lng:s.lon};
+      document.getElementById('ctxAlertInfo').click();
     });
   });
+
   positionAbAlertsPanel();
 }
 
@@ -2713,7 +2814,7 @@ function showAlertModal(infos, distanceStr) {
   const overlay = document.createElement('div');
   overlay.id = 'alert-modal-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:19500;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:14px;';
-  const topColor = severityColorInfo(list[0] && list[0].severity);
+const topColor = severityColorInfoForAlert(list[0]);
   const box = document.createElement('div');
   box.style.cssText = 'background:#1a0d0d;border:1px solid '+topColor.border+';border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;padding:16px;font-family:\'Courier New\',monospace;color:#eee;';
   const headerHtml =
@@ -2726,8 +2827,8 @@ function showAlertModal(infos, distanceStr) {
     '</div>';
   // Each alert renders as a collapsed row (title + severity color + expiry) that
   // expands on click to show area/status/urgency/full text.
-  const rowsHtml=list.map((info,idx)=>{
-    const ic=severityColorInfo(info.severity);
+const rowsHtml=list.map((info,idx)=>{
+    const ic=severityColorInfoForAlert(info);
     const expStr=formatExpiresRelative(info.expires);
     return (
       '<div class="alert-row" data-idx="'+idx+'" style="border:1px solid '+ic.border+';border-radius:8px;margin-top:'+(idx>0?'8px':'0')+';overflow:hidden;">'+
@@ -2793,16 +2894,7 @@ if(hits.length){
       if(pa!==pb) return pa-pb;
       return alertSeverityRank(extractAlertInfo(a.properties||{}))-alertSeverityRank(extractAlertInfo(b.properties||{}));
     });
-const infos=sortedHits.map(f=>{
-      const info=extractAlertInfo(f.properties||{});
-      const classes=classifyAbAlert(f.properties||{});
-      const topPriorityClass=classes.filter(c=>c.priority<=4).sort((a,b)=>a.priority-b.priority)[0];
-      if(topPriorityClass){
-        info._abPriorityLabel=topPriorityClass.label;
-        info._abPriorityIsWarning=(topPriorityClass.priority===1||topPriorityClass.priority===3);
-      }
-      return info;
-    });
+const infos=sortedHits.map(f=>extractAlertInfoWithPriority(f.properties||{}));
     // Priority = tornado/large-hail warning-or-watch tier, or ECCC's own Red severity —
     // forces the banner fully open even if the user had minimized it to the small pill.
     const hasPriority=sortedHits.some(f=>minAbPriorityForFeature(f.properties||{})<=4)
@@ -2836,7 +2928,7 @@ document.getElementById('ctxAlertInfo').addEventListener('click', async ()=>{
   const hits=features.filter(f=>pointInGeoJSON(pos.lat,pos.lng,f.geometry));
 if(hits.length){
     console.log('[alerts] properties at clicked location:', hits.map(f=>f.properties));
-    showAlertModal(sortAlertsBySeverity(hits.map(f=>extractAlertInfo(f.properties||{}))));
+    showAlertModal(sortAlertsBySeverity(hits.map(f=>extractAlertInfoWithPriority(f.properties||{}))));
   } else {
     L.popup({closeButton:true,className:'strike-popup',maxWidth:220})
       .setLatLng(pos)
@@ -5618,6 +5710,69 @@ map.on('mousedown touchstart', e => {
 });
 map.on('mouseup touchend touchmove', () => { clearTimeout(_lpTimer); });
 
+// Looks up every currently active alert row (from the last AB alerts refresh) that
+// covers this specific station id — used to show warnings inline in the station popup.
+function getStationAlertInfo(stationId){
+  const rows=window._lastAbAlertsRows||[];
+  const found=[];
+  rows.forEach(r=>{
+    const inRow=Object.values(r.zoneStations||{}).some(list=>list.includes(stationId));
+    if(!inRow) return;
+    const infos=(r.stationInfos&&r.stationInfos[stationId])||r.infos||[];
+    infos.forEach(info=>{
+      if(!found.some(x=>x.info===info)) found.push({label:r.label,priority:r.priority,info});
+    });
+  });
+  return found;
+}
+window._openStationAlerts=function(stationId){
+  const found=getStationAlertInfo(stationId);
+  if(found.length) showAlertModal(found.map(a=>a.info));
+};
+
+// Builds and opens the station-details popup (Name/Type/Elevation/Lat/Lon/Distance +
+// any active alerts) — shared by both the station marker click and warning-circle click,
+// so clicking a warning circle shows the SAME station details, not just the alert modal.
+function showStationPopup(id){
+  const s = stations[id];
+  if(!s) return;
+  const elevStr = (s.elev !== null && !isNaN(s.elev)) ? s.elev.toFixed(1) + ' m' : '—';
+  const typeStr = s.type || '—';
+  const src = gpsMarker ? gpsMarker.getLatLng() : _gpsLastLL;
+  let distStr = '';
+  if (src) {
+    const slat = src.lat, slon = src.lng ?? src.lon;
+    const km = haversineKm(slat, slon, s.lat, s.lon);
+    distStr = km < 1 ? (km * 1000).toFixed(0) + ' m' : km.toFixed(1) + ' km';
+  }
+  const stnAlerts = getStationAlertInfo(id);
+  const warnBlockHtml = stnAlerts.length
+    ? '<div style="margin-top:6px;padding-top:6px;border-top:0.5px solid rgba(255,255,255,0.1);cursor:pointer;" onclick="window._openStationAlerts(\'' + id + '\')">' +
+        '<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Active Alerts (tap for details)</div>' +
+        stnAlerts.map(a => {
+          const style = alertStyleForPriority(a.priority) || {mode:'text', color: severityColorInfo(a.info.severity).text};
+          return '<div style="margin-top:2px;color:' + style.color + ';font-weight:700;">🚨 ' + a.label + '</div>';
+        }).join('') +
+      '</div>'
+    : '';
+  const popupHtml =
+    '<div style="font-family:monospace;font-size:11px;line-height:2;color:#ccc;min-width:180px;">' +
+    '<div style="font-size:13px;font-weight:700;color:#00ff96;margin-bottom:4px;">📡 ' + id + '</div>' +
+    '<div><span style="color:#666;">Name&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.name + '</div>' +
+    '<div><span style="color:#666;">Type&nbsp;&nbsp;&nbsp;&nbsp;</span>' + typeStr + '</div>' +
+    '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
+    '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lat.toFixed(4) + '°</div>' +
+    '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lon.toFixed(4) + '°</div>' +
+    (distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
+    warnBlockHtml +
+    '<div style="margin-top:6px;"><a href="https://www.google.com/maps?q=' + s.lat.toFixed(5) + ',' + s.lon.toFixed(5) + '" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>' +
+    '</div>';
+  L.popup({closeButton:true, className:'strike-popup', maxWidth:stnAlerts.length ? 260 : 240})
+    .setLatLng([s.lat, s.lon])
+    .setContent(popupHtml)
+    .openOn(map);
+}
+
 // ── RAWS Stations ─────────────────────────────────────────────
 const stations = {};
 let stationLabelsVisible = true, stationFocusMarker = null;
@@ -5662,31 +5817,7 @@ m.on('click', function(e){
         }
         console.log('[station click]', id);
         L.DomEvent.stopPropagation(e);
-        const s = stations[id];
-        const elevStr = (s.elev !== null && !isNaN(s.elev)) ? s.elev.toFixed(1) + ' m' : '—';
-        const typeStr = s.type || '—';
-const src = gpsMarker ? gpsMarker.getLatLng() : _gpsLastLL;
-        let distStr = '';
-        if (src) {
-          const slat = src.lat, slon = src.lng ?? src.lon;
-          const km = haversineKm(slat, slon, s.lat, s.lon);
-          distStr = km < 1 ? (km * 1000).toFixed(0) + ' m' : km.toFixed(1) + ' km';
-        }
-        const popupHtml =
-          '<div style="font-family:monospace;font-size:11px;line-height:2;color:#ccc;min-width:180px;">' +
-          '<div style="font-size:13px;font-weight:700;color:#00ff96;margin-bottom:4px;">📡 ' + id + '</div>' +
-          '<div><span style="color:#666;">Name&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.name + '</div>' +
-          '<div><span style="color:#666;">Type&nbsp;&nbsp;&nbsp;&nbsp;</span>' + typeStr + '</div>' +
-          '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
-          '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lat.toFixed(4) + '°</div>' +
-          '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lon.toFixed(4) + '°</div>' +
-(distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
-          '<div style="margin-top:6px;"><a href="https://www.google.com/maps?q=' + s.lat.toFixed(5) + ',' + s.lon.toFixed(5) + '" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>' +
-          '</div>';
-        L.popup({closeButton:true, className:'strike-popup', maxWidth:240})
-          .setLatLng([s.lat, s.lon])
-          .setContent(popupHtml)
-          .openOn(map);
+        showStationPopup(id);
       });
 stationLabelMarkers.push(m);
     });
