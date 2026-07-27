@@ -563,8 +563,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
   <!-- Alberta panel -->
   <div id="ab-panel" class="collapsed">
-    <div class="title">Alberta Strikes
-      <span id="ab-collapse-btn" style="cursor:pointer;font-size:12px;color:#ff8c00;margin-left:auto;">▼</span>
+<div class="title">Alberta Strikes
+      <span id="ab-zones-hide-btn" style="cursor:pointer;font-size:9px;font-weight:700;background:rgba(255,140,0,0.1);border:0.5px solid rgba(255,140,0,0.4);color:#ff8c00;border-radius:8px;padding:1px 6px;margin-left:auto;white-space:nowrap;">Hide zones</span>
+      <span id="ab-collapse-btn" style="cursor:pointer;font-size:12px;color:#ff8c00;margin-left:6px;">▼</span>
     </div>
     <div id="ab-total-row">
       <span id="ab-total-num">0</span>
@@ -1593,12 +1594,16 @@ zonePolygons.forEach(z=>{z._count=0;z._ec1=0;z._ec2=0;z._ec3=0;z._ec12=0;});
   rows.forEach(r=>list.appendChild(r));
 }
 
-document.getElementById('zone-toggle').addEventListener('click',()=>{
+function toggleZonesVisible(){
   const btn=document.getElementById('zone-toggle');
   zonesVisible=!zonesVisible;
   if(zonesVisible){if(zoneLayer)zoneLayer.addTo(map);btn.classList.add('active');btn.style.opacity='1';}
   else{if(zoneLayer)map.removeLayer(zoneLayer);btn.classList.remove('active');btn.style.opacity='0.5';}
-});
+  const abBtn=document.getElementById('ab-zones-hide-btn');
+  if(abBtn) abBtn.textContent=zonesVisible?'Hide zones':'Show zones';
+}
+document.getElementById('zone-toggle').addEventListener('click',toggleZonesVisible);
+document.getElementById('ab-zones-hide-btn').addEventListener('click',toggleZonesVisible);
 
 document.getElementById('ab-collapse-btn').addEventListener('click',()=>{
   const panel=document.getElementById('ab-panel');
@@ -2100,10 +2105,23 @@ function updateTornadoHailCircles(rows){
 const addCircle=(id,color)=>{
     const s=stations[id];
     if(!s) return;
-    const cm=L.circleMarker([s.lat,s.lon],{
+const cm=L.circleMarker([s.lat,s.lon],{
       pane:'alertCircles',renderer:alertCirclesRenderer,radius:12,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:true
     }).addTo(tornadoHailCircleLayer);
     cm.on('click', e=>{
+      if(_addViewPicking){
+        L.DomEvent.stopPropagation(e);
+        _setAddViewPickingUI(false);
+        runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
+        return;
+      }
+      if(_mockGpsPicking){
+        L.DomEvent.stopPropagation(e);
+        _mockGpsPicking=false;
+        document.getElementById('gps-btn').classList.remove('searching');
+        setMockGPSAt(e.latlng.lat, e.latlng.lng);
+        return;
+      }
       L.DomEvent.stopPropagation(e);
       showStationPopup(id);
     });
@@ -2169,7 +2187,23 @@ function updateAlertPolygons(features){
     try{
       gj=L.geoJSON(f.geometry,{pane:'alertPolygons',style:{color,weight:2,opacity:0.85,fillColor:color,fillOpacity:0.12}});
     }catch(e){ console.warn('[alertPolygons] bad geometry',e); return; }
-    gj.on('click',e=>{ L.DomEvent.stopPropagation(e); showAlertModal([info]); });
+gj.on('click',e=>{
+      if(_addViewPicking){
+        L.DomEvent.stopPropagation(e);
+        _setAddViewPickingUI(false);
+        runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
+        return;
+      }
+      if(_mockGpsPicking){
+        L.DomEvent.stopPropagation(e);
+        _mockGpsPicking=false;
+        document.getElementById('gps-btn').classList.remove('searching');
+        setMockGPSAt(e.latlng.lat, e.latlng.lng);
+        return;
+      }
+      L.DomEvent.stopPropagation(e);
+      showAlertModal([info]);
+    });
     gj.addTo(alertPolygonLayer);
   });
 }
