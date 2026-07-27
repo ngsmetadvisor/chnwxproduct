@@ -27,17 +27,17 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
 /* ── Toolbar ── */
 #toolbar {
-  position: absolute; top: 70px; right: 10px; z-index: 1000;
+  position: absolute; top: 5px; right: 10px; z-index: 1000;
   display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;
   background: rgba(8,8,18,0.9); border: 0.5px solid rgba(255,255,255,0.12);
   border-radius: 16px; padding: 4px 8px; align-items: center;
-  backdrop-filter: blur(6px); max-width: calc(100vw - 20px);
+  backdrop-filter: blur(6px); width: 430px; max-width: calc(100vw - 20px);
 }
 @media (max-width: 600px) {
   #toolbar {
     left: 10px; right: 10px; justify-content: flex-start;
     overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
-    max-width: none;
+    max-width: none; width: auto;
     gap: 4px;
   }
   #toolbar::-webkit-scrollbar { display: none; }
@@ -47,15 +47,15 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   }
   #toolbar .tb-text { display: none; }
 }
-.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
+.tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: 11px; padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
 .tb-btn.active { background: rgba(255,220,0,0.2); border-color: #ffdd00; color: #ffdd00; }
 .tb-btn:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
 .sep { width: 1px; height: 12px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
 #mobile-combo-bar { display:none; }
 @media (max-width: 600px) {
-  #mobile-combo-bar {
+#mobile-combo-bar {
     display:flex; align-items:center; gap:4px;
-    position:absolute; z-index:1000; left:10px; right:10px;
+    position:absolute; z-index:1000; left:10px; right:10px; width:auto;
     background: rgba(8,8,18,0.9); border:0.5px solid rgba(255,255,255,0.12);
     border-radius:14px; padding:6px 10px; font-family:'Courier New',monospace;
     font-size:12px; color:#ccc; backdrop-filter:blur(6px);
@@ -65,8 +65,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   #mobile-combo-bar .combo-seg{ cursor:pointer; white-space:nowrap; padding:3px 6px; border-radius:8px; flex-shrink:0; }
   #mobile-combo-bar .combo-seg.active{ background:rgba(255,255,255,0.12); }
   #mobile-combo-bar .combo-sep{ color:#444; flex-shrink:0; }
-  #station-finder, #ab-panel, #ab-alerts-panel { display:none; }
-  #station-finder.combo-show, #ab-panel.combo-show, #ab-alerts-panel.combo-show { display:block; }
+#station-finder, #ab-panel, #ab-alerts-panel { display:none; }
+  #station-finder.combo-show, #ab-panel.combo-show, #ab-alerts-panel.combo-show { display:block; max-height:60vh; overflow-y:auto; }
 }
 .cd-btn { position: relative; overflow: hidden; }
 .cd-btn::after {
@@ -76,26 +76,28 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   transition: none;
 }
 .cd-btn.cd-active::after { transition: width var(--cd-dur, 360000ms) linear; }
-#zone-toggle { background: transparent; border: 0.5px solid rgba(255,140,0,0.5); color: #ff8c00; font-size: var(--ui-font-sm, 11px); padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
+#zone-toggle { background: transparent; border: 0.5px solid rgba(255,140,0,0.5); color: #ff8c00; font-size: 11px; padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
 #zone-toggle.active { background: rgba(255,140,0,0.2); }
 #zone-toggle:hover { background: rgba(255,140,0,0.15); }
-#gps-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: var(--ui-font-sm, 11px); padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
+#gps-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: 11px; padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
 #gps-btn.active { background: rgba(0,255,150,0.15); border-color: #00ff96; color: #00ff96; }
 #gps-btn.searching { border-color: #ffaa00; color: #ffaa00; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
 
 /* ── Radar panel ── */
 #radar-panel {
-  position: absolute; top: 5px; right: 10px; z-index: 1000;
+  position: absolute; top: 70px; right: 10px; z-index: 1000;
   display: flex; flex-direction: column; gap: 6px;
   background: rgba(8,8,18,0.9); border: 0.5px solid rgba(100,180,255,0.25);
-  border-radius: 14px; padding: 8px 12px; min-width: 180px; max-width: calc(100vw - 20px);
+  border-radius: 14px; padding: 8px 12px; width: 430px; max-width: calc(100vw - 20px);
   backdrop-filter: blur(6px);
 }
 @media (max-width: 600px) {
-  #radar-panel { padding: 5px 10px; gap: 4px; }
+  #radar-panel { padding: 5px 10px; gap: 4px; left: 10px; right: 10px; width: auto; max-width: none; }
 }
-#radar-top-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+#radar-top-row { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+#radar-top-row::-webkit-scrollbar { display: none; }
+#radar-top-row > * { flex-shrink: 0; }
 #radar-toggle { background: transparent; border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 11px; padding: 3px 10px; border-radius: 12px; cursor: pointer; transition: all 0.15s; opacity: 0.6; flex-shrink: 0; }
 #radar-toggle.active { background: rgba(100,180,255,0.15); border-color: #88ccff; opacity: 1; }
 #radar-toggle:hover { background: rgba(100,180,255,0.1); opacity: 1; }
@@ -118,15 +120,17 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   #radar-top-row::-webkit-scrollbar { display: none; }
   #radar-top-row > * { flex-shrink: 0; }
 }
-#radar-panel-row { display: flex; align-items: center; gap: 7px; }
-#radar-type { background: rgba(8,8,18,0.9); border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 10px; padding: 2px 4px; border-radius: 8px; cursor: pointer; font-family: monospace; }
+#radar-panel-row { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+#radar-panel-row::-webkit-scrollbar { display: none; }
+#radar-panel-row > * { flex-shrink: 0; }
+#radar-type { background: rgba(8,8,18,0.9); border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 10px; padding: 2px 2px; border-radius: 8px; cursor: pointer; font-family: monospace; width: 54px; }
 #radar-opacity { width: 55px; accent-color: #88ccff; cursor: pointer; }
 #frame-count-wrap { display: flex; gap: 3px; }
 .fc-btn { background: transparent; border: 0.5px solid rgba(100,180,255,0.3); color: rgba(136,204,255,0.6); font-size: 10px; padding: 2px 7px; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
 .fc-btn.active { background: rgba(100,180,255,0.15); border-color: #88ccff; color: #88ccff; }
 #anim-play-btn { background: transparent; border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 13px; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 #anim-scrub { flex: 1; accent-color: #88ccff; cursor: pointer; }
-#anim-time-label { font-size: 10px; color: #88ccff; min-width: 68px; text-align: right; }
+#anim-time-label { font-size: 10px; color: #88ccff; min-width: 68px; text-align: right; flex-shrink: 0; white-space: nowrap; }
 #anim-speed-btn { background: transparent; border: 0.5px solid rgba(100,180,255,0.3); color: rgba(136,204,255,0.7); font-size: 9px; padding: 2px 6px; border-radius: 8px; cursor: pointer; }
 
 /* ── Loading bar ── */
@@ -141,6 +145,12 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   font-size: var(--ui-font-sm, 11px); padding: 5px 10px;
   background: rgba(8,8,18,0.88); border-top: 0.5px solid rgba(255,255,255,0.08);
   color: #aaa; backdrop-filter: blur(4px);
+  max-height: 40vh; overflow-y: auto;
+  padding-bottom: calc(5px + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 600px) {
+  #status { gap: 6px 10px; }
+  .legend { margin-left: 0; width: 100%; flex-wrap: wrap; gap: 6px 10px; }
 }
 #counter { font-size: 14px; font-weight: 600; color: #ffdd00; letter-spacing: 0.04em; }
 #ab-count { font-size: 13px; font-weight: 600; color: #ff8c00; }
@@ -148,6 +158,20 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 #zoneStatus { color: #ff8c00; font-size: 10px; }
 #radarStatus { color: #88ccff; font-size: 10px; }
 #gpsStatus { color: #00ff96; font-size: 10px; }
+#status-station-finder { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #aaa; }
+@media (max-width: 600px) {
+  #status-station-finder { flex-shrink: 0; order: -1; width: 100%; }
+  #status-station-finder select { flex: 1; min-width: 0; }
+}
+#status-station-finder select {
+  background: rgba(8,8,18,0.9); border: 0.5px solid rgba(255,255,255,0.2);
+  color: #ccc; font-size: 16px; border-radius: 6px; padding: 3px 6px;
+  cursor: pointer; font-family: monospace; max-width: 140px;
+}
+@media (min-width: 601px) {
+  #status-station-finder select { font-size: 13px; }
+}
+#status-station-finder select option { background: #0d0d1a; }
 .legend { display: flex; gap: 8px; align-items: center; margin-left: auto; }
 .leg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .leg-item { display: flex; gap: 4px; align-items: center; font-size: 10px; color: #888; }
@@ -352,15 +376,10 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div class="sep"></div>
 <button id="alerts-toggle" class="tb-btn"><span class="tb-icon">🚨</span><span class="tb-text"> Alerts</span></button>
   </div>
-
   <div id="mobile-combo-bar">
-    <span id="combo-stn-btn" class="combo-seg">Stn</span>
-    <span class="combo-sep">|</span>
-    <span id="combo-zone-btn" class="combo-seg">Zone</span>
-    <span class="combo-sep">|</span>
     <span id="combo-ltg-btn" class="combo-seg">⚡ <span id="combo-ltg-count">0</span></span>
     <span class="combo-sep">|</span>
-    <span id="combo-alert-btn" class="combo-seg">🚨 <span id="combo-warn-count" style="color:#ff5555;">0</span> <span id="combo-watch-count" style="color:#ffdd00;">0</span></span>
+<span id="combo-alert-btn" class="combo-seg" style="border:0.5px solid rgba(255,255,255,0.15);border-radius:8px;"><span id="combo-alert-icon">🚨</span> <span id="combo-warn-count" style="color:#ff5555;">0</span> <span id="combo-watch-count" style="color:#ffdd00;">0</span></span>
   </div>
 
   <!-- Radar panel -->
@@ -368,13 +387,14 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div id="radar-top-row">
       <button id="radar-toggle">Radar</button>
       <button id="radar-options-btn" title="Show/hide radar options">▼</button>
+      <span id="radar-max-count-badge" style="font-size:10px;color:#88ccff;font-family:'Courier New',monospace;white-space:nowrap;"></span>
       <span id="radarStatus" style="font-size:10px;color:#88ccff;flex:1;text-align:right;"></span>
 <button id="radar-max-toggle" type="button" title="Track storm maxima across frames and mark with ✕" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">Track storms</button>
 <input id="radar-max-opacity-slider" type="range" min="10" max="100" value="70" title="Storm marker/trail/projection opacity" style="width:36px;accent-color:rgba(255,255,255,0.7);">
 <button id="radar-max-recalc-btn" type="button" title="Recalculate storm tracks now" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">⟳</button>
       <button id="radar-max-addview-btn" type="button" title="Track current view, keep existing storms" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">+</button>
       <button id="radar-max-settings-btn" type="button" title="Storm tracking parameters" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">⚙</button>
-    </div>
+</div>
 <div id="radar-controls">
       <div id="radar-panel-row">
         <button id="anim-play-btn">▶</button>
@@ -384,13 +404,10 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
           <option value="Radar_1km_SfcPrecipType">Precip Type</option>
         </select>
         <input id="radar-opacity" type="range" min="10" max="90" value="80" title="Opacity">
-<div id="frame-count-wrap">
-          <button class="fc-btn" data-frames="6">6f</button>
-          <button class="fc-btn active" data-frames="12">12f</button>
-        </div>
-<button id="legend-toggle-btn" title="Toggle precip legend" style="display:none;background:transparent;border:0.5px solid rgba(100,180,255,0.3);color:rgba(136,204,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">🗂 Legend</button>
+<button id="legend-toggle-btn" title="Toggle precip legend" style="display:none;background:transparent;border:0.5px solid rgba(100,180,255,0.3);color:rgba(136,204,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">Legend</button>
         <input id="anim-scrub" type="range" min="0" max="11" value="11" step="1" style="width:45px;">
         <span id="anim-time-label">--:--</span>
+        <button id="frame-count-toggle" data-frames="12" title="Tap to cycle frame count" style="background:transparent;border:0.5px solid rgba(100,180,255,0.3);color:rgba(136,204,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">12×</button>
         <button id="anim-speed-btn">1×</button>
       </div>
 </div>
@@ -457,13 +474,6 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     </div>
   </div>
 
-  <!-- Station finder -->
-<div id="station-finder">
-    <div style="font-size:10px;color:#888;letter-spacing:0.06em;text-transform:uppercase;">Stations</div>
-    <select id="stationSelect"><option value="">-- select --</option></select>
-    <div style="font-size:10px;color:#888;letter-spacing:0.06em;text-transform:uppercase;margin-top:8px;">Zoom to Zone</div>
-<select id="zoneZoomSelect"><option value="">-- select --</option><option value="AB">AB (all zones)</option><option value="__export_png">Export AB png</option></select>
-  </div>
 
 
 <!-- Deviation Rose -->
@@ -620,7 +630,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     </div>
   </div>
 
-  <!-- Status bar -->
+<!-- Status bar -->
   <div id="status">
     <span>World: <span id="counter">0</span></span>
     <span>AB: <span id="ab-count">0</span></span>
@@ -631,7 +641,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <span id="gpsStatus"></span>
     <span id="notifyStatus" style="font-size:10px;cursor:pointer;"></span>
     <span id="devStatus" style="color:#00ff96;font-size:10px;"></span>
-    <div class="legend">
+<div id="status-station-finder">
+<select id="stationSelect"><option value="">Find Station</option></select>
+        <select id="zoneZoomSelect"><option value="">Zoom to Zone</option><option value="AB">AB (all zones)</option><option value="__export_png">Export AB png</option></select>
+      </div>
+<div class="legend">
       <div class="leg-item"><div class="leg-dot" style="background:#ffffff;box-shadow:0 0 4px #fff;"></div> New</div>
       <div class="leg-item"><div class="leg-dot" style="background:#ffee00;"></div> &lt;1m</div>
       <div class="leg-item"><div class="leg-dot" style="background:#ff8800;"></div> &lt;10m</div>
@@ -640,7 +654,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       <div class="leg-item"><div class="leg-dot" style="background:#551100;"></div> Older</div>
     </div>
   </div>
-
+  
 <!-- Compass popup menu -->
   <div id="compass-popup" style="display:none;position:absolute;z-index:2000;background:rgba(8,8,18,0.97);border:0.5px solid rgba(138,92,246,0.45);border-radius:14px;padding:6px;min-width:200px;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.7);">
     <div id="cmp-toggle-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(138,92,246,0.12)'" onmouseout="this.style.background='transparent'">
@@ -747,21 +761,20 @@ function positionToolbar(){
   const radarPanel=document.getElementById('radar-panel');
   const toolbar=document.getElementById('toolbar');
   if(!radarPanel||!toolbar) return;
-  // Dynamic below-radar-panel positioning is a mobile-only fix (narrow screens where the
-  // toolbar can't fit beside the radar panel and needs to stack below it instead).
-  // On desktop, leave the toolbar at its fixed CSS top:70px position.
-  if(window.innerWidth>600){ toolbar.style.top=''; positionComboBar(); return; }
-const r=radarPanel.getBoundingClientRect();
-  toolbar.style.top=(r.bottom-4)+'px';
+  // Toolbar stays fixed at top:5px (its own CSS) — the radar panel below it is
+  // repositioned dynamically instead, so it never overlaps the toolbar whether
+  // collapsed or expanded, on both mobile and desktop.
+const r=toolbar.getBoundingClientRect();
+  radarPanel.style.top=r.bottom+'px';
   positionComboBar();
 }
 function positionComboBar(){
   const bar=document.getElementById('mobile-combo-bar');
-  const toolbar=document.getElementById('toolbar');
-  if(!bar||!toolbar) return;
+  const radarPanel=document.getElementById('radar-panel');
+  if(!bar||!radarPanel) return;
   if(window.innerWidth>600){ bar.style.top=''; return; }
-const r=toolbar.getBoundingClientRect();
-  bar.style.top=(r.bottom-4)+'px';
+const r=radarPanel.getBoundingClientRect();
+  bar.style.top=r.bottom+'px';
   repositionOpenComboPanel();
 }
 window.addEventListener('resize', positionToolbar);
@@ -1409,7 +1422,7 @@ const _cLat=f.latlngs.reduce((s,p)=>s+p[0],0)/f.latlngs.length;
         zonePolygons.push({...f,polygon:poly,centroid:{lat:_cLat,lon:_cLon},bbox:_bbox,stations:[]});
       });
 zoneLayer.addTo(map);
-      document.getElementById('zoneStatus').textContent=features.length+' fire weather zones';
+document.getElementById('zoneStatus').textContent='';
       buildZoneListUI();
       buildZoneZoomDropdown();
 rebuildZoneCounts();
@@ -1440,7 +1453,7 @@ function buildZoneZoomDropdown(){
   const sel=document.getElementById('zoneZoomSelect');
   if(!sel) return;
   // Keep the AB option, drop any previously-built zone options, then rebuild from zonePolygons.
-  sel.innerHTML='<option value="">-- select --</option><option value="AB">AB (all zones)</option>';
+  sel.innerHTML='<option value="">Zoom to Zone</option><option value="AB">AB (all zones)</option>';
   [...zonePolygons].sort((a,b)=>a.shortId.localeCompare(b.shortId)).forEach(z=>{
     const o=document.createElement('option');
     o.value=z.shortId;
@@ -1669,13 +1682,22 @@ let _alertBannerRotateIdx=0, _alertBannerRotateTimer=null;
 
 function updateAlertsToggleUI(){
   const btn=document.getElementById('alerts-toggle');
+  const scopeEl=document.getElementById('combo-alert-scope');
+  const comboBtn=document.getElementById('combo-alert-btn');
+  const comboIconEl=document.getElementById('combo-alert-icon');
+  if(scopeEl) scopeEl.textContent=alertsVisible?alertsScope:'';
+  if(comboIconEl) comboIconEl.textContent=alertsVisible?alertsScope:'🚨';
+  if(comboBtn){
+    comboBtn.style.background=alertsVisible?'rgba(255,80,80,0.18)':'transparent';
+    comboBtn.style.borderColor=alertsVisible?'#ff5555':'rgba(255,255,255,0.15)';
+  }
   if(!btn) return;
   if(!alertsVisible){
     btn.classList.remove('active');
     btn.innerHTML='<span class="tb-icon">🚨</span><span class="tb-text"> Off</span>';
   } else {
     btn.classList.add('active');
-    btn.innerHTML='<span class="tb-icon">🚨</span><span class="tb-text"> '+alertsScope+'</span>';
+    btn.innerHTML='<span class="tb-icon">'+alertsScope+'</span><span class="tb-text"> '+alertsScope+'</span>';
   }
 }
 function enableAlertsLayer(scope){
@@ -2048,7 +2070,12 @@ const el=document.getElementById(panelIds[which]);
 document.getElementById('combo-stn-btn')?.addEventListener('click',()=>openComboPanel('stn'));
 document.getElementById('combo-zone-btn')?.addEventListener('click',()=>openComboPanel('stn'));
 document.getElementById('combo-ltg-btn')?.addEventListener('click',()=>openComboPanel('ltg'));
-document.getElementById('combo-alert-btn')?.addEventListener('click',()=>openComboPanel('alerts'));
+document.getElementById('combo-alert-btn')?.addEventListener('click',()=>{
+  if(!alertsVisible){ enableAlertsLayer('AB'); }
+  else if(alertsScope==='AB'){ enableAlertsLayer('CA'); }
+  else { disableAlertsLayer(); }
+  openComboPanel('alerts');
+});
 map.on('click', ()=>closeComboPanels());
 
 // Stacks directly below the AB Warnings/Watches panel on desktop. On mobile, the AB
@@ -3014,6 +3041,7 @@ let radarMaxFirstRunDone=false; // first detection after a fresh page/session lo
                                  // the settled imagery instead of trusting the bad first pass
 let radarMaxTrailLines=[], radarMaxProjectionLines=[], radarMaxProjectionMarkers=[];
 let radarMaxOpacityValue=0.7;     // storm marker/trail/projection opacity — mirrors the radar-max-opacity-slider value; also applied to the center storm-tracking banner
+let radarMaxTrackedCellCount=0;    // cumulative count of currently-tracked storm cells across all scans (initial + each "+" add) — reset only when tracking is cleared/turned off
 let radarMaxLastSpeedKmh=null;     // speed (km/h) of the closest tracked storm from the most recent detection pass — shown in the status bar since the center banner is timing-sensitive
 let radarMaxLastClosestKm=null;    // closest-approach distance (km) of the closest tracked storm from the most recent detection pass
 let radarMaxLastClosestHour=null;  // hour index (0=now) at which that closest approach occurs
@@ -3388,13 +3416,15 @@ const detailClusters=clusterFociForDetailScan(foci);
   setTimeout(proceed, 700); // fallback in case the view was already framed and moveend never fires
 }
 
-document.querySelectorAll('.fc-btn').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('.fc-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    ANIM_STEPS=parseInt(btn.dataset.frames);
-    if(radarVisible)buildRadarAnimLoop();
-  });
+const FRAME_COUNT_OPTIONS=[6,12];
+document.getElementById('frame-count-toggle').addEventListener('click',function(){
+  const cur=parseInt(this.dataset.frames);
+  const idx=FRAME_COUNT_OPTIONS.indexOf(cur);
+  const next=FRAME_COUNT_OPTIONS[(idx+1)%FRAME_COUNT_OPTIONS.length];
+  this.dataset.frames=next;
+  this.textContent=next+'f';
+  ANIM_STEPS=next;
+  if(radarVisible)buildRadarAnimLoop();
 });
 
 let loadBarHideTimer=null;
@@ -3732,6 +3762,9 @@ function hideStormTrackingBanner(){
 }
 
 function clearRadarMaxMarkers(){
+  radarMaxTrackedCellCount=0;
+  const countBadge=document.getElementById('radar-max-count-badge');
+  if(countBadge) countBadge.textContent='';
   radarMaxMarkers.forEach(m=>map.removeLayer(m));
   radarMaxMarkers=[];
   radarMaxTrailLines.forEach(l=>map.removeLayer(l));
@@ -3988,6 +4021,21 @@ radarMaxLastSpeedKmh=stormClosestSpeedKmh;
     } else {
       speedEl.style.display='none';
     }
+  }
+
+// Count only tracks that actually got a forward projection (activeTracks, computed
+  // above) — i.e. still current AND with enough chain length AND not diminishing —
+  // not every track that merely showed up in the last frame.
+  const _currentTrackedCount=activeTracks.length;
+  // additive passes (e.g. the "+" button, or the initial multi-focus sequence) scan a
+  // DIFFERENT area than earlier passes and don't re-detect earlier storms, so their
+  // counts are summed rather than replacing the running total. A fresh non-additive
+  // start (toggle ON, first cluster of a new sequence) resets the total instead.
+  if(additive) radarMaxTrackedCellCount+=_currentTrackedCount;
+  else radarMaxTrackedCellCount=_currentTrackedCount;
+  const countBadge=document.getElementById('radar-max-count-badge');
+  if(countBadge){
+    countBadge.textContent=radarMaxTrackedCellCount>0?(radarMaxTrackedCellCount+' cell'+(radarMaxTrackedCellCount!==1?'s':'')+' tracked'):'';
   }
 
 document.getElementById('radar-max-toggle').textContent='Track storms';
@@ -4689,6 +4737,7 @@ document.getElementById('legend-toggle-btn').addEventListener('click',()=>toggle
 })();
 
 document.getElementById('precip-legend')._userHidden=true; // legend hidden by default; user must tap the Legend button to show it
+
 updateRadarMaxAvailability();
 enableRadar();
 
@@ -5884,7 +5933,7 @@ buildStationDropdown();
   
 function buildStationDropdown(){
   const sel = document.getElementById('stationSelect');
-  sel.innerHTML = '<option value="">-- select --</option>';
+  sel.innerHTML = '<option value="">Find Station</option>';
   Object.keys(stations).sort().forEach(id => {
     const o = document.createElement('option');
     o.value = id;
@@ -6511,4 +6560,3 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
 </script>
 </body>
 </html>
- 
