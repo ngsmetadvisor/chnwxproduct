@@ -3861,13 +3861,21 @@ const MIN_PROJECTION_POINTS=RADAR_MAX_MIN_CHAIN;
 // X marker only for each track's first and last detection, colored by its track.
   // White markers (tracks that haven't yet reached MIN_PROJECTION_POINTS) are drawn at
   // 50% opacity to visually read as "not enough data yet" rather than a confirmed
-  // detection. The most recent detection in each track gets a black circle behind it
-  // to stand out from its own trail.
+  // detection. The most recent detection in each track only gets a black circle behind
+  // it if the track has genuinely ENDED — i.e. it was never re-detected within the
+  // allowed missing-frame window, meaning the storm actually fell below the intensity
+  // threshold. A track still current (re-detected recently, or detected in the very
+  // last frame) keeps its normal intensity color instead of turning black.
+  const _lastFrameIdxForColor=perFrame.length-1;
+  const _endedTrackIds=new Set(
+    tracks.filter(tr=>(_lastFrameIdxForColor-tr.lastFrameIdx)>RADAR_MAX_MISSING_ALLOWED).map(tr=>tr.id)
+  );
 perFrame.forEach(framePts=>{
     framePts.forEach(pt=>{
       if(!pt._isFirst && !pt._isLast) return;
       const isWhite=(pt.color==='#ffffff'||pt.color==='#fff');
-      const markColor=pt._isLast?'#000':pt.color;
+      const isEnded=pt._isLast && _endedTrackIds.has(pt.trackId);
+      const markColor=isEnded?'#000':pt.color;
       const m=L.marker([pt.lat,pt.lon],{
         pane:'radarMax',interactive:false,
         icon:L.divIcon({className:'',html:'<div style="position:relative;width:16px;height:16px;"><div style="position:relative;color:'+markColor+';font-size:13px;font-weight:900;text-shadow:0 0 2px #000,0 0 2px #000,0 0 2px #000;opacity:'+(isWhite?0.5:1)+';text-align:center;line-height:16px;">✕</div></div>',iconSize:[16,16],iconAnchor:[8,8]})
