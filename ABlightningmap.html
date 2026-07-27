@@ -417,6 +417,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div id="ctxECForecast">⛅ Public forecast from EC</div>
   <div id="ctxWxChart">📈 ECMWF forecast chart</div>
   <div id="ctxAlertInfo">🚨 Weather alert here</div>
+  <div style="height:0.5px;background:rgba(255,255,255,0.1);margin:4px 0;"></div>
+  <div id="ctxMenuClose" style="padding:8px 14px;font-size:12px;color:#666;cursor:pointer;transition:background 0.1s;text-align:center;">✕ Close</div>
   </div>
 
   <!-- EC Forecast Modal -->
@@ -3016,13 +3018,10 @@ let radarMaxLastSpeedKmh=null;     // speed (km/h) of the closest tracked storm 
 let radarMaxLastClosestKm=null;    // closest-approach distance (km) of the closest tracked storm from the most recent detection pass
 let radarMaxLastClosestHour=null;  // hour index (0=now) at which that closest approach occurs
 function stormStatusSuffix(){
-  let s='';
-  if(radarMaxLastSpeedKmh!=null && isFinite(radarMaxLastSpeedKmh)) s+=' · storm '+radarMaxLastSpeedKmh.toFixed(0)+' km/h';
-  if(radarMaxLastClosestKm!=null && isFinite(radarMaxLastClosestKm)){
-    const hourLabel=radarMaxLastClosestHour===0?'now':('~'+radarMaxLastClosestHour+'h');
-    s+=' · closest '+radarMaxLastClosestKm.toFixed(0)+'km @ '+hourLabel;
-  }
-  return s;
+  // Storm speed/closest-approach text removed from the status bar — too long on
+  // mobile. radarMaxLastSpeedKmh/radarMaxLastClosestKm are still tracked and used
+  // by the storm-proximity banner; this just no longer appends them to the status line.
+  return '';
 }
 let radarMaxSeparationKm=12;      // minimum separation between simultaneously-tracked storms
 let radarMaxMinIntensity=1.5;     // minimum cm/h (from RADAR_INTENSITY_LUT) — storms below this are ignored. Default: yellow band (index 7)
@@ -5735,6 +5734,7 @@ setTimeout(toggleGPS, 500);
 
 // ── Context menu — right-click + long-press ───────────────────
 const ctxMenu = document.getElementById('mapContextMenu');
+document.getElementById('ctxMenuClose').addEventListener('click', () => { ctxMenu.style.display = 'none'; });
 
 map.on('contextmenu', e => {
   window._ecFcLatLng = e.latlng;
