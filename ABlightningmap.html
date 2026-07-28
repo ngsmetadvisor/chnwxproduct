@@ -570,7 +570,26 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
       </div>
 <input id="radar-max-intensity-slider" type="range" min="0" max="14" step="1" value="7" style="width:100%;accent-color:#fff;border-radius:6px;height:6px;background:rgba(255,255,255,0.12);">
     </div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-top:2px;border-top:0.5px solid rgba(255,255,255,0.1);padding-top:8px;">
+      <span style="font-size:10px;color:#aaa;" title="Hide grey/white/black X markers and trails for tracks that lack enough data or have ended — only show currently-active projected storms">Hide weakened tracks</span>
+      <input id="radar-max-onlyactive-toggle" type="checkbox" style="width:16px;height:16px;accent-color:#fff;cursor:pointer;">
+    </div>
     <button id="radar-max-reset-btn" type="button" style="width:100%;margin-top:2px;background:transparent;border:0.5px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.7);font-size:10px;padding:6px 0;border-radius:8px;cursor:pointer;">↺ Reset to defaults</button>
+  </div>
+  
+<!-- Hail size threshold popup -->
+  <div id="hail-size-settings-panel" style="display:none;position:absolute;z-index:2000;background:rgba(8,8,18,0.97);border:0.5px solid rgba(255,140,0,0.35);border-radius:14px;padding:10px 12px;min-width:220px;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.7);font-family:monospace;">
+    <div style="font-size:10px;color:#ff8c00;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;border-bottom:0.5px solid rgba(255,140,0,0.2);padding-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+      <span>Large Hail Threshold</span>
+      <span id="hail-size-settings-close" style="cursor:pointer;color:#888;font-size:13px;">✕</span>
+    </div>
+    <div style="margin-bottom:4px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:3px;">
+        <span title="Minimum hail size to classify as a Large Hail Warning/Watch">Min size</span>
+        <span id="hail-size-val" style="color:#ffdd00;font-weight:700;">–</span>
+      </div>
+      <input id="hail-size-slider" type="range" min="0" max="0" step="1" value="0" style="width:100%;accent-color:#ff8c00;">
+    </div>
   </div>
 
   <!-- Alberta panel -->
@@ -592,7 +611,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   </div>
 
 <!-- Alberta Alerts panel -->
-<div id="ab-alerts-panel" style="display:block;position:absolute;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,80,80,0.35);border-radius:10px;padding:8px 12px;min-width:220px;max-width:280px;backdrop-filter:blur(6px);font-family:monospace;font-size:13px;color:#888;">
+<div id="ab-alerts-panel" style="display:block;position:absolute;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,80,80,0.35);border-radius:10px;padding:8px 12px;min-width:320px;max-width:450px;backdrop-filter:blur(6px);font-family:monospace;font-size:13px;color:#888;">
     <div class="title" style="font-size:14px;color:#ff5555;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;border-bottom:0.5px solid rgba(255,80,80,0.25);padding-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
       <span>AB Warnings/Watches</span>
       <span id="ab-alerts-collapse-btn" style="cursor:pointer;font-size:14px;color:#ff5555;margin-left:auto;">▼</span>
@@ -778,6 +797,7 @@ const r=radarPanel.getBoundingClientRect();
   repositionOpenComboPanel();
 }
 window.addEventListener('resize', positionToolbar);
+window.addEventListener('resize', updateAlertsToggleUI);
 setTimeout(positionToolbar, 0);
 
 map.createPane('radar');        map.getPane('radar').style.zIndex        = 350;
@@ -1161,6 +1181,24 @@ function haversineKm(lat1,lon1,lat2,lon2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
+function handlePickModeClick(e){
+  if(_addViewPicking){
+    L.DomEvent.stopPropagation(e);
+    _setAddViewPickingUI(false);
+    runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
+    return true;
+  }
+  if(_mockGpsPicking){
+    L.DomEvent.stopPropagation(e);
+    _mockGpsPicking=false;
+    document.getElementById('gps-btn').classList.remove('searching');
+    setMockGPSAt(e.latlng.lat, e.latlng.lng);
+    return true;
+  }
+  L.DomEvent.stopPropagation(e);
+  return false;
+}
+
 const BEARING_DIR_NAMES=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 function bearingTo(lat1,lon1,lat2,lon2){
   const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180;
@@ -1367,7 +1405,7 @@ function pip(lat,lon,ll){
 }
 
 // ── Fire Weather Zones ────────────────────────────────────────
-let zoneLayer=null, zonesVisible=true;
+let zoneLayer=null, zonesVisible=true, zoneColorsVisible=true;
 const zonePolygons=[];
 // Zones (KML) and stations (CSV) load via two independent fetches that can resolve in
 // either order. refreshAbAlertsPanel() needs BOTH to be loaded before it can correctly
@@ -1594,9 +1632,13 @@ zonePolygons.forEach(z=>{z._count=0;z._ec1=0;z._ec2=0;z._ec3=0;z._ec12=0;});
     if(!el)return;
     el.textContent=z._count;
     el.className='zone-count'+(z._count>50?' fire':z._count>10?' hot':'');
-    if(z.polygon&&zonesVisible){
-      const intensity=max>0?z._count/max:0;
-      z.polygon.setStyle({fillOpacity:0.05+intensity*0.35});
+if(z.polygon&&zonesVisible){
+      if(zoneColorsVisible){
+        const intensity=max>0?z._count/max:0;
+        z.polygon.setStyle({fillOpacity:0.05+intensity*0.35});
+      } else {
+        z.polygon.setStyle({fillOpacity:0.06});
+      }
     }
   });
   const list=document.getElementById('zone-list');
@@ -1614,11 +1656,18 @@ function toggleZonesVisible(){
   zonesVisible=!zonesVisible;
   if(zonesVisible){if(zoneLayer)zoneLayer.addTo(map);btn.classList.add('active');btn.style.opacity='1';}
   else{if(zoneLayer)map.removeLayer(zoneLayer);btn.classList.remove('active');btn.style.opacity='0.5';}
-  const abBtn=document.getElementById('ab-zones-hide-btn');
-  if(abBtn) abBtn.textContent=zonesVisible?'Hide zones':'Show zones';
 }
 document.getElementById('zone-toggle').addEventListener('click',toggleZonesVisible);
-document.getElementById('ab-zones-hide-btn').addEventListener('click',toggleZonesVisible);
+
+// AB panel's own button — only toggles the orange strike-intensity fill, keeps zone
+// boundaries/polygons on the map either way.
+function toggleZoneColorsVisible(){
+  zoneColorsVisible=!zoneColorsVisible;
+  const abBtn=document.getElementById('ab-zones-hide-btn');
+  if(abBtn) abBtn.textContent=zoneColorsVisible?'Hide zones':'Show zones';
+  rebuildZoneCounts();
+}
+document.getElementById('ab-zones-hide-btn').addEventListener('click',toggleZoneColorsVisible);
 
 document.getElementById('ab-collapse-btn').addEventListener('click',()=>{
   const panel=document.getElementById('ab-panel');
@@ -1672,10 +1721,11 @@ let _alertsCheckSeq=0; // bumped every time checkAlertsAtCurrentLocation is call
                        // you've since switched away from) can never overwrite a newer,
                        // already-applied result
 let _abAlertsPriorityActive=false;
-let _collapsedAlertGroups=new Set(); // stable keys 'tornado'/'hail' — controls ONLY circle visibility (via the Hide/Show circles button), independent of row expand/collapse
+let _collapsedAlertGroups=new Set(); // stable keys 'tornado'/'hail' — controls ONLY circle visibility (via the Hide/Show button), independent of row expand/collapse
 let _openAlertRowGroups=new Set(); // stable keys — tracks which rows are manually expanded, independent of _collapsedAlertGroups
 let _abAlertsDismissedKey=null, _abAlertsLastVibrateKey=null;
 let tornadoHailCircleLayer=null, mockTornadoHailCircle=null, gpsTornadoHailCircle=null;
+let tornadoHailPolygonLayer=null, tornadoHailPolygonGeoms={}; // groupKey ('tornado'/'hail') -> array of {geometry, priority, props}
 let alertPolygonLayer=null;
 let otherAlertCircleLayer=null, otherAlertCircleGroups={}; // yellow circles for non-tornado/hail alerts, shown only while their row is expanded
 let _alertBannerRotateIdx=0, _alertBannerRotateTimer=null;
@@ -1691,13 +1741,20 @@ function updateAlertsToggleUI(){
     comboBtn.style.background=alertsVisible?'rgba(255,80,80,0.18)':'transparent';
     comboBtn.style.borderColor=alertsVisible?'#ff5555':'rgba(255,255,255,0.15)';
   }
-  if(!btn) return;
+if(!btn) return;
   if(!alertsVisible){
     btn.classList.remove('active');
     btn.innerHTML='<span class="tb-icon">🚨</span><span class="tb-text"> Off</span>';
   } else {
     btn.classList.add('active');
-    btn.innerHTML='<span class="tb-icon">'+alertsScope+'</span><span class="tb-text"> '+alertsScope+'</span>';
+    // Desktop shows both the icon span and the text span, so using the same "AB"/"CA"
+    // string for both produced a duplicate ("AB AB"). Mobile only shows the icon span
+    // (tb-text is display:none there), so it's left as plain letters, unchanged.
+    const isDesktop=window.innerWidth>600;
+    const scopeEmoji=alertsScope==='AB'?'🚨':'🚨';
+    btn.innerHTML=isDesktop
+      ? '<span class="tb-icon">'+scopeEmoji+'</span><span class="tb-text"> '+alertsScope+'</span>'
+      : '<span class="tb-icon">'+alertsScope+'</span><span class="tb-text"> '+alertsScope+'</span>';
   }
 }
 function enableAlertsLayer(scope){
@@ -1871,7 +1928,26 @@ const HAIL_SIZE_KEYWORDS=[
   {kw:'toonie',mm:28},{kw:'loonie',mm:26},{kw:'quarter',mm:24},
   {kw:'nickel',mm:18},{kw:'dime',mm:10},{kw:'pea',mm:6}
 ];
-const HAIL_LARGE_THRESHOLD_MM=18; // nickel-sized and up
+const HAIL_THRESHOLD_STORAGE_KEY='hail_large_threshold_mm_v1';
+let HAIL_LARGE_THRESHOLD_MM=18; // nickel-sized and up — user-adjustable via the hail gear popup
+(function loadHailThreshold(){
+  try{
+    const saved=localStorage.getItem(HAIL_THRESHOLD_STORAGE_KEY);
+    if(saved!==null){ const v=parseFloat(saved); if(!isNaN(v)) HAIL_LARGE_THRESHOLD_MM=v; }
+  }catch(e){ console.warn('[hailThreshold] load failed',e); }
+})();
+// Distinct sizes, ascending by mm, deduped (grapefruit/softball both 90mm -> one slider step),
+// used to populate the hail-size threshold slider.
+const HAIL_SLIDER_SIZES=(()=>{
+  const seen=new Set(), out=[];
+  [...HAIL_SIZE_KEYWORDS].sort((a,b)=>a.mm-b.mm).forEach(h=>{
+    if(seen.has(h.mm)) return;
+    seen.add(h.mm);
+    const label=HAIL_SIZE_KEYWORDS.filter(x=>x.mm===h.mm).map(x=>x.kw).join('/');
+    out.push({mm:h.mm,label});
+  });
+  return out;
+})();
 
 // Isolates only the text actually about hail — the "Hail:" structured line (ECCC's
 // common format) plus any full sentence containing the word "hail" — so size figures
@@ -1990,14 +2066,10 @@ async function fetchAlertsInBbox(minLon,minLat,maxLon,maxLat,label){
     return allFeats.filter(f=>!isAlertExpired(f.properties||{}));
   }catch(e){ console.warn('['+(label||'alerts')+'] fetch failed:',e.message||e); return allFeats.filter(f=>!isAlertExpired(f.properties||{})); }
 }
-function fetchAlbertaAlerts(){
-  const buffer=0.5;
-  return fetchAlertsInbbox_AB(buffer);
-}
-function fetchAlbertaAlerts_impl(buffer){
+function fetchAlbertaAlerts(buffer){
+  buffer = buffer==null ? 0.5 : buffer;
   return fetchAlertsInBbox(AB.lonMin-buffer, AB.latMin-buffer, AB.lonMax+buffer, AB.latMax+buffer, 'abAlerts');
 }
-fetchAlbertaAlerts = function(){ return fetchAlbertaAlerts_impl(0.5); };
 // Canada-wide bbox — covers all provinces/territories including offshore/Arctic alert zones
 const CANADA_BBOX={minLon:-141.5,minLat:41.5,maxLon:-51.5,maxLat:83.5};
 function fetchCanadaAlerts(){
@@ -2138,20 +2210,7 @@ const cm=L.circleMarker([s.lat,s.lon],{
       pane:'alertCircles',renderer:alertCirclesRenderer,radius:12,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:true
     }).addTo(tornadoHailCircleLayer);
     cm.on('click', e=>{
-      if(_addViewPicking){
-        L.DomEvent.stopPropagation(e);
-        _setAddViewPickingUI(false);
-        runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
-        return;
-      }
-      if(_mockGpsPicking){
-        L.DomEvent.stopPropagation(e);
-        _mockGpsPicking=false;
-        document.getElementById('gps-btn').classList.remove('searching');
-        setMockGPSAt(e.latlng.lat, e.latlng.lng);
-        return;
-      }
-      L.DomEvent.stopPropagation(e);
+      if(handlePickModeClick(e)) return;
       showStationPopup(id);
     });
   };
@@ -2167,8 +2226,34 @@ Object.values(r.zoneStations).forEach(list=>list.forEach(id=>{
       }));
     });
 watchStations.forEach((v,id)=>{ if(warnStations.has(id)) watchStations.delete(id); });
-    warnStations.forEach((entries,id)=>addCircle(id,'#ff2222'));
+warnStations.forEach((entries,id)=>addCircle(id,'#ff2222'));
     watchStations.forEach((entries,id)=>addCircle(id,'#ffdd00'));
+  });
+}
+
+// Draws the real ECCC alert polygon geometry for tornado/large-hail warnings and watches —
+// independent of the general Alerts toolbar toggle, so these two hazard types are always
+// shown on the map. Hidden per-group (tornado/hail) via the same Hide/Show button that
+// controls the warning circles above.
+function updateTornadoHailPolygons(){
+  if(!tornadoHailPolygonLayer){ tornadoHailPolygonLayer=L.layerGroup().addTo(map); }
+  tornadoHailPolygonLayer.clearLayers();
+  Object.entries(tornadoHailPolygonGeoms).forEach(([groupKey,list])=>{
+    if(_collapsedAlertGroups.has(groupKey)) return; // hidden by the group's Hide/Show button
+    list.forEach(item=>{
+      const style=alertStyleForPriority(item.priority);
+      const color=style?(style.mode==='banner'?style.bg:style.color):'#ff8c00';
+      let gj;
+      try{
+        gj=L.geoJSON(item.geometry,{pane:'alertPolygons',style:{color,weight:2,opacity:0.85,fillColor:color,fillOpacity:0.1}});
+      }catch(e){ console.warn('[tornadoHailPolygons] bad geometry',e); return; }
+      const info=extractAlertInfoWithPriority(item.props);
+      gj.on('click', e=>{
+        if(handlePickModeClick(e)) return;
+        showAlertModal([info]);
+      });
+      gj.addTo(tornadoHailPolygonLayer);
+    });
   });
 }
 
@@ -2217,20 +2302,7 @@ function updateAlertPolygons(features){
       gj=L.geoJSON(f.geometry,{pane:'alertPolygons',style:{color,weight:2,opacity:0.85,fillColor:color,fillOpacity:0.12}});
     }catch(e){ console.warn('[alertPolygons] bad geometry',e); return; }
 gj.on('click',e=>{
-      if(_addViewPicking){
-        L.DomEvent.stopPropagation(e);
-        _setAddViewPickingUI(false);
-        runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
-        return;
-      }
-      if(_mockGpsPicking){
-        L.DomEvent.stopPropagation(e);
-        _mockGpsPicking=false;
-        document.getElementById('gps-btn').classList.remove('searching');
-        setMockGPSAt(e.latlng.lat, e.latlng.lng);
-        return;
-      }
-      L.DomEvent.stopPropagation(e);
+      if(handlePickModeClick(e)) return;
       showAlertModal([info]);
     });
     gj.addTo(alertPolygonLayer);
@@ -2273,11 +2345,17 @@ const features=await fetchAlbertaAlerts();
   // produce duplicate rows. For each matched zone, record which specific stations in that
   // zone fall inside the alert polygon (every station is checked, no centroid shortcut),
   // merged via Sets so overlapping features of the same alert type don't duplicate entries.
-const groups={};
+tornadoHailPolygonGeoms={};
+  const groups={};
 features.forEach(f=>{
     const props=f.properties||{};
     const classes=classifyAbAlert(props);
     classes.forEach(cls=>{
+      if((cls.priority===1||cls.priority===2||cls.priority===3||cls.priority===4) && f.geometry){
+        const gKey=(cls.priority<=2)?'tornado':'hail';
+        if(!tornadoHailPolygonGeoms[gKey]) tornadoHailPolygonGeoms[gKey]=[];
+        tornadoHailPolygonGeoms[gKey].push({geometry:f.geometry, priority:cls.priority, props});
+      }
       const key=cls.priority+'|'+cls.label;
 if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null,infos:[],_infoKeySet:new Set(),stationInfos:{}};
 const infoObj=extractAlertInfo(props);
@@ -2306,7 +2384,7 @@ if(cls.priority<=6){
           console.log('[abAlerts-debug]',cls.label,'vs zone',z.shortId,'geomType:',f.geometry&&f.geometry.type,'bboxOverlap:',_fBBox&&z.bbox?bboxOverlap(_fBBox,z.bbox):'n/a','match:',hitStations.length?'station':'NONE');
         }
 if(!hitStations.length && !polyInZone) return;
-        if(!groups[key].zoneStations[z.shortId]) groups[key].zoneStations[z.shortId]=new Set();
+
         if(!groups[key].zoneStations[z.shortId]) groups[key].zoneStations[z.shortId]=new Set();
         hitStations.forEach(s=>{
           groups[key].zoneStations[z.shortId].add(s.id);
@@ -2325,6 +2403,7 @@ rows.sort((a,b)=>{
   });
 window._lastAbAlertsRows=rows;
   updateTornadoHailCircles(rows);
+  updateTornadoHailPolygons();
   window._abAlertsCurrentKey=JSON.stringify(rows.filter(r=>r.priority<=4).map(r=>({p:r.priority,z:Object.keys(r.zoneStations).sort()})));
 // Priorities 2, 4, 6 (Tornado Watch, Large Hail Watch, Severe T-Storm Watch) are the
 // watch tier; everything else active (1,3,5,7,8) is warning-tier — counted by distinct
@@ -2375,13 +2454,21 @@ const stnHtml=stnList.map(id=>'<span class="ab-alert-stn-id" data-stnid="'+id+'"
     const zoneLabel=zoneIds.length+' zone'+(zoneIds.length!==1?'s':'');
 const isCircleGroup=(groupId==='tornado'||groupId==='hail');
     const circlesHidden=isCircleGroup && _collapsedAlertGroups.has(groupId);
-    const hideBtnHtml=isCircleGroup
-      ? '<button class="ab-alert-hide-circles-btn" data-gid="'+groupId+'" style="font-size:9px;font-weight:700;background:rgba(0,0,0,0.25);border:0.5px solid '+col+';color:'+col+';border-radius:8px;padding:1px 6px;cursor:pointer;white-space:nowrap;font-family:monospace;">'+(circlesHidden?'Show circles':'Hide circles')+'</button>'
+const hideBtnHtml=isCircleGroup
+      ? '<button class="ab-alert-hide-circles-btn" data-gid="'+groupId+'" style="font-size:9px;font-weight:700;background:rgba(0,0,0,0.25);border:0.5px solid '+col+';color:'+col+';border-radius:8px;padding:1px 6px;cursor:pointer;white-space:nowrap;font-family:monospace;">'+(circlesHidden?'Show zone':'Hide zone')+'</button>'
+      : '';
+const hailGearBtnHtml=(groupId==='hail')
+      ? '<button class="ab-alert-hail-gear-btn" data-gid="'+groupId+'" title="Hail size threshold" style="font-size:11px;line-height:1;background:rgba(0,0,0,0.25);border:0.5px solid '+col+';color:'+col+';border-radius:8px;padding:2px 6px;cursor:pointer;white-space:nowrap;font-family:monospace;">⚙</button>'
+      : '';
+const hailThresholdLabelHtml=(groupId==='hail')
+      ? '<span style="font-size:9px;color:'+col+';opacity:0.85;white-space:nowrap;">≥'+(HAIL_SLIDER_SIZES[_hailSizeIdxForMM(HAIL_LARGE_THRESHOLD_MM)]||{}).label+'</span>'
       : '';
     return '<div style="border-bottom:0.5px solid rgba(255,255,255,0.06);padding:4px 0;'+wrapStyle+'">'+
       '<div class="ab-alert-grp-header" data-target="'+groupId+'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px;">'+
         '<span style="font-size:12px;font-weight:800;color:'+col+';">'+r.label+'</span>'+
         '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0;">'+
+          hailThresholdLabelHtml+
+          hailGearBtnHtml+
           hideBtnHtml+
           '<span style="font-size:11px;font-weight:700;'+badgeStyle+'border-radius:8px;padding:1px 6px;white-space:nowrap;">'+zoneLabel+'</span>'+
           '<span class="ab-alert-grp-caret" style="font-size:11px;color:'+col+';">'+(defaultOpen?'▼':'▶')+'</span>'+
@@ -2390,11 +2477,19 @@ const isCircleGroup=(groupId==='tornado'||groupId==='hail');
       '<div id="'+groupId+'" style="display:'+(defaultOpen?'block':'none')+';margin-top:3px;">'+zoneRowsHtml+'</div>'+
       '</div>';
   }
-  function renderGreyRow(label){
+function renderGreyRow(label,groupId){
+    const isHail=(groupId==='hail');
+    const hailBits=isHail
+      ? '<span style="font-size:9px;color:#888;opacity:0.85;white-space:nowrap;">≥'+(HAIL_SLIDER_SIZES[_hailSizeIdxForMM(HAIL_LARGE_THRESHOLD_MM)]||{}).label+'</span>'+
+        '<button class="ab-alert-hail-gear-btn" data-gid="hail" title="Hail size threshold" style="font-size:11px;line-height:1;background:rgba(0,0,0,0.25);border:0.5px solid #888;color:#888;border-radius:8px;padding:2px 6px;cursor:pointer;white-space:nowrap;font-family:monospace;">⚙</button>'
+      : '';
     return '<div style="border-bottom:0.5px solid rgba(255,255,255,0.06);padding:4px 0;opacity:0.4;">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">'+
         '<span style="font-size:12px;font-weight:700;color:#888;">'+label+'</span>'+
-        '<span style="font-size:11px;color:#666;">none</span>'+
+        '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0;">'+
+          hailBits+
+          '<span style="font-size:11px;color:#666;">none</span>'+
+        '</span>'+
       '</div></div>';
   }
 // Groups whose presence (warning OR watch) should force the panel open — the color
@@ -2411,10 +2506,11 @@ window._alertRowDataStore={};
       const matches=[];
       rows.forEach((r,i)=>{ if(!usedRowIdx.has(i) && c.priorities.includes(r.priority)) matches.push({r,i}); });
 if(matches.length){
-        matches.forEach(m=>usedRowIdx.add(m.i));
+matches.forEach(m=>usedRowIdx.add(m.i));
         console.log('[abAlerts-debug] rendering group', c.group, 'as groupId');
         const hasWarning=matches.some(m=>m.r.priority===c.priorities[0]);
         if(hasWarning) priorityWarnActive=true; else priorityWatchActive=true;
+        void 0; // marker: active branch already includes hail gear/threshold via renderActiveRow
 const zoneStations={};
         matches.forEach(m=>{
           Object.entries(m.r.zoneStations).forEach(([zId,list])=>{
@@ -2431,8 +2527,8 @@ const zoneStations={};
         });
 const merged={label:c.label,priorities:c.priorities,zoneStations:Object.fromEntries(Object.entries(zoneStations).map(([zId,set])=>[zId,[...set].sort()])),stationInfos};
 html+=renderActiveRow(merged,rIdx++, alertStyleForPriority(hasWarning?c.priorities[0]:c.priorities[1]), true, c.group);
-      } else {
-        html+=renderGreyRow(c.label);
+} else {
+        html+=renderGreyRow(c.label,c.group);
       }
       return;
     }
@@ -2520,8 +2616,15 @@ listEl.querySelectorAll('.ab-alert-hide-circles-btn').forEach(btn=>{
       const gid=btn.dataset.gid;
       const nowHidden=!_collapsedAlertGroups.has(gid);
       if(nowHidden) _collapsedAlertGroups.add(gid); else _collapsedAlertGroups.delete(gid);
-      btn.textContent=nowHidden?'Show circles':'Hide circles';
+      btn.textContent=nowHidden?'Show zone':'Hide zone';
       updateTornadoHailCircles(window._lastAbAlertsRows||[]);
+      updateTornadoHailPolygons();
+    });
+  });
+listEl.querySelectorAll('.ab-alert-hail-gear-btn').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      openHailSizePanel(btn);
     });
   });
 listEl.querySelectorAll('.ab-alert-zone-header').forEach(h=>{
@@ -2557,82 +2660,42 @@ document.getElementById('ab-alerts-collapse-btn')?.addEventListener('click',()=>
   positionAbAlertsPanel();
 });
 
-// Same red/yellow logic as updateTornadoHailCircles, but for the single mock GPS point —
-// red if any active classification at that point is tornado/hail warning-tier (priority
-// 1 or 3), else yellow if watch-tier (priority 2 or 4), else no circle.
-function updateMockTornadoHailCircle(){
-  if(mockTornadoHailCircle){ map.removeLayer(mockTornadoHailCircle); mockTornadoHailCircle=null; }
-  if(!window._mockLocationLL) return;
-  const mockAlerts=window._mockLocationAlerts||[];
+// Shared by updateMockTornadoHailCircle/updateGpsTornadoHailCircle — red if any active
+// classification at the location is tornado/hail warning-tier (priority 1 or 3), else
+// yellow if watch-tier (priority 2 or 4), else no circle. Returns the new circle layer
+// (or null), so callers just reassign their own tracking variable to the result.
+function _updateLocationTornadoHailCircle(existingCircle, latlng, alerts, label){
+  if(existingCircle){ map.removeLayer(existingCircle); }
+  if(!latlng) return null;
+  const lat=latlng.lat, lon=latlng.lng??latlng.lon;
   let color=null, isWarning=false, labels=[];
-mockAlerts.forEach(m=>{
+  (alerts||[]).forEach(m=>{
     (m.classes||[]).forEach(cls=>{
       if(cls.priority===1||cls.priority===3){ color='#ff2222'; isWarning=true; labels.push({label:cls.label,infos:[m.info]}); }
       else if(cls.priority===2||cls.priority===4){ if(color!=='#ff2222'){ color='#ffdd00'; } labels.push({label:cls.label,infos:[m.info]}); }
     });
   });
-  if(!color) return;
-  mockTornadoHailCircle=L.circleMarker([window._mockLocationLL.lat,window._mockLocationLL.lon],{
+  if(!color) return null;
+  const circle=L.circleMarker([lat,lon],{
     pane:'alertCircles',renderer:alertCirclesRenderer,radius:14,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:true
   }).addTo(map);
-mockTornadoHailCircle.on('click', function(e){
-    if(_addViewPicking){
-      L.DomEvent.stopPropagation(e);
-      _setAddViewPickingUI(false);
-      runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
-      return;
-    }
-    if(_mockGpsPicking){
-      L.DomEvent.stopPropagation(e);
-      _mockGpsPicking=false;
-      document.getElementById('gps-btn').classList.remove('searching');
-      setMockGPSAt(e.latlng.lat, e.latlng.lng);
-      return;
-    }
-    L.DomEvent.stopPropagation(e);
-    const fakeStation={lat:window._mockLocationLL.lat,lon:window._mockLocationLL.lon};
-    showStationAlertPopup('Mock Location',fakeStation,labels,isWarning,color);
+  circle.on('click', function(e){
+    if(handlePickModeClick(e)) return;
+    showStationAlertPopup(label,{lat,lon},labels,isWarning,color);
   });
+  return circle;
+}
+
+function updateMockTornadoHailCircle(){
+  mockTornadoHailCircle=_updateLocationTornadoHailCircle(mockTornadoHailCircle, window._mockLocationLL, window._mockLocationAlerts, 'Mock Location');
 }
 
 // Same logic as updateMockTornadoHailCircle, but at the real GPS fix — this was
 // previously mock-only, so switching from mock back to real GPS never drew a
 // per-location warning circle at all, even when the real position was inside one.
 function updateGpsTornadoHailCircle(){
-  if(gpsTornadoHailCircle){ map.removeLayer(gpsTornadoHailCircle); gpsTornadoHailCircle=null; }
   const src=gpsActive?(gpsMarker?gpsMarker.getLatLng():_gpsLastLL):null;
-  if(!src) return;
-  const lat=src.lat, lon=src.lng??src.lon;
-  const gpsAlerts=window._gpsLocationAlerts||[];
-  let color=null, isWarning=false, labels=[];
-  gpsAlerts.forEach(m=>{
-    (m.classes||[]).forEach(cls=>{
-      if(cls.priority===1||cls.priority===3){ color='#ff2222'; isWarning=true; labels.push({label:cls.label,infos:[m.info]}); }
-      else if(cls.priority===2||cls.priority===4){ if(color!=='#ff2222'){ color='#ffdd00'; } labels.push({label:cls.label,infos:[m.info]}); }
-    });
-  });
-  if(!color) return;
-  gpsTornadoHailCircle=L.circleMarker([lat,lon],{
-    pane:'alertCircles',renderer:alertCirclesRenderer,radius:14,weight:2.5,color,fillColor:color,fillOpacity:0.18,interactive:true
-  }).addTo(map);
-  gpsTornadoHailCircle.on('click', function(e){
-    if(_addViewPicking){
-      L.DomEvent.stopPropagation(e);
-      _setAddViewPickingUI(false);
-      runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
-      return;
-    }
-    if(_mockGpsPicking){
-      L.DomEvent.stopPropagation(e);
-      _mockGpsPicking=false;
-      document.getElementById('gps-btn').classList.remove('searching');
-      setMockGPSAt(e.latlng.lat, e.latlng.lng);
-      return;
-    }
-    L.DomEvent.stopPropagation(e);
-    const fakeStation={lat,lon};
-    showStationAlertPopup('My Location',fakeStation,labels,isWarning,color);
-  });
+  gpsTornadoHailCircle=_updateLocationTornadoHailCircle(gpsTornadoHailCircle, src, window._gpsLocationAlerts, 'My Location');
 }
 // Same rendering/styling rules as the AB panel (per-classification, banner for
 // Tornado/Large Hail warning-or-watch, plain colored text for the rest) — but built
@@ -3042,6 +3105,7 @@ let radarMaxFirstRunDone=false; // first detection after a fresh page/session lo
 let radarMaxTrailLines=[], radarMaxProjectionLines=[], radarMaxProjectionMarkers=[];
 let radarMaxOpacityValue=0.7;     // storm marker/trail/projection opacity — mirrors the radar-max-opacity-slider value; also applied to the center storm-tracking banner
 let radarMaxTrackedCellCount=0;    // cumulative count of currently-tracked storm cells across all scans (initial + each "+" add) — reset only when tracking is cleared/turned off
+window._endedTrackIdsGlobal=window._endedTrackIdsGlobal||new Set();
 let radarMaxLastSpeedKmh=null;     // speed (km/h) of the closest tracked storm from the most recent detection pass — shown in the status bar since the center banner is timing-sensitive
 let radarMaxLastClosestKm=null;    // closest-approach distance (km) of the closest tracked storm from the most recent detection pass
 let radarMaxLastClosestHour=null;  // hour index (0=now) at which that closest approach occurs
@@ -3051,6 +3115,7 @@ function stormStatusSuffix(){
   // by the storm-proximity banner; this just no longer appends them to the status line.
   return '';
 }
+let radarMaxOnlyActiveTracks=true; // if true, hide white (not-enough-data) and black (ended) X markers/trails — only show currently-active projected tracks — defaults to on
 let radarMaxSeparationKm=12;      // minimum separation between simultaneously-tracked storms
 let radarMaxMinIntensity=1.5;     // minimum cm/h (from RADAR_INTENSITY_LUT) — storms below this are ignored. Default: yellow band (index 7)
 let radarMaxIntensityColor='rgb(254,254,0)'; // mirrors the current min-intensity swatch — used to color the Track storms button/countdown
@@ -3113,7 +3178,8 @@ function saveRadarMaxSettings(){
       coltol:RADAR_LUT_COLOR_TOL,
       edge:RADAR_MAX_EDGE_MARGIN_PX,
       chain:RADAR_MAX_MIN_CHAIN,
-      missing:RADAR_MAX_MISSING_ALLOWED
+      missing:RADAR_MAX_MISSING_ALLOWED,
+      onlyActive:radarMaxOnlyActiveTracks
     }));
   }catch(e){ console.warn('[radarMaxSettings] save failed',e); }
 }
@@ -3136,7 +3202,8 @@ function loadRadarMaxSettings(){
   if(typeof saved.coltol==='number') RADAR_LUT_COLOR_TOL=saved.coltol;
   if(typeof saved.edge==='number') RADAR_MAX_EDGE_MARGIN_PX=saved.edge;
   if(typeof saved.chain==='number') RADAR_MAX_MIN_CHAIN=saved.chain;
-  if(typeof saved.missing==='number') RADAR_MAX_MISSING_ALLOWED=saved.missing;
+if(typeof saved.missing==='number') RADAR_MAX_MISSING_ALLOWED=saved.missing;
+  if(typeof saved.onlyActive==='boolean') radarMaxOnlyActiveTracks=saved.onlyActive;
   radarMaxMinIntensity=RADAR_INTENSITY_STEPS[radarMaxIntensityIdx];
 }
 
@@ -3155,8 +3222,10 @@ function applyRadarMaxSettingsToUI(){
   setSlider('radar-max-edge-slider',RADAR_MAX_EDGE_MARGIN_PX);  setLabel('radar-max-edge-val',RADAR_MAX_EDGE_MARGIN_PX+'px');
   setSlider('radar-max-chain-slider',RADAR_MAX_MIN_CHAIN);      setLabel('radar-max-chain-val',RADAR_MAX_MIN_CHAIN);
   setSlider('radar-max-missing-slider',RADAR_MAX_MISSING_ALLOWED); setLabel('radar-max-missing-val',RADAR_MAX_MISSING_ALLOWED);
-  setSlider('radar-max-intensity-slider',radarMaxIntensityIdx);
+setSlider('radar-max-intensity-slider',radarMaxIntensityIdx);
   updateRadarMaxIntensitySwatch(radarMaxIntensityIdx);
+  const onlyActiveEl=document.getElementById('radar-max-onlyactive-toggle');
+  if(onlyActiveEl) onlyActiveEl.checked=radarMaxOnlyActiveTracks;
 }
 
 
@@ -3898,15 +3967,17 @@ const MIN_PROJECTION_POINTS=RADAR_MAX_MIN_CHAIN;
   // allowed missing-frame window, meaning the storm actually fell below the intensity
   // threshold. A track still current (re-detected recently, or detected in the very
   // last frame) keeps its normal intensity color instead of turning black.
-  const _lastFrameIdxForColor=perFrame.length-1;
+const _lastFrameIdxForColor=perFrame.length-1;
   const _endedTrackIds=new Set(
     tracks.filter(tr=>(_lastFrameIdxForColor-tr.lastFrameIdx)>RADAR_MAX_MISSING_ALLOWED).map(tr=>tr.id)
   );
+  window._endedTrackIdsGlobal=_endedTrackIds; // exposed so updateRadarMaxCurrent() can apply the same "hide weakened" filter
 perFrame.forEach(framePts=>{
     framePts.forEach(pt=>{
       if(!pt._isFirst && !pt._isLast) return;
       const isWhite=(pt.color==='#ffffff'||pt.color==='#fff');
       const isEnded=pt._isLast && _endedTrackIds.has(pt.trackId);
+      if(radarMaxOnlyActiveTracks && (isWhite||isEnded)) return;
       const markColor=isEnded?'#000':pt.color;
       const m=L.marker([pt.lat,pt.lon],{
         pane:'radarMax',interactive:false,
@@ -3919,8 +3990,12 @@ perFrame.forEach(framePts=>{
   // Dashed trail per track (only for tracks with 2+ points)
   tracks.forEach(tr=>{
     if(tr.points.length<2) return;
+    const lastPt=tr.points[tr.points.length-1];
+    const lastColor=lastPt.color||tr.color;
+    const isWhite=(lastColor==='#ffffff'||lastColor==='#fff');
+    const isEnded=_endedTrackIds.has(tr.id);
+    if(radarMaxOnlyActiveTracks && (isWhite||isEnded)) return;
     const pts=tr.points.map(p=>[p.lat,p.lon]);
-    const lastColor=tr.points[tr.points.length-1].color||tr.color;
     const line=L.polyline(pts,{pane:'radarMax',color:lastColor,weight:1.5,opacity:0.55,dashArray:'2 4',interactive:false}).addTo(map);
     radarMaxTrailLines.push(line);
   });
@@ -4075,6 +4150,7 @@ function updateRadarMaxCurrent(){
 r._maxPoints.forEach(pt=>{
     const col=pt.color||'#fff';
     const isWhite=(col==='#ffffff'||col==='#fff');
+    if(radarMaxOnlyActiveTracks && (isWhite||_endedTrackIdsGlobal.has(pt.trackId))) return;
     const m=L.marker([pt.lat,pt.lon],{
       pane:'radarMax',interactive:false,
       icon:L.divIcon({className:'',html:'<div style="color:'+col+';font-size:22px;font-weight:900;text-shadow:0 0 5px #000,0 0 5px #000,0 0 8px #000;opacity:'+(isWhite?0.5:1)+';">✕</div>',iconSize:[26,26],iconAnchor:[13,13]})
@@ -4459,62 +4535,40 @@ document.getElementById('radar-max-sep-slider').addEventListener('input',functio
   radarMaxSeparationKm=parseInt(this.value);
   document.getElementById('radar-max-sep-val').textContent=radarMaxSeparationKm+'km';
 });
-document.getElementById('radar-max-sep-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
+['radar-max-sep-slider','radar-max-link-slider','radar-max-proj-slider','radar-max-chain-slider',
+ 'radar-max-missing-slider','radar-max-storms-slider','radar-max-pool-slider','radar-max-coltol-slider',
+ 'radar-max-edge-slider','radar-max-speed-slider','radar-max-intensity-slider'
+].forEach(id=>{
+  document.getElementById(id).addEventListener('change', function(){
+    saveRadarMaxSettings();
+    if(radarMaxEnabled) runRadarMaxDetectionFast();
+  });
 });
 document.getElementById('radar-max-link-slider').addEventListener('input',function(){
   RADAR_MAX_LINK_KM=parseInt(this.value);
   document.getElementById('radar-max-link-val').textContent=RADAR_MAX_LINK_KM+'km';
 });
-document.getElementById('radar-max-link-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
+
 document.getElementById('radar-max-proj-slider').addEventListener('input',function(){
   RADAR_MAX_PROJECT_HOURS=parseInt(this.value);
   document.getElementById('radar-max-proj-val').textContent=RADAR_MAX_PROJECT_HOURS+'h';
 });
-document.getElementById('radar-max-proj-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
+
 document.getElementById('radar-max-chain-slider').addEventListener('input',function(){
   RADAR_MAX_MIN_CHAIN=parseInt(this.value);
   document.getElementById('radar-max-chain-val').textContent=RADAR_MAX_MIN_CHAIN;
 });
-document.getElementById('radar-max-chain-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
+
 document.getElementById('radar-max-missing-slider').addEventListener('input',function(){
   RADAR_MAX_MISSING_ALLOWED=parseInt(this.value);
   document.getElementById('radar-max-missing-val').textContent=RADAR_MAX_MISSING_ALLOWED;
 });
-document.getElementById('radar-max-missing-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
-document.getElementById('radar-max-storms-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
-document.getElementById('radar-max-pool-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
-document.getElementById('radar-max-coltol-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
-document.getElementById('radar-max-edge-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
-document.getElementById('radar-max-speed-slider').addEventListener('change',function(){
-  saveRadarMaxSettings();
-  if(radarMaxEnabled) runRadarMaxDetectionFast();
-});
+
+
+
+
+
+
 document.getElementById('radar-max-storms-slider').addEventListener('input',function(){
   RADAR_MAX_STORMS=parseInt(this.value);
   document.getElementById('radar-max-storms-val').textContent=RADAR_MAX_STORMS;
@@ -4577,12 +4631,15 @@ document.getElementById('radar-max-intensity-slider').addEventListener('input',f
   updateRadarMaxIntensitySwatch(idx);
 });
 document.getElementById('radar-max-intensity-slider').style.background=RADAR_INTENSITY_GRADIENT;
-loadRadarMaxSettings(); // safe here — all RADAR_MAX_* let/const vars above are now initialized
-applyRadarMaxSettingsToUI(); // restore any saved slider positions/labels (including intensity swatch) now that the panel DOM exists
-document.getElementById('radar-max-intensity-slider').addEventListener('change',function(){
+document.getElementById('radar-max-onlyactive-toggle').addEventListener('change',function(){
+  radarMaxOnlyActiveTracks=this.checked;
   saveRadarMaxSettings();
+  updateRadarMaxCurrent();
   if(radarMaxEnabled) runRadarMaxDetectionFast();
 });
+loadRadarMaxSettings(); // safe here — all RADAR_MAX_* let/const vars above are now initialized
+applyRadarMaxSettingsToUI(); // restore any saved slider positions/labels (including intensity swatch) now that the panel DOM exists
+
 document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
   radarMaxSeparationKm=12;
   RADAR_MAX_LINK_KM=20;
@@ -4594,9 +4651,12 @@ document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
   RADAR_MAX_CANDIDATE_POOL=100;
   RADAR_LUT_COLOR_TOL=60;
   RADAR_MAX_EDGE_MARGIN_PX=2;
-  RADAR_MAX_MIN_CHAIN=4;
+RADAR_MAX_MIN_CHAIN=4;
   RADAR_MAX_MISSING_ALLOWED=2;
+  radarMaxOnlyActiveTracks=false;
   saveRadarMaxSettings();
+  const onlyActiveEl=document.getElementById('radar-max-onlyactive-toggle');
+  if(onlyActiveEl) onlyActiveEl.checked=false;
 
   document.getElementById('radar-max-sep-slider').value=12;
   document.getElementById('radar-max-sep-val').textContent='12km';
@@ -4649,6 +4709,54 @@ document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
   });
   map.on('click', closePanel);
 })();
+
+// ── Hail size threshold popup ────────────────────────────────
+function _hailSizeIdxForMM(mm){
+  let idx=0,best=Infinity;
+  HAIL_SLIDER_SIZES.forEach((s,i)=>{ const d=Math.abs(s.mm-mm); if(d<best){best=d;idx=i;} });
+  return idx;
+}
+function _updateHailSizeLabel(idx){
+  const s=HAIL_SLIDER_SIZES[idx];
+  const valEl=document.getElementById('hail-size-val');
+  if(valEl && s) valEl.textContent=s.label+' ('+s.mm+'mm)';
+}
+(function initHailSizeSettings(){
+  const panel=document.getElementById('hail-size-settings-panel');
+  const closeBtn=document.getElementById('hail-size-settings-close');
+  const slider=document.getElementById('hail-size-slider');
+  if(!panel||!slider) return;
+  slider.max=HAIL_SLIDER_SIZES.length-1;
+  slider.value=_hailSizeIdxForMM(HAIL_LARGE_THRESHOLD_MM);
+  _updateHailSizeLabel(parseInt(slider.value));
+  function closePanel(){ panel.style.display='none'; }
+  closeBtn.addEventListener('click', closePanel);
+  document.addEventListener('click', e=>{
+    if(!panel.contains(e.target) && !e.target.closest('.ab-alert-hail-gear-btn')) closePanel();
+  });
+  map.on('click', closePanel);
+slider.addEventListener('input', function(){
+    const idx=parseInt(this.value);
+    _updateHailSizeLabel(idx);
+    HAIL_LARGE_THRESHOLD_MM=HAIL_SLIDER_SIZES[idx].mm;
+    try{ localStorage.setItem(HAIL_THRESHOLD_STORAGE_KEY, HAIL_LARGE_THRESHOLD_MM); }catch(e){ console.warn('[hailThreshold] save failed',e); }
+    refreshAbAlertsPanel();
+  });
+})();
+function openHailSizePanel(btn){
+  const panel=document.getElementById('hail-size-settings-panel');
+  const slider=document.getElementById('hail-size-slider');
+  if(!panel||!slider) return;
+  const br=btn.getBoundingClientRect();
+  const pw=220;
+  let left=br.right-pw;
+  if(left<8) left=8;
+  panel.style.left=left+'px';
+  panel.style.top=(br.bottom+6)+'px';
+  slider.value=_hailSizeIdxForMM(HAIL_LARGE_THRESHOLD_MM);
+  _updateHailSizeLabel(parseInt(slider.value));
+  panel.style.display='block';
+}
 document.getElementById('radar-opacity').addEventListener('input',function(){
   radarOpacity=parseInt(this.value)/100;
   localStorage.setItem('radar_opacity',this.value);
@@ -5065,6 +5173,25 @@ function _destPoint(lat,lon,bearingDeg,distKm){
   return[φ2*180/Math.PI,λ2*180/Math.PI];
 }
 
+function renderFakeGpsAt(lat,lon){
+  if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
+  if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
+  if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
+  const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
+  window._fakeMarker=L.marker([lat,lon],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
+  const tip=_destPoint(lat,lon,0,100);
+  window._fakeHeadingLine=L.polyline([[lat,lon],tip],{color:'#ffdd00',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
+  const perp=90;
+  window._fakeTicks=[];
+  [25,50,75,100].forEach(dist=>{
+    const mid=_destPoint(lat,lon,0,dist);
+    const a=_destPoint(mid[0],mid[1],perp,10);
+    const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
+    window._fakeTicks.push(L.polyline([a,b],{color:'#ffdd00',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
+    if(dist===100)window._fakeTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ffdd00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km N</span>',iconAnchor:[-4,12]})}).addTo(map));
+  });
+}
+
 function onGPSSuccess(pos){
   const{latitude:lat,longitude:lon,accuracy,heading,speed}=pos.coords;
 document.getElementById('gps-btn').classList.remove('searching');
@@ -5144,7 +5271,7 @@ function onGPSError(err){
 function toggleGPS(){
   requestNotifyPermission();
 if(!gpsActive){
-console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarker);
+
 console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarker);
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
@@ -5222,29 +5349,14 @@ document.getElementById('gps-btn').classList.remove('active','searching');
     document.getElementById('gpsStatus').style.color='#00ff96';
 const fallbackLL={lat:53.5461,lon:-113.4938}; // always default to Edmonton on GPS off, regardless of last real fix
 
-    _gpsLastLL=fallbackLL;
+_gpsLastLL=fallbackLL;
     // Force a fresh alert check at the fallback location too — this branch previously
     // never re-ran checkAlertsAtCurrentLocation at all, so the banner just kept showing
     // whatever the last check happened to render (e.g. a mock location's alert) instead
     // of reflecting the location GPS is actually falling back to now.
     _alertsLastLocKey='';
     checkAlertsAtCurrentLocation(true);
-    if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
-    if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
-    if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
-    const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
-    window._fakeMarker=L.marker([fallbackLL.lat,fallbackLL.lon],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
-    const tip=_destPoint(fallbackLL.lat,fallbackLL.lon,0,100);
-    window._fakeHeadingLine=L.polyline([[fallbackLL.lat,fallbackLL.lon],tip],{color:'#ffdd00',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
-    const perp=90;
-    window._fakeTicks=[];
-    [25,50,75,100].forEach(dist=>{
-      const mid=_destPoint(fallbackLL.lat,fallbackLL.lon,0,dist);
-      const a=_destPoint(mid[0],mid[1],perp,10);
-      const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
-      window._fakeTicks.push(L.polyline([a,b],{color:'#ffdd00',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
-      if(dist===100)window._fakeTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ffdd00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km N</span>',iconAnchor:[-4,12]})}).addTo(map));
-    });
+    renderFakeGpsAt(fallbackLL.lat, fallbackLL.lon);
     _showCompassRings(fallbackLL.lat,fallbackLL.lon);
   }
 }
@@ -5353,23 +5465,8 @@ document.getElementById('gps-btn').addEventListener('click',function(){
 
 let _mockGpsPicking=false;
 function setMockGPSAt(lat,lon){
-  if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
-  if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
-  if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
   _gpsLastLL={lat,lon};
-  const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
-  window._fakeMarker=L.marker([lat,lon],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
-  const tip=_destPoint(lat,lon,0,100);
-  window._fakeHeadingLine=L.polyline([[lat,lon],tip],{color:'#ffdd00',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
-  const perp=90;
-  window._fakeTicks=[];
-  [25,50,75,100].forEach(dist=>{
-    const mid=_destPoint(lat,lon,0,dist);
-    const a=_destPoint(mid[0],mid[1],perp,10);
-    const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
-    window._fakeTicks.push(L.polyline([a,b],{color:'#ffdd00',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
-    if(dist===100)window._fakeTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ffdd00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km N</span>',iconAnchor:[-4,12]})}).addTo(map));
-  });
+  renderFakeGpsAt(lat,lon);
   _showCompassRings(lat,lon);
   document.getElementById('gpsStatus').textContent='📍 (mock) '+lat.toFixed(4)+', '+lon.toFixed(4);
   document.getElementById('gpsStatus').style.color='#ffdd00';
@@ -5710,19 +5807,7 @@ document.getElementById('map').addEventListener('click', function(e){
   const fakeLL={lat:53.5461,lng:-113.4938}; // Edmonton fallback
   _gpsLastLL={lat:53.5461,lon:-113.4938};
   _showCompassRings(fakeLL.lat,fakeLL.lng);
-  const fakeIcon=L.divIcon({className:'',html:'<div class="gps-dot-fake"></div>',iconSize:[14,14],iconAnchor:[7,7]});
-  window._fakeMarker=L.marker([fakeLL.lat,fakeLL.lng],{icon:fakeIcon,interactive:false,pane:'gps'}).addTo(map);
-  const tip=_destPoint(fakeLL.lat,fakeLL.lng,0,100);
-  window._fakeHeadingLine=L.polyline([[fakeLL.lat,fakeLL.lng],tip],{color:'#ffdd00',weight:2.5,opacity:0.85,interactive:false,pane:'gps'}).addTo(map);
-  const perp=90;
-  window._fakeTicks=[];
-  [25,50,75,100].forEach(dist=>{
-    const mid=_destPoint(fakeLL.lat,fakeLL.lng,0,dist);
-    const a=_destPoint(mid[0],mid[1],perp,10);
-    const b=_destPoint(mid[0],mid[1],(perp+180)%360,10);
-    window._fakeTicks.push(L.polyline([a,b],{color:'#ffdd00',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map));
-    if(dist===100)window._fakeTicks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ffdd00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">100km N</span>',iconAnchor:[-4,12]})}).addTo(map));
-  });
+  renderFakeGpsAt(fakeLL.lat, fakeLL.lng);
 })();
 setTimeout(toggleGPS, 500);
 
@@ -5866,10 +5951,35 @@ function showStationPopup(id){
     warnBlockHtml +
     '<div style="margin-top:6px;"><a href="https://www.google.com/maps?q=' + s.lat.toFixed(5) + ',' + s.lon.toFixed(5) + '" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>' +
     '</div>';
-  L.popup({closeButton:true, className:'strike-popup', maxWidth:stnAlerts.length ? 260 : 240})
+L.popup({closeButton:true, className:'strike-popup', maxWidth:stnAlerts.length ? 260 : 240})
     .setLatLng([s.lat, s.lon])
     .setContent(popupHtml)
     .openOn(map);
+}
+
+// Popup for a synthetic location's own tornado/hail warning circle (mock GPS or real
+// GPS fix) — was called by updateMockTornadoHailCircle/updateGpsTornadoHailCircle but
+// never defined, so clicking either warning circle previously threw a ReferenceError.
+function showStationAlertPopup(label, station, labels, isWarning, color){
+  const infos=[];
+  (labels||[]).forEach(l=>{ (l.infos||[]).forEach(info=>{ if(!infos.includes(info)) infos.push(info); }); });
+  const popupHtml=
+    '<div style="font-family:monospace;font-size:11px;line-height:1.8;color:#ccc;min-width:160px;">'+
+    '<div style="font-size:13px;font-weight:700;color:'+color+';margin-bottom:4px;">🚨 '+label+'</div>'+
+    '<div>📍 '+station.lat.toFixed(4)+'°, '+station.lon.toFixed(4)+'°</div>'+
+    (labels||[]).map(l=>'<div style="margin-top:2px;color:'+color+';font-weight:700;">'+l.label+'</div>').join('')+
+    (infos.length?'<div id="stn-alert-popup-details" style="margin-top:6px;font-size:10px;color:#88ccff;cursor:pointer;">Tap for full details</div>':'')+
+    '</div>';
+  const pop=L.popup({closeButton:true,className:'strike-popup',maxWidth:240})
+    .setLatLng([station.lat,station.lon])
+    .setContent(popupHtml)
+    .openOn(map);
+  if(infos.length){
+    setTimeout(()=>{
+      const el=document.getElementById('stn-alert-popup-details');
+      if(el) el.addEventListener('click', ()=>{ map.closePopup(pop); showAlertModal(infos); });
+    },0);
+  }
 }
 
 // ── RAWS Stations ─────────────────────────────────────────────
@@ -5901,21 +6011,8 @@ const charW = 6.6, padX = 6, padY = 6;
 const m = L.marker([lat, lon], {icon, interactive: true, pane: 'stations'}).addTo(map);
       m._stationId = id;
 m.on('click', function(e){
-        if(_addViewPicking){
-          L.DomEvent.stopPropagation(e);
-          _setAddViewPickingUI(false);
-          runAddViewTrackingAt(e.latlng.lat, e.latlng.lng);
-          return;
-        }
-        if(_mockGpsPicking){
-          L.DomEvent.stopPropagation(e);
-          _mockGpsPicking=false;
-          document.getElementById('gps-btn').classList.remove('searching');
-          setMockGPSAt(e.latlng.lat, e.latlng.lng);
-          return;
-        }
+        if(handlePickModeClick(e)) return;
         console.log('[station click]', id);
-        L.DomEvent.stopPropagation(e);
         showStationPopup(id);
       });
 stationLabelMarkers.push(m);
