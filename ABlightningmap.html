@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head> 
@@ -2215,8 +2214,10 @@ const cm=L.circleMarker([s.lat,s.lon],{
       showStationPopup(id);
     });
   };
-  Object.entries(GROUPS).forEach(([groupKey,priorities])=>{
+Object.entries(GROUPS).forEach(([groupKey,priorities])=>{
     if(_collapsedAlertGroups.has(groupKey)) return; // row collapsed — don't draw this group's circles
+    // Warning tier (magenta) takes precedence over watch tier (red) for a station
+    // that somehow falls under both.
     const warnStations=new Map(), watchStations=new Map(); // id -> [{label,infos}]
     rows.forEach(r=>{
       if(!priorities.includes(r.priority)) return;
@@ -2227,8 +2228,8 @@ Object.values(r.zoneStations).forEach(list=>list.forEach(id=>{
       }));
     });
 watchStations.forEach((v,id)=>{ if(warnStations.has(id)) watchStations.delete(id); });
-warnStations.forEach((entries,id)=>addCircle(id,'#ff2222'));
-    watchStations.forEach((entries,id)=>addCircle(id,'#ffdd00'));
+warnStations.forEach((entries,id)=>addCircle(id,'#cc00cc'));
+    watchStations.forEach((entries,id)=>addCircle(id,'#ff2222'));
   });
 }
 
@@ -2240,9 +2241,14 @@ function updateTornadoHailPolygons(){
   if(!tornadoHailPolygonLayer){ tornadoHailPolygonLayer=L.layerGroup().addTo(map); }
   tornadoHailPolygonLayer.clearLayers();
   Object.entries(tornadoHailPolygonGeoms).forEach(([groupKey,list])=>{
-    if(_collapsedAlertGroups.has(groupKey)) return; // hidden by the group's Hide/Show button
+    const isTornadoHail = (groupKey==='tornado'||groupKey==='hail');
+    // Tornado/Hail polygons follow the group's Hide/Show button (same as their circles).
+    // Every other alert type only draws its polygon while its row is expanded — matching
+    // the same on-demand behavior toggleOtherAlertCircles() already uses for its circles.
+    if(isTornadoHail){ if(_collapsedAlertGroups.has(groupKey)) return; }
+    else { if(!_openAlertRowGroups.has(groupKey)) return; }
     list.forEach(item=>{
-      const style=alertStyleForPriority(item.priority);
+      const style=alertStyleForPriority(item.priority, item.props&&item.props.risk_colour_en);
       const color=style?(style.mode==='banner'?style.bg:style.color):'#ff8c00';
       let gj;
       try{
@@ -2294,7 +2300,7 @@ function updateAlertPolygons(features){
     const props=f.properties||{};
     const classes=classifyAbAlert(props);
     const top=classes.filter(c=>c.priority<=6).sort((a,b)=>a.priority-b.priority)[0];
-    const style=top?alertStyleForPriority(top.priority):null;
+    const style=top?alertStyleForPriority(top.priority, props.risk_colour_en):null;
     const sev=severityColorInfo(props.risk_colour_en);
     const color=style?(style.mode==='banner'?style.bg:style.color):sev.border;
     const info=extractAlertInfoWithPriority(props);
@@ -2351,9 +2357,15 @@ tornadoHailPolygonGeoms={};
 features.forEach(f=>{
     const props=f.properties||{};
     const classes=classifyAbAlert(props);
-    classes.forEach(cls=>{
-      if((cls.priority===1||cls.priority===2||cls.priority===3||cls.priority===4) && f.geometry){
-        const gKey=(cls.priority<=2)?'tornado':'hail';
+classes.forEach(cls=>{
+      // Capture the real ECCC alert polygon for EVERY classified priority, not just
+      // Tornado/Hail — this is what lets any alert type (Severe T-Storm, Heat Warning,
+      // etc.) draw its actual small polygon shape, independent of whether any RAWS
+      // station happens to sit inside it. Keyed to match the same groupId used by the
+      // row's own expand/collapse state (_collapsedAlertGroups for tornado/hail,
+      // _openAlertRowGroups for everything else) so visibility stays in sync.
+      if(f.geometry){
+        const gKey=cls.priority<=2?'tornado':cls.priority<=4?'hail':('ab-alert-grp-lbl-'+cls.label);
         if(!tornadoHailPolygonGeoms[gKey]) tornadoHailPolygonGeoms[gKey]=[];
         tornadoHailPolygonGeoms[gKey].push({geometry:f.geometry, priority:cls.priority, props});
       }
@@ -2366,7 +2378,10 @@ const infoObj=extractAlertInfo(props);
       if(!groups[key]._infoKeySet.has(infoKey)){ groups[key]._infoKeySet.add(infoKey); groups[key].infos.push(infoObj); }
 const _fBBox=geometryBBox(f.geometry);
       zonePolygons.forEach(z=>{
-        if(!z.stations||!z.stations.length) return;
+        // Zones with no RAWS stations assigned (z.stations empty) are no longer skipped
+        // here — they still need to appear (with 0 stations) when their bbox overlaps
+        // the alert, so expanding the row shows every affected zone, not just the ones
+        // that happen to contain a station.
         // Fast reject: skip every expensive check below if the alert's bbox doesn't even
         // overlap this zone's bbox — this is what keeps a province-wide, many-vertex alert
         // from re-walking all 19 zone polygons on every refresh.
@@ -2377,14 +2392,14 @@ const _fBBox=geometryBBox(f.geometry);
         // station the alert doesn't actually reach, even if other stations in the same
         // zone are genuinely covered.
 let hitStations=z.stations.filter(s=>pointInGeoJSON(s.lat,s.lon,f.geometry));
-        // Fallback for small/localized polygons (e.g. a storm-based tornado warning box)
-        // that fall inside a zone without containing any actual station point — still
-        // register the zone (with an empty station list) instead of dropping it entirely.
-        const polyInZone = !hitStations.length && geometryHasVertexInZone(f.geometry, z.latlngs);
+        // No longer gated on hitStations/vertex/centroid matches — any zone whose bbox
+        // overlaps the alert's bbox (already checked above) is included, with whatever
+        // stations it actually contains (possibly zero). This is what lets an expanded
+        // row show its zones even when the alert polygon doesn't directly contain any
+        // station point in that zone.
 if(cls.priority<=6){
-          console.log('[abAlerts-debug]',cls.label,'vs zone',z.shortId,'geomType:',f.geometry&&f.geometry.type,'bboxOverlap:',_fBBox&&z.bbox?bboxOverlap(_fBBox,z.bbox):'n/a','match:',hitStations.length?'station':'NONE');
+          console.log('[abAlerts-debug]',cls.label,'vs zone',z.shortId,'geomType:',f.geometry&&f.geometry.type,'bboxOverlap:',_fBBox&&z.bbox?bboxOverlap(_fBBox,z.bbox):'n/a','match:',hitStations.length?'station':'zone-included (no station)');
         }
-if(!hitStations.length && !polyInZone) return;
 
         if(!groups[key].zoneStations[z.shortId]) groups[key].zoneStations[z.shortId]=new Set();
         hitStations.forEach(s=>{
@@ -2536,7 +2551,7 @@ html+=renderActiveRow(merged,rIdx++, alertStyleForPriority(hasWarning?c.prioriti
     const matchIdx=rows.findIndex((r,i)=>!usedRowIdx.has(i)&&r.priority===c.priority);
     if(matchIdx!==-1){
       usedRowIdx.add(matchIdx);
-      html+=renderActiveRow(rows[matchIdx],rIdx++, alertStyleForPriority(c.priority));
+      html+=renderActiveRow(rows[matchIdx],rIdx++, alertStyleForPriority(c.priority, rows[matchIdx].severity));
     } else {
       html+=renderGreyRow(c.label);
     }
@@ -2603,12 +2618,13 @@ listEl.querySelectorAll('.ab-alert-grp-header').forEach(h=>{
       if(willOpen) _openAlertRowGroups.add(gid); else _openAlertRowGroups.delete(gid);
       body.style.display=willOpen?'block':'none';
       caret.textContent=willOpen?'▼':'▶';
-      // Tornado/Hail circle visibility is controlled ONLY by the explicit Hide/Show
+// Tornado/Hail circle visibility is controlled ONLY by the explicit Hide/Show
       // circles button now — expanding/collapsing the station detail list here no
       // longer touches the map circles for those two groups.
       if(gid!=='tornado' && gid!=='hail'){
         toggleOtherAlertCircles(gid, willOpen);
       }
+      updateTornadoHailPolygons(); // redraw so this group's polygon appears/disappears immediately on expand/collapse
     });
   });
 listEl.querySelectorAll('.ab-alert-hide-circles-btn').forEach(btn=>{
@@ -2670,10 +2686,10 @@ function _updateLocationTornadoHailCircle(existingCircle, latlng, alerts, label)
   if(!latlng) return null;
   const lat=latlng.lat, lon=latlng.lng??latlng.lon;
   let color=null, isWarning=false, labels=[];
-  (alerts||[]).forEach(m=>{
+(alerts||[]).forEach(m=>{
     (m.classes||[]).forEach(cls=>{
-      if(cls.priority===1||cls.priority===3){ color='#ff2222'; isWarning=true; labels.push({label:cls.label,infos:[m.info]}); }
-      else if(cls.priority===2||cls.priority===4){ if(color!=='#ff2222'){ color='#ffdd00'; } labels.push({label:cls.label,infos:[m.info]}); }
+      if(cls.priority===1||cls.priority===3){ color='#cc00cc'; isWarning=true; labels.push({label:cls.label,infos:[m.info]}); }
+      else if(cls.priority===2||cls.priority===4){ if(color!=='#cc00cc'){ color='#ff2222'; } labels.push({label:cls.label,infos:[m.info]}); }
     });
   });
   if(!color) return null;
@@ -2878,15 +2894,31 @@ alertMinPill.addEventListener('click', ()=>{
 // what actually governs display order and highlighting per ECCC convention.
 // Fixed styling for our own warning/watch classification (used for Tornado, Large Hail,
 // and Severe T-Storm rows) — independent of ECCC's risk_colour_en, per priority number.
-function alertStyleForPriority(priority){
-  if(priority===1||priority===3) return {mode:'banner',color:'#fff',bg:'#cc2200'}; // warning-tier: white on red
-  if(priority===2||priority===4) return {mode:'banner',color:'#111',bg:'#ffdd00'}; // watch-tier: black on yellow
-  if(priority===5) return {mode:'text',color:'#ff5555'}; // severe t-storm warning: red font
-  if(priority===6) return {mode:'text',color:'#ffdd00'}; // severe t-storm watch: yellow font
+function alertStyleForPriority(priority, riskColour){
+  // Tornado Warning / Large Hail Warning (at/above the size threshold) are always
+  // magenta — the most severe tier, regardless of ECCC's own risk_colour_en.
+  if(priority===1||priority===3){
+    return {mode:'banner',color:'#fff',bg:'#cc00cc'};
+  }
+  // Tornado Watch / Large Hail Watch are always red.
+  if(priority===2||priority===4){
+    return {mode:'banner',color:'#fff',bg:'#cc2200'};
+  }
+  // Severe Thunderstorm Warning/Watch (priority 5/6) isn't automatically escalated by
+  // our own tornado/hail rules — color follows ECCC's own risk_colour_en instead.
+  if(priority===5||priority===6){
+    const rc=(riskColour||'').toLowerCase();
+    if(rc==='red')    return {mode:'text',color:'#ff5555'};
+    if(rc==='orange') return {mode:'text',color:'#ffaa44'};
+    if(rc==='yellow') return {mode:'text',color:'#ffdd00'};
+    // ECCC didn't supply a risk colour — fall back to warning=red / watch=yellow
+    return priority===5?{mode:'text',color:'#ff5555'}:{mode:'text',color:'#ffdd00'};
+  }
   return null;
 }
 function severityColorInfo(sev){
   const s=(sev||'').toLowerCase();
+  if(s==='magenta')return {key:'magenta',border:'#e619e6', text:'#ff66ff', bg:'#330033', light:'#ffaaff', dim:'#ff88ff', label:'Magenta'};
   if(s==='red')    return {key:'red',   border:'#ff3333', text:'#ff5555', bg:'#3a0d0d', light:'#ffaaaa', dim:'#ff8888', label:'Red'};
   if(s==='orange') return {key:'orange',border:'#ff8c00', text:'#ffaa44', bg:'#3a1f0d', light:'#ffcc99', dim:'#ffbb77', label:'Orange'};
   if(s==='yellow') return {key:'yellow',border:'#ffdd00', text:'#ffee66', bg:'#3a3300', light:'#ffee99', dim:'#ffe066', label:'Yellow'};
@@ -2898,10 +2930,14 @@ function severityColorInfo(sev){
 // checkAlertsAtCurrentLocation), so this is a no-op for every other alert type.
 function severityColorInfoForAlert(info){
   if(info && info._abPriority!=null){
-    const style=alertStyleForPriority(info._abPriority);
+    const style=alertStyleForPriority(info._abPriority, info.severity);
     if(style){
-      const isRed=(style.mode==='banner' ? style.bg==='#cc2200' : style.color==='#ff5555');
-      return isRed?severityColorInfo('red'):severityColorInfo('yellow');
+      if(style.mode==='banner'){
+        return style.bg==='#cc00cc' ? severityColorInfo('magenta') : severityColorInfo('red');
+      }
+      if(style.color==='#ff5555') return severityColorInfo('red');
+      if(style.color==='#ffaa44') return severityColorInfo('orange');
+      return severityColorInfo('yellow');
     }
   }
   return severityColorInfo(info && info.severity);
@@ -2909,7 +2945,7 @@ function severityColorInfoForAlert(info){
 // Red first, then orange, then yellow, then anything uncolored (advisory-level) last.
 function alertSeverityRank(info){
   const key=severityColorInfo(info&&info.severity).key;
-  return key==='red'?0:key==='orange'?1:key==='yellow'?2:3;
+  return key==='magenta'?0:key==='red'?1:key==='orange'?2:key==='yellow'?3:4;
 }
 function sortAlertsBySeverity(infos){
   return [...infos].sort((a,b)=>alertSeverityRank(a)-alertSeverityRank(b));
