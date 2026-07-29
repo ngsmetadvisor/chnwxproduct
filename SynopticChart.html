@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Surface Synoptic Map — Western Canada</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root {
+  --bg: #0b0f14;
+  --panel: #131920;
+  --border: #1e2d3d;
+  --text: #c8d8e8;
+  --muted: #5a7a9a;
+  --accent: #4fa3e0;
+  --green: #3ecf6a;
+  --red: #e05050;
+  --orange: #e08030;
+  --yellow: #e0c840;
+  --mono: 'Courier New', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); overflow: hidden; }
+#map { position: absolute; inset: 0; }
+
+/* ── CONTROLS ── */
+#ctrl {
+  position: fixed; top: 12px; left: 12px; z-index: 2000;
+  background: rgba(255,255,255,0.95); border: 1px solid #ccc;
+  border-radius: 8px; padding: 10px 12px; min-width: 220px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+}
+#ctrl h1 { font-size: 13px; letter-spacing: 0.12em; color: #1a4a8a; text-transform: uppercase; margin-bottom: 8px; }
+.ctrl-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+.ctrl-row label { color: #555; text-transform: uppercase; font-size: 10px; letter-spacing: 0.08em; min-width: 60px; }
+select, input[type=range] { background: #f4f6f8; border: 1px solid #ccd; color: #1a2030; border-radius: 4px; padding: 3px 6px; font-family: var(--mono); font-size: 12px; cursor: pointer; }
+select { width: 100%; }
+.toggle-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.toggle-row label { display: flex; align-items: center; gap: 4px; color: #444; font-size: 11px; cursor: pointer; }
+.toggle-row input[type=checkbox] { accent-color: #1a4a8a; }
+.btn { background: #e8f0f8; border: 1px solid #aac; color: #1a4a8a; border-radius: 4px; padding: 5px 10px; font-family: var(--mono); font-size: 12px; cursor: pointer; transition: background 0.15s; }
+.btn:hover { background: #d0e4f4; }
+#fetchBtn { width: 100%; margin-top: 6px; background: #c8dff4; border-color: #1a4a8a; font-weight: bold; }
+#fetchBtn:hover { background: #b0d0ec; }
+
+/* ── STATUS BAR ── */
+#status {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 2000;
+  background: rgba(255,255,255,0.95); border-top: 1px solid #ccc;
+  padding: 6px 14px; font-size: 11px; color: #555;
+  display: flex; align-items: center; gap: 16px;
+}
+#status span.hi { color: #1a2030; }
+#progWrap { flex: 1; height: 4px; background: #dde; border-radius: 2px; overflow: hidden; }
+#progBar { height: 100%; width: 0; background: #1a4a8a; border-radius: 2px; transition: width 0.2s; }
+
+/* ── TIME SLIDER ── */
+#timebar {
+  position: fixed; bottom: 28px; left: 0; right: 0; z-index: 2000;
+  background: rgba(255,255,255,0.95); border-top: 1px solid #ccc;
+  padding: 8px 14px 6px; display: none;
+}
+#timebar .trow { display: flex; align-items: center; gap: 10px; }
+#timeLabel { font-size: 18px; font-weight: bold; color: #1a4a8a; letter-spacing: 0.06em; min-width: 100px; }
+#timeSlider { flex: 1; height: 6px; accent-color: #1a4a8a; cursor: pointer; }
+#timeInfo { font-size: 11px; color: #888; min-width: 120px; text-align: right; }
+
+/* ── LEGEND ── */
+#legend {
+  position: fixed; top: 12px; right: 12px; z-index: 2000;
+  background: rgba(255,255,255,0.95); border: 1px solid #ccc;
+  border-radius: 8px; padding: 10px 12px; font-size: 11px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18); width: 200px;
+}
+#legend h2 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #666; margin-bottom: 4px; }
+.station-model-demo { display: flex; justify-content: center; margin-bottom: 8px; }
+.leg-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.leg-swatch { width: 14px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.leg-label { color: var(--muted); font-size: 10px; }
+
+/* ── POPUP ── */
+.leaflet-popup-content-wrapper {
+  background: #fff !important; border: 1px solid #ccc !important;
+  border-radius: 6px !important; color: #1a2030 !important;
+  font-family: var(--mono) !important; font-size: 12px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+}
+.leaflet-popup-tip { background: #fff !important; }
+.leaflet-popup-content { margin: 10px 14px !important; line-height: 1.6; }
+.pop-icao { font-size: 14px; font-weight: bold; color: #1a4a8a; }
+.pop-line { display: flex; justify-content: space-between; gap: 12px; }
+.pop-val { color: #1a2030; }
+.pop-key { color: #888; }
+
+
+/* ── IDW TUNING PANEL ── */
+#idwPanel {
+  font-family: var(--mono);
+}
+#idwPanel h2 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+  color: #1a4a8a; margin-bottom: 8px; display: flex;
+  justify-content: space-between; align-items: center; cursor: pointer;
+}
+#idwPanel h2 span { font-size: 10px; color: #888; font-weight: normal; }
+#idwBody { display: none; }
+.idw-row {
+  display: grid; grid-template-columns: 110px 1fr 40px;
+  align-items: center; gap: 6px; margin-bottom: 5px;
+}
+.idw-row label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
+.idw-row input[type=range] { accent-color: #1a4a8a; cursor: pointer; width: 100%; }
+.idw-row .idw-val { font-size: 11px; font-weight: bold; color: #1a4a8a; text-align: right; }
+#idwSummary {
+  margin-top: 8px; padding: 7px 9px; background: #f0f4f8;
+  border: 1px solid #ccd; border-radius: 4px;
+  font-size: 10px; color: #334; line-height: 1.7;
+  white-space: pre; font-family: var(--mono);
+}
+#idwSummary strong { color: #1a4a8a; }
+.idw-btns { display: flex; gap: 6px; margin-top: 7px; }
+.idw-btns button {
+  flex: 1; background: #e8f0f8; border: 1px solid #aac;
+  color: #1a4a8a; border-radius: 4px; padding: 4px 8px;
+  font-family: var(--mono); font-size: 11px; cursor: pointer;
+}
+.idw-btns button:hover { background: #d0e4f4; }
+.idw-btns button.apply { background: #c8dff4; border-color: #1a4a8a; font-weight: bold; }
+
+
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<!-- CONTROLS -->
+<div id="ctrl">
+  <h1>⛅ Synoptic Map</h1>
+  <div class="ctrl-row">
+    <label>Basemap</label>
+    <select id="basemapSelect">
+      <option value="blank" selected>Blank (Borders Only)</option>
+<option value="white">White</option>
+      <option value="dark">Dark</option>
+      <option value="street">Street</option>
+      <option value="sat">Satellite</option>
+      <option value="terrain">Terrain</option>
+    </select>
+  </div>
+  <div class="ctrl-row">
+    <label>Coverage</label>
+    <select id="coverageSelect">
+  <option value="essential">Essential (~80 stns)</option>
+  <option value="standard">Standard (~200 stns)</option>
+<option value="all">All Available</option>
+  <option value="chart" selected>Chart</option>
+</select>
+  </div>
+  <div class="ctrl-row">
+    <label>Overlay</label>
+    <select id="overlaySelect">
+<option value="none" selected>None</option>
+<option value="slp">SLP Contours</option>
+      <option value="temp">Temp Isotherms</option>
+    </select>
+  </div>
+<div class="toggle-row" style="margin-bottom:6px;">
+    <label style="display:none"><input type="checkbox" id="showWind" checked> Wind</label>
+    <label><input type="checkbox" id="showGust"> Gust</label>
+    <label style="display:none"><input type="checkbox" id="showTd" checked> Td</label>
+    <label style="display:none"><input type="checkbox" id="showSLP" checked> SLP</label>
+    <label style="display:none"><input type="checkbox" id="showWx" checked> Wx</label>
+    <label><input type="checkbox" id="showHL" checked> H/L</label>
+    <label><input type="checkbox" id="showWxLabel">Weather</label>
+    <label><input type="checkbox" id="showLowCloud">Cloud</label>
+  </div>
+  <div class="ctrl-row">
+    <label>Symbol</label>
+<input type="range" id="symbolSize" min="20" max="100" value="20" step="5">
+    <span id="symbolSizeLabel" style="color:#1a4a8a;min-width:30px;text-align:right;font-weight:bold;">20</span>
+  </div>
+<button class="btn" id="fetchBtn">▶ Fetch METARs</button>
+<button class="btn" id="ctrlHideBtn" style="position:absolute;top:8px;right:8px;padding:2px 7px;font-size:10px;">✕</button>
+<button class="btn" id="gridBtn" style="width:100%;margin-top:4px;">⊞ Grid Values</button>
+<button class="btn" id="exportBtn" style="width:100%;margin-top:4px;">📷 Export PNG</button>
+<button class="btn" id="sfcChartBtn"
+  style="width:100%;margin-top:4px;background:#c0392b;border-color:#8e1a0e;color:#fff;font-weight:bold;">
+  🗺 Export SFC Chart
+</button>
+<a href="https://colab.research.google.com/drive/1fJ7b0lkuv5t43sUpVoRcfQJBF7LN9WLO#scrollTo=uKhTUfSbzkb9" target="_blank" class="btn" style="width:100%;margin-top:4px;display:block;text-align:center;text-decoration:none;">Python (better contour)</a>
+  <div id="idwInline" style="margin-top:6px;border-top:1px solid #dde;padding-top:6px;"></div>
+</div>
+
+<!-- LEGEND -->
+<div id="legend">
+  <h2>Station Model <button class="btn" id="legendHideBtn" style="font-size:9px;padding:2px 6px;float:right;margin-top:-2px;">Hide</button></h2>
+  <!-- SVG diagram of WMO station model layout -->
+<svg id="legendSVG" width="190" height="170" viewBox="0 0 190 170" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:4px auto 6px;">
+    <!-- circle -->
+    <circle cx="95" cy="72" r="14" fill="white" stroke="black" stroke-width="1.5"/>
+<!-- BKN fill: full black then white top-left wedge (9→12) -->
+<circle cx="95" cy="72" r="14" fill="black" stroke="black" stroke-width="1.5"/>
+<path d="M95,72 L81,72 A14,14 0 0,1 95,58 Z" fill="white"/>
+
+    <!-- Temp top-left -->
+<text x="76" y="60" text-anchor="end" font-size="11" font-family="Courier New,monospace" fill="black">-8</text>
+    <!-- Weather middle-left -->
+    <text x="76" y="75" text-anchor="end" font-size="10" font-family="Courier New,monospace" fill="black">SN</text>
+    <!-- Dew bottom-left -->
+    <text x="76" y="89" text-anchor="end" font-size="10" font-family="Courier New,monospace" fill="black">-14</text>
+    <!-- SLP top-right -->
+    <text x="114" y="63" text-anchor="start" font-size="10" font-family="Courier New,monospace" fill="black">183</text>
+
+<!-- cloud height below circle (no prefix, only if <=120) -->
+    <text x="95" y="96" text-anchor="middle" font-size="8.5" font-family="Courier New,monospace" fill="black">30</text>
+    <!-- layout annotations -->
+    <text x="6"  y="63"  font-size="8" fill="#888" font-family="Arial">Temp °C</text>
+    <text x="6"  y="78"  font-size="8" fill="#888" font-family="Arial">Weather</text>
+    <text x="6"  y="87"  font-size="8" fill="#888" font-family="Arial">Dew °C</text>
+    <text x="135" y="63" font-size="8" fill="#888" font-family="Arial">SLP</text>
+    <!-- Visibility middle-left (between Weather and Dew) -->
+<text x="60" y="75" text-anchor="end" font-size="10"
+      font-family="Courier New,monospace" fill="black">15</text>
+
+<text x="6" y="71" font-size="8" fill="#888"
+      font-family="Arial">Vis SM</text>
+    <text x="95"  y="107" text-anchor="middle" font-size="8" fill="#888" font-family="Arial">Ceiling</text>
+    <!-- cloud oktas key -->
+    <text x="6" y="135" font-size="8" font-weight="bold" fill="#555" font-family="Arial">Cloud cover oktas:</text>
+    <!-- 0 -->
+    <circle cx="18" cy="148" r="7" fill="white" stroke="black" stroke-width="1.2"/><text x="18" y="163" text-anchor="middle" font-size="7.5" fill="#555" font-family="Arial">0</text>
+<!-- FEW 2: left quarter black (top to 9-o'clock) -->
+    <!-- FEW 2: top-right quarter black (12→3 o'clock) -->
+<circle cx="42" cy="148" r="7" fill="white" stroke="black" stroke-width="1.2"/>
+<path d="M42,148 L42,141 A7,7 0 0,1 49,148 Z" fill="black"/>
+<text x="42" y="163" text-anchor="middle" font-size="7.5" fill="#555" font-family="Arial">FEW</text>
+   <!-- SCT 4 -->
+    <circle cx="66" cy="148" r="7" fill="white" stroke="black" stroke-width="1.2"/>
+    <path d="M66,148 L66,141 A7,7 0 1,1 66,155 Z" fill="black"/>
+    <text x="66" y="163" text-anchor="middle" font-size="7.5" fill="#555" font-family="Arial">SCT</text>
+    <!-- BKN 6: full black + white top-right wedge -->
+    <!-- BKN 6: full black + white top-left quarter (9→12 o'clock) -->
+<circle cx="90" cy="148" r="7" fill="black" stroke="black" stroke-width="1.2"/>
+<path d="M90,148 L83,148 A7,7 0 0,1 90,141 Z" fill="white"/>
+<text x="90" y="163" text-anchor="middle" font-size="7.5" fill="#555" font-family="Arial">BKN</text>
+    <!-- OVC 8 -->
+    <circle cx="114" cy="148" r="7" fill="black" stroke="black" stroke-width="1.2"/>
+    <text x="114" y="163" text-anchor="middle" font-size="7.5" fill="#555" font-family="Arial">OVC</text>
+    <!-- VV / obscured -->
+    <circle cx="138" cy="148" r="7" fill="black" stroke="black" stroke-width="1.2"/>
+    <line x1="134" y1="144" x2="142" y2="152" stroke="white" stroke-width="1.1"/>
+    <line x1="142" y1="144" x2="134" y2="152" stroke="white" stroke-width="1.1"/>
+    <text x="138" y="163" text-anchor="middle" font-size="7.5" fill="#555" font-family="Arial">VV</text>
+  </svg>
+
+</div>
+
+<!-- TIME BAR -->
+<div id="timebar">
+  <div class="trow">
+    <div id="timeLabel">——</div>
+    <input type="range" id="timeSlider" min="0" max="0" value="0">
+    <div id="timeInfo">step 0/0</div>
+  </div>
+</div>
+
+<!-- STATUS -->
+<div id="status">
+  <span>Alberta Surface Synoptic</span>
+  <div id="progWrap"><div id="progBar"></div></div>
+  <span id="statusText" class="hi">Ready — press Fetch</span>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-array@3/dist/d3-array.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-contour@4/dist/d3-contour.min.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// MAP SETUP — centred on Alberta
+// ═══════════════════════════════════════════════════════════════
+const map = L.map('map', { zoomControl: true }).setView([56, -114], 5);
+
+const TILES = {
+  white:   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',      { attribution: '©OpenStreetMap ©CARTO', maxZoom: 19 }),
+blank:   L.tileLayer('data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', { attribution: '', maxZoom: 19, opacity: 0 }),
+  dark:    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png',    { attribution: '©OpenStreetMap ©CARTO', maxZoom: 19 }),
+  street:  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',                  { attribution: '©OpenStreetMap', maxZoom: 19 }),
+  sat:     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '©ESRI', maxZoom: 19 }),
+  terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',                    { attribution: '©OpenTopoMap', maxZoom: 17 }),
+};
+let activeBasemap = 'blank';
+TILES.blank.addTo(map);
+document.getElementById('map').style.background = '#ffffff';
+
+let borderLayer = null;
+
+async function loadBorderLayer() {
+  if (borderLayer) return;
+  const layers = [];
+  try {
+    const r = await fetch('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson');
+    const d = await r.json();
+layers.push(L.geoJSON(d, { style: { color: '#1a1a2e', weight: 2.8, fill: false, opacity: 0.0 } })); //Country boarder
+  } catch(e) {}
+  try {
+    const r = await fetch('https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson');
+    const d = await r.json();
+layers.push(L.geoJSON(d, { style: { color: '#2a3a6a', weight: 0.9, fill: false, opacity: 0.75 } }));
+  } catch(e) {}
+  try {
+const r = await fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json');
+    const d = await r.json();
+    layers.push(L.geoJSON(d, { style: { color: '#2a3a6a', weight: 0.9, fill: false, opacity: 0.75 } }));
+  } catch(e) {}
+try {
+    const r = await fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_1_states_provinces.geojson');
+    const d = await r.json();
+    const ab = {
+      type: 'FeatureCollection',
+      features: d.features.filter(f => {
+        const n = (f.properties.name || f.properties.NAME || '').toUpperCase();
+        return n === 'ALBERTA';
+      })
+    };
+    layers.push(L.geoJSON(ab, { style: { color: '#cc0000', weight: 3.5, fill: false, opacity: 1.0 } }));
+  } catch(e) {}
+
+  borderLayer = L.layerGroup(layers);
+}
+
+document.getElementById('basemapSelect').addEventListener('change', async function() {
+  const prev = activeBasemap;
+  map.removeLayer(TILES[prev]);
+  if (prev === 'blank' && borderLayer) map.removeLayer(borderLayer);
+  activeBasemap = this.value;
+  TILES[activeBasemap].addTo(map);
+
+    if (activeBasemap === 'blank') {
+    document.getElementById('map').style.background = '#ffffff';
+    statusText.textContent = 'Loading border overlays…';
+    await loadBorderLayer();
+    borderLayer.addTo(map);
+    statusText.textContent = 'Borders loaded — Ready';
+  } else {
+    document.getElementById('map').style.background = '';
+  }
+});
+
+// load borders on startup
+loadBorderLayer().then(() => { if (borderLayer) borderLayer.addTo(map); });
+
+document.addEventListener('DOMContentLoaded', () => {
+  const svg = document.getElementById('legendSVG');
+  if (svg && typeof windBarbSVG === 'function') {
+    const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    tmp.innerHTML = windBarbSVG(95, 72, 225, 20, 0, 44, 6, '#000', 1.5);
+    svg.appendChild(tmp);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// STATION LIST — Loaded from ./AP_location.csv
+// ═══════════════════════════════════════════════════════════════
+let STATION_MAP = {};
+
+async function loadStationCSV() {
+
+  const res = await fetch('./AP_location.csv', { cache: 'no-store' });
+  const text = await res.text();
+
+  const lines = text.trim().split('\n');
+  const header = lines.shift(); // remove header
+
+  lines.forEach(line => {
+
+    const cols = line.split(',');
+
+    if (cols.length < 8) return;
+
+    const icao = cols[0].trim();
+
+    STATION_MAP[icao] = {
+  icao,
+  name: cols[1].trim(),
+  lat: parseFloat(cols[2]),
+  lon: parseFloat(cols[3]),
+  tier:
+    cols[5].trim() === "Essential" ? 1 :
+    cols[6].trim() === "Standard"  ? 2 :
+    3,
+  chart: cols[8] ? cols[8].trim() : ''   // column I
+};
+
+  });
+
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let metarData = [];
+let markers = [];
+let contourLayer = null;
+let gridLayer = null;
+let gridVisible = false;
+let timestamps = [];
+// ═══════════════════════════════════════════════════════════════
+// UI REFS
+// ═══════════════════════════════════════════════════════════════
+const progBar = document.getElementById('progBar');
+const statusText = document.getElementById('statusText');
+const timeLabel = document.getElementById('timeLabel');
+const timeSlider = document.getElementById('timeSlider');
+const timeInfo = document.getElementById('timeInfo');
+const overlaySelect = document.getElementById('overlaySelect');
+const symbolSize = document.getElementById('symbolSize');
+const symbolSizeLabel = document.getElementById('symbolSizeLabel');
+
+symbolSize.addEventListener('input', () => {
+  symbolSizeLabel.textContent = symbolSize.value;
+  renderMap();
+});
+symbolSizeLabel.textContent = symbolSize.value;
+
+overlaySelect.addEventListener('change', renderMap);
+['showWind','showTd','showSLP','showWx','showGust','showHL','showWxLabel','showLowCloud'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderMap);
+});
+
+// legend demo drawn as inline SVG — no canvas needed
+
+// ═══════════════════════════════════════════════════════════════
+// FETCH & PARSE
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('fetchBtn').addEventListener('click', fetchAndRender);
+
+async function fetchAndRender() {
+
+  if (Object.keys(STATION_MAP).length === 0) {
+    await loadStationCSV();
+  }
+
+  const coverage = document.getElementById('coverageSelect').value;
+const codes = coverage === 'chart'
+  ? Object.values(STATION_MAP).filter(s => s.chart).map(s => s.icao)
+  : Object.values(STATION_MAP)
+      .filter(s => s.tier <= { essential: 1, standard: 2, all: 3 }[coverage])
+      .map(s => s.icao);
+
+metarData = [];
+  markers.forEach(m => map.removeLayer(m)); markers = [];
+  if (contourLayer) { map.removeLayer(contourLayer); contourLayer = null; }
+  if (gridLayer) { map.removeLayer(gridLayer); gridLayer = null; }
+
+  statusText.textContent = `Fetching ${codes.length} stations...`;
+  progBar.style.width = '0%';
+
+  // chunk into groups of 25
+  const chunks = [];
+  for (let i = 0; i < codes.length; i += 25) chunks.push(codes.slice(i, i + 25));
+
+  let done = 0;
+  const rawLines = [];
+
+  // Parallel fetch with concurrency 4
+  let ci = 0;
+  async function worker() {
+    while (ci < chunks.length) {
+      const idx = ci++;
+      try {
+        const url = `metarProxy.php?ids=${chunks[idx].join(',')}`;
+        const r = await fetch(url, { cache: 'no-store' });
+        const txt = await r.text();
+        rawLines.push(txt.trim());
+      } catch (e) { /* skip failed chunks */ }
+      done += chunks[idx].length;
+      const pct = Math.round((done / codes.length) * 100);
+      progBar.style.width = pct + '%';
+      statusText.textContent = `Fetched ${done}/${codes.length} (${pct}%)`;
+    }
+  }
+  await Promise.all([worker(), worker(), worker(), worker()]);
+
+  statusText.textContent = 'Parsing...';
+  const allText = rawLines.join('\n');
+  parseMETARs(allText);
+
+  // Build timestamps from anchor stations
+  const ANCHORS = ['CYYC','CYEG','CYVR','CYYZ','KGTF','PANC'];
+  const anchorTS = [...new Set(
+    metarData.filter(d => d.type === 'METAR' && ANCHORS.includes(d.icao)).map(d => d.timestamp)
+  )].sort();
+  timestamps = anchorTS.length > 0 ? anchorTS :
+    [...new Set(metarData.filter(d => d.type === 'METAR').map(d => d.timestamp))].sort();
+
+  timeSlider.max = timestamps.length - 1;
+  timeSlider.value = timestamps.length - 1;
+  timeLabel.textContent = timestamps[timestamps.length - 1] || '——';
+  timeInfo.textContent = `step ${timestamps.length}/${timestamps.length}`;
+
+  document.getElementById('timebar').style.display = 'block';
+  timeSlider.addEventListener('input', onSliderChange);
+  overlaySelect.dispatchEvent(new Event('change'));
+
+  renderMap();
+  statusText.textContent = `Ready — ${metarData.length} records, ${timestamps.length} time steps`;
+  progBar.style.width = '100%';
+}
+
+function onSliderChange() {
+  const idx = parseInt(timeSlider.value);
+  timeLabel.textContent = timestamps[idx] || '——';
+  timeInfo.textContent = `step ${idx+1}/${timestamps.length}`;
+  renderMap();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// METAR PARSER
+// ═══════════════════════════════════════════════════════════════
+function parseMETARs(text) {
+  const lines = text.split('\n').filter(l => l.trim() && /^(METAR|SPECI)/.test(l.trim()));
+  lines.forEach(line => {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 4) return;
+
+    const origType = parts[0];
+    const icao = parts[1];
+    if (!STATION_MAP[icao]) return;
+
+    // timestamp
+    const rawT = parts[2];
+    if (!/^\d{6}Z$/.test(rawT)) return;
+    let day = parseInt(rawT.slice(0,2)), hour = parseInt(rawT.slice(2,4)), min = parseInt(rawT.slice(4,6));
+    let tH = hour, tD = day, tM = min;
+    if (origType === 'METAR') {
+      if (min >= 45) { tH = (hour+1) % 24; tM = 0; if (tH === 0) tD++; }
+      else if (min <= 14) { tM = 0; }
+    }
+    const timestamp = `${String(tD).padStart(2,'0')}${String(tH).padStart(2,'0')}${String(tM).padStart(2,'0')}Z`;
+    const type = tM === 0 ? 'METAR' : 'SPECI';
+
+    // visibility (SM)
+    const visIdx = parts.findIndex(p => /SM$/.test(p));
+    let vis = null;
+    if (visIdx >= 0) {
+      let rv = parts[visIdx], whole = 0;
+      if (visIdx > 0 && /^\d+$/.test(parts[visIdx-1])) whole = parseInt(parts[visIdx-1]);
+      const vp = rv.replace(/SM$/,'');
+      if (vp.includes('/')) { const [n,d] = vp.split('/').map(Number); vis = whole + n/d; }
+      else { vis = whole + parseFloat(vp); }
+    }
+
+    // wind
+    const wP = parts.find(p => /KT$/.test(p) || /MPS$/.test(p)) || '';
+    let windDir = null, windSpd = null, windGust = null;
+    if (wP) {
+      const wm = wP.match(/^(\d{3})(\d{2,3})(?:G(\d{2,3}))?K/);
+      if (wm) { windDir = parseInt(wm[1]); windSpd = parseInt(wm[2]); windGust = wm[3] ? parseInt(wm[3]) : 0; }
+      const calm = wP.match(/^00000K/); if (calm) { windDir = 0; windSpd = 0; windGust = 0; }
+    }
+
+    // temp / dew
+    let temp = null, dew = null;
+    for (const p of parts) {
+      if (/^M?\d{1,2}\/M?\d{1,2}$/.test(p)) {
+        const [ts, ds] = p.split('/');
+        temp = ts.startsWith('M') ? -parseInt(ts.slice(1)) : parseInt(ts);
+        dew  = ds.startsWith('M') ? -parseInt(ds.slice(1)) : parseInt(ds);
+        break;
+      }
+    }
+
+    // SLP
+    const slpP = parts.find(p => /^SLP\d+/.test(p)) || '';
+    let slp = null;
+    if (slpP) { const v = parseInt(slpP.slice(3)); slp = v >= 500 ? 900 + v/10 : 1000 + v/10; }
+
+    // cloud
+    const cloudParts = parts.filter(p => /^(FEW|SCT|BKN|OVC|VV)\d{3}/.test(p));
+const cloudsSorted = cloudParts.map(c => { const m = c.match(/\d+/); return { code: c, val: m ? parseInt(m[0]) : 999 }; }).sort((a,b)=>a.val-b.val);
+    console.log(`[CLOUD] ${icao} | raw parts: ${cloudParts.join(' ')} | sorted: ${cloudsSorted.map(c=>c.code+'('+c.val+')').join(' ')} | coverRank max: ${cloudsSorted.reduce((mx,c)=>{const r=/^VV/.test(c.code)?9:/^OVC/.test(c.code)?8:/^BKN/.test(c.code)?6:/^SCT/.test(c.code)?4:/^FEW/.test(c.code)?2:0; return Math.max(mx,r);},0)}`);
+    const lowestCloud = cloudsSorted.length > 0 ? cloudsSorted[0].code : (parts.includes('CLR')||parts.includes('SKC') ? 'CLR' : 'UNK');
+
+// cloud cover (oktas) — use the maximum coverage layer reported
+const coverRank = (code) => {
+      if (/^VV/.test(code))  return 9;
+      if (/^OVC/.test(code)) return 8;
+      if (/^BKN/.test(code)) return 6;
+      if (/^SCT/.test(code)) return 4;
+      if (/^FEW/.test(code)) return 2;
+      return 0;
+    };
+    let cloudCover = 0;
+    if (lowestCloud === 'CLR' || lowestCloud === 'SKC') cloudCover = 0;
+    else {
+      // Circle fill: use highest-rank significant layer (BKN/OVC/VV take priority)
+      const sigLayers = cloudsSorted.filter(c => /^(BKN|OVC|VV)/.test(c.code));
+      const allLayers = sigLayers.length > 0 ? sigLayers : cloudsSorted;
+      cloudCover = allLayers.reduce((max, c) => Math.max(max, coverRank(c.code)), 0);
+    }
+    
+
+    // weather
+    const wxParts = parts.filter(p => {
+      p = p.toUpperCase().trim();
+      if (/^RMK|^SLP|^R\d+|^Q\d|^A\d|^M?\d{1,2}\//.test(p)) return false;
+      if (/KT$|SM$/.test(p) || /^\d+$/.test(p)) return false;
+      if (/^FEW|^SCT|^BKN|^OVC|^VV|^CLR|^SKC|^AUTO|^COR/.test(p)) return false;
+if (p === 'MISG') return false;
+      const s = p.replace(/^[+\-]/,'');
+      return /^(FZ|SH|BL|TS|MI|PR|BC|DR)?(DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|HZ|FU|VA|DU|SA|PY|SQ|PO|FC|SS|DS){1,3}$/.test(s);
+    });
+    const weather = wxParts.join(' ');
+
+    // pressure tendency (RMK ... PRESRR / PRESFR)
+    let tendency = null;
+    const rmkIdx = parts.findIndex(p => p === 'RMK');
+    if (rmkIdx >= 0) {
+      const rmk = parts.slice(rmkIdx).join(' ');
+      if (/PRESRR/.test(rmk)) tendency = 1;   // rising rapidly
+      else if (/PRESFR/.test(rmk)) tendency = -1; // falling rapidly
+      // 6-hourly pressure change P######
+      const pm = rmk.match(/\bP(\d)(\d{3})\b/);
+      if (pm) tendency = parseInt(pm[1]); // WMO code 0-8
+    }
+
+    // relative humidity
+    let rh = null;
+    if (temp !== null && dew !== null) {
+      const a = 17.625, b = 243.04;
+      const at = (a*temp)/(b+temp), ad = (a*dew)/(b+dew);
+      rh = Math.min(100, Math.max(0, Math.round(100 * Math.exp(ad-at))));
+    }
+
+const st = STATION_MAP[icao];
+    metarData.push({ type, icao, timestamp, vis, temp, dew, rh, slp,
+      windDir, windSpd, windGust, lowestCloud, cloudCover, cloudsSorted, weather, tendency,
+      lat: st.lat, lon: st.lon, name: st.name });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER MAP
+// ═══════════════════════════════════════════════════════════════
+function renderMap() {
+  markers.forEach(m => map.removeLayer(m)); markers = [];
+  if (contourLayer) { map.removeLayer(contourLayer); contourLayer = null; }
+  if (timestamps.length === 0) return;
+
+  const idx = parseInt(timeSlider.value);
+  const ts = timestamps[idx];
+  const sz = parseInt(symbolSize.value);
+const showWind = document.getElementById('showWind').checked;
+  const showTd = document.getElementById('showTd').checked;
+  const showSLP = document.getElementById('showSLP').checked;
+  const showWx = document.getElementById('showWx').checked;
+  const showGust = document.getElementById('showGust').checked;
+
+  const data = metarData.filter(d => d.timestamp === ts && d.type === 'METAR');
+
+data.forEach(d => {
+const html = makeStationHTML(d, sz, { showWind, showTd, showSLP, showWx, showGust });
+if (document.getElementById('showWxLabel').checked && d.weather) {
+      const col = wxLabelColor(d.weather);
+      if (col) {
+        const wxM = L.marker([d.lat, d.lon], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="background:${col};color:#fff;font-size:10px;font-family:'Courier New',monospace;padding:1px 4px;border-radius:2px;white-space:nowrap;pointer-events:none;opacity:0.92;">${d.weather}</div>`,
+            iconSize: null,
+            iconAnchor: [2, -4]
+          }),
+          interactive: false,
+          zIndexOffset: 200
+        }).addTo(map);
+        markers.push(wxM);
+      }
+    }
+
+    // Low Cloud overlay
+if (document.getElementById('showLowCloud').checked) {
+      const col = lowCloudColor(d);
+      if (col) {
+        const sig = d.cloudsSorted.find(c => /^(BKN|OVC|VV)/.test(c.code));
+        const lbl = sig ? sig.code : '';
+        const lcM = L.marker([d.lat, d.lon], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="background:${col};color:#fff;font-size:10px;font-family:'Courier New',monospace;padding:1px 4px;border-radius:2px;white-space:nowrap;pointer-events:none;opacity:0.85;">${lbl}</div>`,
+            iconSize: null,
+iconAnchor: [2, 14]
+          }),
+          interactive: false,
+          zIndexOffset: 200
+        }).addTo(map);
+        markers.push(lcM);
+      }
+    }
+    const m = L.marker([d.lat, d.lon], {
+      icon: L.divIcon({
+        className: '',
+        html,
+        iconSize: [sz * 3, sz * 3],
+        iconAnchor: [sz * 1.5, sz * 1.5]
+      })
+    }).addTo(map);
+
+m.bindPopup(makePopup(d));
+    markers.push(m);
+  });
+
+  // Red reference dots for YEG and YYC
+  ['CYEG', 'CYYC'].forEach(function(icao) {
+    const st = STATION_MAP[icao];
+    if (!st) return;
+    const dot = L.circleMarker([st.lat, st.lon], {
+      radius: 5,
+      color: '#cc0000',
+      fillColor: '#ff0000',
+      fillOpacity: 1,
+      weight: 1.5,
+      interactive: false,
+      zIndexOffset: 1000
+    }).addTo(map);
+    markers.push(dot);
+  });
+
+// Overlays
+  const overlay = overlaySelect.value;
+  if (overlay === 'slp') drawSLPContours(data);
+  else if (overlay === 'temp') drawTempContours(data);
+  drawGridValues(data);
+  setTimeout(debugAnchorOffset, 50);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATION MODEL — SVG via canvas→dataURL approach
+// We build the station model as an SVG string
+// ═══════════════════════════════════════════════════════════════
+// ── Station model: all black ink, white circle fill ──
+function makeStationHTML(d, sz, opts) {
+  const S  = sz;
+  const cx = S * 1.5;
+  const cy = S * 1.5;
+  const R  = S * 0.24;          // small circle
+const fs = 10;
+  const FF = 'Arial,sans-serif';
+  const FW = 'normal';
+  const BK = '#000000';
+  const lw = Math.max(1.1, S * 0.035);
+
+  let e = [];
+
+  // cloud circle
+// cloud circle or missing-data triangle
+  const hasCloud = d.lowestCloud && d.lowestCloud !== 'UNK';
+  if (hasCloud) {
+    e.push(cloudCircleSVG(cx, cy, R, d.cloudCover));
+  } else {
+    // black triangle — same size footprint as circle
+    const th = R * 1.5;
+    const tx1 = cx, ty1 = cy - th;
+    const tx2 = cx - th, ty2 = cy + th * 0.6;
+    const tx3 = cx + th, ty3 = cy + th * 0.6;
+    e.push(`<polygon points="${tx1.toFixed(2)},${ty1.toFixed(2)} ${tx2.toFixed(2)},${ty2.toFixed(2)} ${tx3.toFixed(2)},${ty3.toFixed(2)}" fill="#000" stroke="none"/>`);
+  }
+  
+  
+  // wind barb (all black, from circle edge)
+if (opts.showWind && d.windDir !== null && d.windSpd !== null) {
+    e.push(windBarbSVG(cx, cy, d.windDir, d.windSpd, opts.showGust ? d.windGust : 0, S, R, BK, lw));
+  }
+  
+  // Temp — top-left
+  if (d.temp !== null) {
+e.push(`<text x="${(cx-R-3).toFixed(1)}" y="${(cy-R*0.45-2).toFixed(1)}" text-anchor="end" font-size="${fs}px" font-weight="${FW}" font-family="${FF}" fill="${BK}">${d.temp}</text>`);
+  }
+
+  // Weather + Visibility — middle-left, combined on one line
+  const visStr = d.vis === null ? null :
+    d.vis >= 10 ? Math.round(d.vis).toString() :
+    d.vis % 1 === 0 ? d.vis.toString() :
+    d.vis.toFixed(1);
+  const wxLine = [visStr, d.weather || null].filter(Boolean).join(' ');
+if (wxLine) {
+e.push(`<text x="${(cx-R-3).toFixed(1)}" y="${(cy+fs*0.38).toFixed(1)}" text-anchor="end" font-size="${fs}px" font-weight="${FW}" font-family="${FF}" fill="${BK}">${wxLine}</text>`);
+  }
+
+  // Dew — bottom-left
+  if (opts.showTd && d.dew !== null) {
+e.push(`<text x="${(cx-R-3).toFixed(1)}" y="${(cy+R*0.55+fs).toFixed(1)}" text-anchor="end" font-size="${fs}px" font-family="${FF}" fill="${BK}">${d.dew}</text>`);
+  }
+
+  // SLP — top-right
+  if (opts.showSLP && d.slp !== null) {
+e.push(`<text x="${(cx+R+3).toFixed(1)}" y="${(cy-R*0.45-2).toFixed(1)}" text-anchor="start" font-size="${fs}px" font-family="${FF}" fill="${BK}">${formatSLP(d.slp)}</text>`);
+  }
+
+
+
+// Cloud height only — below circle, no prefix, hidden if above 120 (×100 ft)
+  const belowY = cy + R + fs * 1.05;
+const sigCld = d.cloudsSorted ? d.cloudsSorted.find(c => /^(BKN|OVC|VV)/.test(c.code)) : null;
+  const lowestCld = sigCld || null;
+if (lowestCld && lowestCld.val <= 120) {
+const cldHgt = Math.round(lowestCld.val / 10);
+    e.push(`<text x="${cx.toFixed(1)}" y="${belowY.toFixed(1)}" text-anchor="middle" font-size="${fs}px" font-family="${FF}" fill="${BK}">${cldHgt}</text>`);
+  }
+
+// Station ID last 3 chars — below cloud height
+  const stnSuffix = (d.icao || '').slice(-3);
+  const stnY = belowY + fs * 0.85;
+e.push(`<text x="${cx.toFixed(1)}" y="${stnY.toFixed(1)}" text-anchor="middle" font-size="${fs}px" font-weight="${FW}" font-family="${FF}" fill="${BK}">${stnSuffix}</text>`);
+
+  const W = S * 3, H = S * 3;
+return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;font-size:0;line-height:1" stroke="none">${e.join('')}</svg>`;
+}
+
+// ── Cloud circle: white fill, black outline, black sector ──
+function cloudCircleSVG(cx, cy, R, oktas) {
+  const lw = Math.max(1.1, R * 0.16);
+  const BK = '#000', WH = '#fff';
+
+  if (oktas === 9) {
+    // VV obscured: full black + white X
+    return `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${BK}" stroke="${BK}" stroke-width="${lw}"/>` +
+           `<line x1="${(cx-R*0.52).toFixed(2)}" y1="${(cy-R*0.52).toFixed(2)}" x2="${(cx+R*0.52).toFixed(2)}" y2="${(cy+R*0.52).toFixed(2)}" stroke="${WH}" stroke-width="${(lw*0.85).toFixed(2)}"/>` +
+           `<line x1="${(cx+R*0.52).toFixed(2)}" y1="${(cy-R*0.52).toFixed(2)}" x2="${(cx-R*0.52).toFixed(2)}" y2="${(cy+R*0.52).toFixed(2)}" stroke="${WH}" stroke-width="${(lw*0.85).toFixed(2)}"/>`;
+  }
+
+  let s = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${WH}" stroke="${BK}" stroke-width="${lw}"/>`;
+  if (oktas <= 0) return s;  // clear
+
+  if (oktas >= 8) return `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${BK}" stroke="${BK}" stroke-width="${lw}"/>`; // OVC
+
+  const cxs = cx.toFixed(2), cys = cy.toFixed(2), Rs = R.toFixed(2);
+if (oktas === 2) {
+    // FEW: top-right quarter black (12→3 o'clock, CW)
+    s += `<path d="M${cxs},${cys} L${cxs},${(cy-R).toFixed(2)} A${Rs},${Rs} 0 0,1 ${(cx+R).toFixed(2)},${cys} Z" fill="${BK}"/>`;
+  } else if (oktas === 4) {
+    // SCT: right half black (12→6 o'clock, CW)
+    s += `<path d="M${cxs},${cys} L${cxs},${(cy-R).toFixed(2)} A${Rs},${Rs} 0 1,1 ${cxs},${(cy+R).toFixed(2)} Z" fill="${BK}"/>`;
+  } else if (oktas === 6) {
+    // BKN: white top-left quarter cut out (9→12 o'clock)
+    const top  = `${cxs},${(cy-R).toFixed(2)}`;
+    const lft  = `${(cx-R).toFixed(2)},${cys}`;
+    s  = `<circle cx="${cxs}" cy="${cys}" r="${Rs}" fill="${BK}" stroke="${BK}" stroke-width="${lw}"/>`;
+    s += `<path d="M${cxs},${cys} L${lft} A${Rs},${Rs} 0 0,1 ${top} Z" fill="${WH}"/>`;
+  }
+  return s;
+}
+
+function cloudCoverFill(oktas) { return oktas / 8; }
+
+// ── Wind barb: all black ──
+function windBarbSVG(cx, cy, dirDeg, speedKt, gustKt, S, R, col, lw) {
+  col = col || '#000';
+  lw  = lw  || Math.max(1.1, S * 0.035);
+
+  if (speedKt < 3) {
+    return `<circle cx="${cx}" cy="${cy}" r="${(R*1.5).toFixed(2)}" fill="none" stroke="${col}" stroke-width="${lw}"/>`;
+  }
+
+  const rad = (dirDeg * Math.PI) / 180;
+  const sX = Math.sin(rad), sY = -Math.cos(rad);
+  const bx = cx + R*sX, by = cy + R*sY;
+  const staffLen = S * 1.6;   // wind barb shaft length
+  const tipX = bx + staffLen*sX, tipY = by + staffLen*sY;
+const angle100 = Math.PI / 180 * 10; // 10° tilt = 100° from forward shaft
+  const cos10 = Math.cos(angle100), sin10 = Math.sin(angle100);
+  const pX = -sY * cos10 + sX * sin10;
+  const pY =  sX * cos10 + sY * sin10;
+  const barbLen = S * 0.5;  // wind feather length
+  const barbSpc = S * 0.2;
+
+  let rem = Math.round(speedKt / 5) * 5;
+  const pennants = Math.floor(rem/50); rem -= pennants*50;
+  const fulls    = Math.floor(rem/10); rem -= fulls*10;
+  const halfs    = Math.floor(rem/5);
+
+  let e = [];
+  e.push(`<line x1="${bx.toFixed(2)}" y1="${by.toFixed(2)}" x2="${tipX.toFixed(2)}" y2="${tipY.toFixed(2)}" stroke="${col}" stroke-width="${lw}" stroke-linecap="round"/>`);
+
+  const pureHalf = (pennants===0 && fulls===0 && halfs===1);
+  if (pureHalf) {
+    const hx=tipX-staffLen*0.28*sX, hy=tipY-staffLen*0.28*sY;
+    e.push(`<line x1="${hx.toFixed(2)}" y1="${hy.toFixed(2)}" x2="${(hx+barbLen*0.5*pX).toFixed(2)}" y2="${(hy+barbLen*0.5*pY).toFixed(2)}" stroke="${col}" stroke-width="${lw}" stroke-linecap="round"/>`);
+  } else {
+    let pos = 0;
+    for (let p=0; p<pennants; p++) {
+      const ax=tipX-pos*sX, ay=tipY-pos*sY, bx2=ax-barbSpc*sX, by2=ay-barbSpc*sY, apx=ax+barbLen*pX, apy=ay+barbLen*pY;
+      e.push(`<polygon points="${ax.toFixed(2)},${ay.toFixed(2)} ${apx.toFixed(2)},${apy.toFixed(2)} ${bx2.toFixed(2)},${by2.toFixed(2)}" fill="${col}"/>`);
+      pos += barbSpc*1.5;
+    }
+    for (let f=0; f<fulls; f++) {
+      const fx=tipX-pos*sX, fy=tipY-pos*sY;
+      e.push(`<line x1="${fx.toFixed(2)}" y1="${fy.toFixed(2)}" x2="${(fx+barbLen*pX).toFixed(2)}" y2="${(fy+barbLen*pY).toFixed(2)}" stroke="${col}" stroke-width="${lw}" stroke-linecap="round"/>`);
+      pos += barbSpc;
+    }
+    for (let h=0; h<halfs; h++) {
+      const hx=tipX-pos*sX, hy=tipY-pos*sY;
+      e.push(`<line x1="${hx.toFixed(2)}" y1="${hy.toFixed(2)}" x2="${(hx+barbLen*0.5*pX).toFixed(2)}" y2="${(hy+barbLen*0.5*pY).toFixed(2)}" stroke="${col}" stroke-width="${lw}" stroke-linecap="round"/>`);
+      pos += barbSpc;
+    }
+  }
+
+  // Gust barbs — dashed, same black
+  if (gustKt && gustKt > speedKt) {
+    let gr=Math.round(gustKt/5)*5;
+    const gP=Math.floor(gr/50); gr-=gP*50;
+    const gF=Math.floor(gr/10); gr-=gF*10;
+    const gH=Math.floor(gr/5);
+    let gPos=0;
+for(let p=0;p<gP;p++){const ax=tipX-gPos*sX,ay=tipY-gPos*sY,bx2=ax-barbSpc*sX,by2=ay-barbSpc*sY,apx=ax+barbLen*0.85*pX,apy=ay+barbLen*0.85*pY;e.push(`<polygon points="${ax.toFixed(2)},${ay.toFixed(2)} ${apx.toFixed(2)},${apy.toFixed(2)} ${bx2.toFixed(2)},${by2.toFixed(2)}" fill="#ff2222" stroke="#ff2222" stroke-width="${(lw*0.7).toFixed(2)}"/>`);gPos+=barbSpc*1.5;}
+for(let f=0;f<gF;f++){const fx=tipX-gPos*sX,fy=tipY-gPos*sY;e.push(`<line x1="${fx.toFixed(2)}" y1="${fy.toFixed(2)}" x2="${(fx+barbLen*0.85*pX).toFixed(2)}" y2="${(fy+barbLen*0.85*pY).toFixed(2)}" stroke="#ff2222" stroke-width="${(lw*0.7).toFixed(2)}" stroke-linecap="round"/>`);gPos+=barbSpc;}
+for(let h=0;h<gH;h++){const hx=tipX-gPos*sX,hy=tipY-gPos*sY;e.push(`<line x1="${hx.toFixed(2)}" y1="${hy.toFixed(2)}" x2="${(hx+barbLen*0.45*pX).toFixed(2)}" y2="${(hy+barbLen*0.45*pY).toFixed(2)}" stroke="#ff2222" stroke-width="${(lw*0.7).toFixed(2)}" stroke-linecap="round"/>`);gPos+=barbSpc;}
+  }
+
+  return e.join('');
+}
+
+// legend uses inline SVG — no canvas needed
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function formatSLP(slp) {
+  if (slp === null) return '';
+  // WMO: drop leading 9 or 10, drop decimal
+  const v = Math.round(slp * 10) % 1000;
+  return String(v).padStart(3, '0');
+}
+
+
+
+function makePopup(d) {
+  const fltCat = flightCategory(d);
+  const fcColor = { VFR: '#3ecf6a', MVFR: '#e08030', IFR: '#e05050', LIFR: '#9050c0' }[fltCat] || '#c8d8e8';
+  return `<div class="pop-icao">${d.icao} <span style="font-size:11px;color:${fcColor}">${fltCat}</span></div>
+    <div style="font-size:11px;color:#5a7a9a;margin-bottom:6px;">${d.name} — ${d.timestamp}</div>
+    <div class="pop-line"><span class="pop-key">Temp / Dew</span><span class="pop-val">${d.temp ?? '—'}°C / ${d.dew ?? '—'}°C</span></div>
+    <div class="pop-line"><span class="pop-key">Spread</span><span class="pop-val">${d.temp !== null && d.dew !== null ? (d.temp-d.dew) : '—'}°C</span></div>
+    <div class="pop-line"><span class="pop-key">Visibility</span><span class="pop-val">${d.vis ?? '—'} SM</span></div>
+<div class="pop-line"><span class="pop-key">Cloud</span><span class="pop-val">${d.cloudsSorted && d.cloudsSorted.length > 0 ? d.cloudsSorted.map(c => c.code).join(' ') : (d.lowestCloud || '—')}</span></div>
+    <div class="pop-line"><span class="pop-key">Weather</span><span class="pop-val">${d.weather || '—'}</span></div>
+    <div class="pop-line"><span class="pop-key">Wind</span><span class="pop-val">${d.windDir ?? '—'}° / ${d.windSpd ?? '—'} kt${d.windGust ? ' G'+d.windGust : ''}</span></div>
+    <div class="pop-line"><span class="pop-key">SLP</span><span class="pop-val">${d.slp ? d.slp.toFixed(1)+' hPa' : '—'}</span></div>
+    <div class="pop-line"><span class="pop-key">RH</span><span class="pop-val">${d.rh ?? '—'}%</span></div>
+    <div style="margin-top:6px;"><a href="https://aviationweather.gov/api/data/metar?ids=${d.icao}&hours=24" target="_blank" style="color:#4fa3e0;font-size:11px;">🔗 24h history</a></div>`;
+}
+
+function flightCategory(d) {
+  const cldMatch = d.lowestCloud && /^(BKN|OVC|VV)\d+/.test(d.lowestCloud)
+    ? d.lowestCloud.match(/\d+/) : null;
+  const ceiling = cldMatch ? parseInt(cldMatch[0]) * 100 : 99999;
+  const vis = d.vis ?? 99;
+  if (ceiling < 500 || vis < 1) return 'LIFR';
+  if (ceiling < 1000 || vis < 3) return 'IFR';
+  if (ceiling < 3000 || vis < 5) return 'MVFR';
+  return 'VFR';
+}
+
+// ── Colour functions ──
+function tempColor(t) {
+  if (t <= -30) return '#800080'; if (t <= -20) return '#0040FF';
+  if (t <= -10) return '#0080FF'; if (t <= 0) return '#40E0D0';
+  if (t <= 10) return '#7FFF00'; if (t <= 20) return '#FFD700';
+  if (t <= 30) return '#FF4500'; return '#FF0000';
+}
+function dewColor(d) {
+  if (d <= -20) return '#4a4'; if (d <= -10) return '#2a8';
+  if (d <= 0) return '#2c6'; if (d <= 10) return '#3e8';
+  if (d <= 20) return '#3ecf6a'; return '#5eff80';
+}
+function wxLabelColor(wx) {
+  if (!wx) return null;
+  if (/FZRA|FZDZ/.test(wx))           return '#ff2222';
+  if (/TS/.test(wx))                   return '#842ba6';
+  if (/\+SN|\+RA/.test(wx))           return '#ff2222';
+  if (/SN/.test(wx))                   return '#4488ff';
+  if (/RA/.test(wx))                   return '#22aa44';
+  if (/DZ/.test(wx))                   return '#88dd88';
+  if (/PL|IC|SG/.test(wx))            return '#aaddff';
+  if (/FG/.test(wx))                   return '#ff8800';
+  if (/BR/.test(wx))                   return '#dddd00';
+  if (/HZ/.test(wx))                   return '#cccccc';
+  if (/FU/.test(wx))                   return '#999999';
+  return null;
+}
+
+function wxColor(wx) {
+  if (!wx) return null;
+  if (/FZRA|FZDZ/.test(wx))           return '#ff2222';
+  if (/TS/.test(wx))                   return '#842ba6';
+  if (/\+SN|\+RA/.test(wx))           return '#ff2222';
+  if (/SN/.test(wx))                   return '#4488ff';
+  if (/RA/.test(wx))                   return '#22aa44';
+  if (/DZ/.test(wx))                   return '#88dd88';
+  if (/PL|IC|SG/.test(wx))            return '#aaddff';
+  if (/FG/.test(wx))                   return '#ff8800';
+  if (/BR/.test(wx))                   return '#dddd00';
+  if (/HZ/.test(wx))                   return '#cccccc';
+  if (/FU/.test(wx))                   return '#999999';
+  return null;
+}
+
+function lowCloudColor(d) {
+  // find lowest BKN/OVC/VV layer
+  const sig = d.cloudsSorted ? d.cloudsSorted.find(c => /^(BKN|OVC|VV)/.test(c.code)) : null;
+  if (!sig) return null;
+  const ft = sig.val * 100;
+  if (ft <= 6000)  return '#842ba6'; // purple — low
+  if (ft <= 12000) return '#996633'; // brown — mid
+  return null;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// SLP CONTOURS (from original code, adapted)
+// ═══════════════════════════════════════════════════════════════
+function chaikinSmooth(pts, n=3) {
+  let arr = pts;
+  for (let it = 0; it < n; it++) {
+    const next = [];
+    for (let i = 0; i < arr.length-1; i++) {
+      const [la, lo] = arr[i], [lb, lb2] = arr[i+1];
+      next.push([0.75*la+0.25*lb, 0.75*lo+0.25*lb2]);
+      next.push([0.25*la+0.75*lb, 0.25*lo+0.75*lb2]);
+    }
+    arr = next;
+  }
+  return arr;
+}
+
+function buildIDWGrid(pts, getProp, W, H, latMin, latMax, lonMin, lonMax, power=4) {
+  const grid = new Float32Array(W * H);
+  for (let row = 0; row < H; row++) for (let col = 0; col < W; col++) {
+    const lat = latMax - (row/(H-1))*(latMax-latMin);
+    const lon = lonMin + (col/(W-1))*(lonMax-lonMin);
+    let wS=0, vS=0;
+    pts.forEach(p => {
+      const dl=lat-parseFloat(p.lat), dn=lon-parseFloat(p.lon);
+      const d2=dl*dl+dn*dn;
+      const w=d2<1e-10?1e10:1/Math.pow(d2,power/2);
+      wS+=w; vS+=w*getProp(p);
+    });
+    grid[row*W+col] = vS/wS;
+  }
+  return grid;
+}
+
+function drawSLPContours(data) {
+  if (contourLayer) { map.removeLayer(contourLayer); contourLayer=null; }
+  const pts = data.filter(d => d.slp && d.slp > 900);
+  if (pts.length < 6) return;
+
+const { slpPower, gridW: W, gridH: H, chaikin: chaikinPasses, slpInt, opFaint, opBold } = getIDWParams();
+  const lats=pts.map(d=>parseFloat(d.lat)), lons=pts.map(d=>parseFloat(d.lon));
+  const latMin=Math.min(...lats)-1.5, latMax=Math.max(...lats)+1.5;
+  const lonMin=Math.min(...lons)-1.5, lonMax=Math.max(...lons)+1.5;
+const grid = buildIDWGrid(pts, p=>parseFloat(p.slp), W, H, latMin, latMax, lonMin, lonMax, slpPower);
+
+const slpMin=Math.floor(Math.min(...pts.map(d=>d.slp))/slpInt)*slpInt;
+const slpMax=Math.ceil(Math.max(...pts.map(d=>d.slp))/slpInt)*slpInt;
+const thr=[]; for(let v=slpMin;v<=slpMax;v+=slpInt) thr.push(v);
+
+  const contours=d3.contours().size([W,H]).thresholds(thr)(grid);
+  const toLL=(gx,gy)=>[latMax-(gy/(H-1))*(latMax-latMin), lonMin+(gx/(W-1))*(lonMax-lonMin)];
+
+  const lines=[];
+  contours.forEach(c=>{
+    const w=c.value%20===0?2.5:c.value%8===0?1.5:0.8;
+const op=c.value%20===0?opBold:c.value%8===0?(opFaint+opBold)/2:opFaint;
+    c.coordinates.forEach(poly=>poly.forEach((ring,ri)=>{
+      if(ri!==0) return;
+      const raw=ring.map(([gx,gy])=>toLL(gx,gy));
+const ll=chaikinSmooth(raw, chaikinPasses);
+lines.push(L.polyline(ll,{color:'#1a3a5a',weight:w,opacity:op}));
+      if(c.value%4===0 && ring.length>8){
+        // always label closed rings at least once; longer rings get more labels
+        const labelEvery = Math.max(1, Math.floor(ring.length / 80));
+        const positions = new Set();
+        // guaranteed first label
+        positions.add(Math.floor(ring.length / 2));
+        // additional labels spaced along long rings
+        for (let li = 0; li < ring.length; li += Math.floor(ring.length / labelEvery)) {
+          positions.add(li);
+        }
+        positions.forEach(pos => {
+          const pt = ring[Math.min(pos, ring.length-1)];
+          const [ml,mn] = toLL(pt[0], pt[1]);
+          lines.push(L.marker([ml,mn],{icon:L.divIcon({className:'',
+          html:`<div style="font-size:13px;font-weight:normal;color:#1a4a8a;font-family:'Courier New',monospace;white-space:nowrap;text-shadow:1px 1px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff;">${c.value}</div>`,iconSize:null,iconAnchor:[14,8]}),interactive:false}));
+        });
+      }
+    }));
+  });
+
+// H/L markers
+  const hlms = document.getElementById('showHL').checked ? findHL(grid, W, H, pts, toLL) : [];
+  contourLayer=L.layerGroup([...lines,...hlms]).addTo(map);
+}
+
+function drawTempContours(data) {
+  if (contourLayer) { map.removeLayer(contourLayer); contourLayer=null; }
+  const pts=data.filter(d=>d.temp!==null);
+  if(pts.length<6) return;
+
+const { tmpPower, gridW: W, gridH: H } = getIDWParams();
+  const lats=pts.map(d=>parseFloat(d.lat)),lons=pts.map(d=>parseFloat(d.lon));
+  const latMin=Math.min(...lats)-1.5,latMax=Math.max(...lats)+1.5;
+  const lonMin=Math.min(...lons)-1.5,lonMax=Math.max(...lons)+1.5;
+const grid=buildIDWGrid(pts,p=>parseFloat(p.temp),W,H,latMin,latMax,lonMin,lonMax,tmpPower);
+
+  const tMin=Math.floor(Math.min(...pts.map(d=>d.temp))/2)*2;
+  const tMax=Math.ceil(Math.max(...pts.map(d=>d.temp))/2)*2;
+  const thr=[]; for(let v=tMin;v<=tMax;v+=2) thr.push(v);
+
+  const contours=d3.contours().size([W,H]).thresholds(thr)(grid);
+  const toLL=(gx,gy)=>[latMax-(gy/(H-1))*(latMax-latMin),lonMin+(gx/(W-1))*(lonMax-lonMin)];
+
+  const lines=[];
+  contours.forEach(c=>{
+    const w=c.value%10===0?2.5:c.value%4===0?1.5:0.7;
+    const op=c.value%10===0?0.9:c.value%4===0?0.65:0.4;
+    const sc=c.value<0?'#0060cc':c.value===0?'#00bfff':'#8b0000';
+    c.coordinates.forEach(poly=>poly.forEach(ring=>{
+      const raw=ring.map(([gx,gy])=>toLL(gx,gy));
+      const ll=chaikinSmooth(raw,3);
+      lines.push(L.polyline(ll,{color:sc,weight:w,opacity:op}));
+      if(c.value%4===0&&ring.length>15){
+        const mid=ring[Math.floor(ring.length/2)];
+        const[ml,mn]=toLL(mid[0],mid[1]);
+        lines.push(L.marker([ml,mn],{icon:L.divIcon({className:'',html:`<div style="font-size:9px;font-weight:bold;color:${sc};background:rgba(11,15,20,0.75);padding:0 2px;border-radius:2px;">${c.value}°</div>`,iconSize:null,iconAnchor:[10,7]}),interactive:false}));
+      }
+    }));
+  });
+  contourLayer=L.layerGroup(lines).addTo(map);
+}
+
+function findHL(grid, W, H, pts, toLL) {
+  // Smooth grid
+const { sigma } = getIDWParams();
+const sg=gaussSmooth(grid,W,H,sigma);
+  const R=10; const placed=[]; const markers=[];
+  for(let row=R;row<H-R;row++) for(let col=R;col<W-R;col++){
+    const v=sg[row*W+col];
+    let mx=true,mn=true;
+    for(let dr=-R;dr<=R;dr++) for(let dc=-R;dc<=R;dc++){
+      if(dr===0&&dc===0) continue;
+      const nv=sg[(row+dr)*W+(col+dc)];
+      if(nv>=v) mx=false; if(nv<=v) mn=false;
+    }
+    if(!mx&&!mn) continue;
+    const type=mx?'H':'L';
+    if(placed.some(p=>{const dr2=p.r-row,dc2=p.c-col;return Math.sqrt(dr2*dr2+dc2*dc2)<12&&p.t===type;})) continue;
+    placed.push({r:row,c:col,t:type});
+    const[lat,lon]=toLL(col,row);
+    // Find nearest obs
+    let best=null,bd=Infinity;
+    pts.forEach(p=>{const dl=parseFloat(p.lat)-lat,dn=parseFloat(p.lon)-lon,d=dl*dl+dn*dn;if((type==='H'?parseFloat(p.slp)>best?.slp??-Infinity:parseFloat(p.slp)<best?.slp??Infinity)||best===null){if(d<25){if(!best||(type==='H'&&parseFloat(p.slp)>parseFloat(best.slp))||(type==='L'&&parseFloat(p.slp)<parseFloat(best.slp))) best=p;}}});
+    const color=type==='H'?'#cc2222':'#2244cc';
+    const valStr=best?Math.round(parseFloat(best.slp)).toString():'';
+    markers.push(L.marker([lat,lon],{icon:L.divIcon({className:'',html:`<div style="display:flex;flex-direction:column;align-items:center;pointer-events:none"><div style="font-size:24px;font-weight:900;color:${color};font-family:Arial Black,sans-serif;text-shadow:-1px -1px 0 rgba(255,255,255,0.8),1px -1px 0 rgba(255,255,255,0.8),-1px 1px 0 rgba(255,255,255,0.8),1px 1px 0 rgba(255,255,255,0.8);">${type}</div>${valStr?`<div style="font-size:10px;font-weight:bold;color:${color};background:rgba(255,255,255,0.8);border-radius:2px;padding:0 3px;">${valStr}</div>`:''}</div>`,iconSize:null,iconAnchor:[14,12]}),interactive:false,zIndexOffset:500}));
+  }
+  return markers;
+}
+
+function gaussSmooth(g,W,H,sigma){
+  const out=new Float32Array(g.length),r=Math.ceil(sigma*2);
+  for(let row=0;row<H;row++) for(let col=0;col<W;col++){
+    let ws=0,vs=0;
+    for(let dr=-r;dr<=r;dr++) for(let dc=-r;dc<=r;dc++){
+      const rr=row+dr,cc=col+dc;
+      if(rr<0||rr>=H||cc<0||cc>=W) continue;
+      const wt=Math.exp(-(dr*dr+dc*dc)/(2*sigma*sigma));
+      ws+=wt;vs+=wt*g[rr*W+cc];
+    }
+    out[row*W+col]=vs/ws;
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HIDE / SHOW PANELS
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // Legend hide
+  document.getElementById('legendHideBtn').addEventListener('click', () => {
+    const leg = document.getElementById('legend');
+    const body = leg.querySelector('svg, .leg-row, #legendSVG');
+    const isHidden = leg.dataset.hidden === '1';
+    if (!isHidden) {
+      // hide everything except the h2
+      [...leg.children].forEach(el => { if (el.tagName !== 'H2') el.style.display = 'none'; });
+      leg.dataset.hidden = '1';
+      document.getElementById('legendHideBtn').textContent = 'Show';
+    } else {
+      [...leg.children].forEach(el => { el.style.display = ''; });
+      leg.dataset.hidden = '0';
+      document.getElementById('legendHideBtn').textContent = 'Hide';
+    }
+  });
+
+  // Controls hide
+  document.getElementById('ctrlHideBtn').addEventListener('click', () => {
+    const ctrl = document.getElementById('ctrl');
+    const isHidden = ctrl.dataset.hidden === '1';
+    if (!isHidden) {
+      [...ctrl.children].forEach(el => {
+        if (el.id !== 'ctrlHideBtn') el.style.display = 'none';
+      });
+      ctrl.dataset.hidden = '1';
+      document.getElementById('ctrlHideBtn').textContent = 'Show Controls';
+      document.getElementById('ctrlHideBtn').style.marginTop = '0';
+    } else {
+      [...ctrl.children].forEach(el => { el.style.display = ''; });
+      ctrl.dataset.hidden = '0';
+      document.getElementById('ctrlHideBtn').textContent = 'Hide Controls';
+    }
+  });
+});
+// ═══════════════════════════════════════════════════════════════
+// GRID VALUE OVERLAY
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('gridBtn').addEventListener('click', () => {
+  gridVisible = !gridVisible;
+  document.getElementById('gridBtn').textContent = gridVisible ? '⊞ Hide Grid' : '⊞ Grid Values';
+  renderMap();
+});
+
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  statusText.textContent = 'Capturing…';
+  try {
+    const svgEl = document.querySelector('.leaflet-overlay-pane svg');
+    let svgReplaced = false;
+    let svgCanvas = null;
+    if (svgEl) {
+      const mapRect = document.getElementById('map').getBoundingClientRect();
+      const svgRect = svgEl.getBoundingClientRect();
+      const w = svgEl.width.baseVal.value;
+      const h = svgEl.height.baseVal.value;
+      const xml = new XMLSerializer().serializeToString(svgEl);
+      const blob = new Blob([xml], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      await new Promise(resolve => {
+        const img = new Image();
+        img.onload = function() {
+          svgCanvas = document.createElement('canvas');
+          svgCanvas.width = w;
+          svgCanvas.height = h;
+          svgCanvas.style.position = 'absolute';
+          svgCanvas.style.left = (svgRect.left - mapRect.left) + 'px';
+          svgCanvas.style.top  = (svgRect.top  - mapRect.top)  + 'px';
+          svgCanvas.getContext('2d').drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+          svgEl.parentNode.replaceChild(svgCanvas, svgEl);
+          svgReplaced = true;
+          resolve();
+        };
+        img.onerror = resolve;
+        img.src = url;
+      });
+    }
+
+    const canvas = await html2canvas(document.getElementById('map'), {
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      scale: window.devicePixelRatio || 1,
+      ignoreElements: el =>
+        el.id === 'ctrl' || el.id === 'legend' ||
+        el.id === 'timebar' || el.id === 'status' || el.id === 'idwPanel'
+    });
+
+    if (svgReplaced && svgCanvas) {
+      svgCanvas.parentNode.replaceChild(svgEl, svgCanvas);
+    }
+    const ts = timestamps.length > 0 ? timestamps[parseInt(timeSlider.value)] : 'synoptic';
+    const a = document.createElement('a');
+    a.download = `synoptic_${ts}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+statusText.textContent = 'PNG exported.';
+  } catch(e) {
+    statusText.textContent = 'Export failed: ' + e.message;
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORT SFC CHART
+// Synoptic window logic (UTC):
+//   1130–1729Z  → 1200Z chart
+//   1730–2329Z  → 1800Z chart
+//   2330–0029Z  → 1800Z chart  (wraps midnight)
+//   0030–0529Z  → 0000Z chart
+//   0530–1129Z  → 0600Z chart
+// ═══════════════════════════════════════════════════════════════
+
+function getSynopticHour(tsStr) {
+  // tsStr format from timestamps[]: "DDHHMMSZ" e.g. "031200Z"
+  var hh = parseInt(tsStr.slice(2, 4), 10);
+  var mm = parseInt(tsStr.slice(4, 6), 10);
+  var totalMin = hh * 60 + mm;
+  // midnight wrap: 2330–0029 → 1800Z
+  if (totalMin >= 23 * 60 + 30 || totalMin < 0 * 60 + 30) return '1800Z';
+  if (totalMin >= 11 * 60 + 30 && totalMin <= 17 * 60 + 29) return '1200Z';
+  if (totalMin >= 17 * 60 + 30 && totalMin <= 23 * 60 + 29) return '1800Z';
+  if (totalMin >=  0 * 60 + 30 && totalMin <=  5 * 60 + 29) return '0000Z';
+  if (totalMin >=  5 * 60 + 30 && totalMin <= 11 * 60 + 29) return '0600Z';
+  return '1200Z'; // fallback
+}
+
+document.getElementById('sfcChartBtn').addEventListener('click', function() {
+  // ── Determine synoptic hour; if ≤29 min past, use previous ──
+  var now = new Date();
+  var nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  var synHours = [0, 6, 12, 18];
+  var bestSyn = 0;
+  for (var i = 0; i < synHours.length; i++) {
+    if (synHours[i] * 60 <= nowMin) bestSyn = synHours[i];
+  }
+  var minutesPastSyn = nowMin - bestSyn * 60;
+  if (minutesPastSyn <= 29) {
+    var idx2 = synHours.indexOf(bestSyn);
+    bestSyn = idx2 > 0 ? synHours[idx2 - 1] : 18;
+  }
+  var synHour = String(bestSyn).padStart(2, '0') + '00Z';
+
+  // ── Snap slider to closest timestamp ──
+  var bestIdx = parseInt(timeSlider.value);
+  var bestDiff = Infinity;
+  timestamps.forEach(function(t, i) {
+    var diff = Math.abs(parseInt(t.slice(2, 4)) - bestSyn);
+    if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+  });
+  timeSlider.value = bestIdx;
+  timeLabel.textContent = timestamps[bestIdx] || '——';
+  timeInfo.textContent = 'step ' + (bestIdx + 1) + '/' + timestamps.length;
+  renderMap();
+
+  // ── Pan to White Court ──
+  map.setView([54.1439, -115.6855], map.getZoom(), { animate: false });
+
+  statusText.textContent = 'Snapped to ' + synHour + ' — centred on White Court';
+
+  var ts = timestamps[bestIdx] || '';
+  var synHourLabel = synHour;
+
+
+});
+
+
+document.getElementById('showHL').addEventListener('change', renderMap);
+document.getElementById('showWxLabel').addEventListener('change', renderMap);
+document.getElementById('showLowCloud').addEventListener('change', renderMap);
+function drawGridValues(data) {
+  if (gridLayer) { map.removeLayer(gridLayer); gridLayer = null; }
+  if (!gridVisible) return;
+
+  const pts = data.filter(d => d.slp && d.slp > 900);
+  if (pts.length < 6) return;
+
+  const { slpPower, gridW: W, gridH: H, slpInt } = getIDWParams();
+  const lats = pts.map(d => parseFloat(d.lat)), lons = pts.map(d => parseFloat(d.lon));
+  const latMin = Math.min(...lats) - 1.5, latMax = Math.max(...lats) + 1.5;
+  const lonMin = Math.min(...lons) - 1.5, lonMax = Math.max(...lons) + 1.5;
+  const grid = buildIDWGrid(pts, p => parseFloat(p.slp), W, H, latMin, latMax, lonMin, lonMax, slpPower);
+
+  // Color scale — one color per SLP interval band
+  const slpMin = Math.floor(Math.min(...pts.map(d => d.slp)) / slpInt) * slpInt;
+  const slpMax = Math.ceil(Math.max(...pts.map(d => d.slp)) / slpInt) * slpInt;
+  const nBands = Math.round((slpMax - slpMin) / slpInt);
+
+  // Generate distinct hues spread across spectrum
+  function bandColor(val) {
+    const band = Math.floor((val - slpMin) / slpInt);
+    const hue = Math.round((band / Math.max(nBands, 1)) * 300); // 0–300 deg, skip red wrap
+    return `hsl(${hue},80%,38%)`;
+  }
+
+  // Subsample grid — show every Nth point to avoid clutter
+  // Target ~600 labels max across the grid
+  const totalCells = W * H;
+//  const step = Math.max(1, Math.round(Math.sqrt(totalCells / 600)));
+// Target ~1 label per grid cell (step=1 = every point)
+  const step = 4;
+
+
+  const markers = [];
+  for (let row = 0; row < H; row += step) {
+    for (let col = 0; col < W; col += step) {
+      const val = grid[row * W + col];
+      const lat = latMax - (row / (H - 1)) * (latMax - latMin);
+      const lon = lonMin + (col / (W - 1)) * (lonMax - lonMin);
+      const color = bandColor(val);
+      const label = Math.round(val).toString();
+      markers.push(
+        L.marker([lat, lon], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="font-size:9px;font-weight:bold;color:${color};font-family:'Courier New',monospace;white-space:nowrap;pointer-events:none;">${label}</div>`,
+            iconSize: null,
+            iconAnchor: [10, 6]
+          }),
+          interactive: false,
+          zIndexOffset: -100
+        })
+      );
+    }
+  }
+
+  gridLayer = L.layerGroup(markers).addTo(map);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IDW TUNING PANEL
+// ═══════════════════════════════════════════════════════════════
+
+const IDW_DEFAULTS = {
+  slpPower: 4, tmpPower: 4, gridW: 440, gridH: 340,
+  chaikin: 1, slpInt: 4, sigma: 5, opFaint: 0.60, opBold: 0.90
+};
+
+const idwSliders = [
+  { id: 'tSlpPower', valId: 'vSlpPower', key: 'slpPower',  fmt: v => v },
+  { id: 'tTmpPower', valId: 'vTmpPower', key: 'tmpPower',  fmt: v => v },
+  { id: 'tGridW',    valId: 'vGridW',    key: 'gridW',     fmt: v => v },
+  { id: 'tGridH',    valId: 'vGridH',    key: 'gridH',     fmt: v => v },
+  { id: 'tChaikin',  valId: 'vChaikin',  key: 'chaikin',   fmt: v => v },
+  { id: 'tSlpInt',   valId: 'vSlpInt',   key: 'slpInt',    fmt: v => v + ' hPa' },
+  { id: 'tSigma',    valId: 'vSigma',    key: 'sigma',     fmt: v => v },
+  { id: 'tOpFaint',  valId: 'vOpFaint',  key: 'opFaint',   fmt: v => parseFloat(v).toFixed(2) },
+  { id: 'tOpBold',   valId: 'vOpBold',   key: 'opBold',    fmt: v => parseFloat(v).toFixed(2) },
+];
+
+function getIDWParams() {
+  const p = {};
+  idwSliders.forEach(s => { p[s.key] = parseFloat(document.getElementById(s.id).value); });
+  return p;
+}
+
+function updateIDWLabels() {
+  idwSliders.forEach(s => {
+    const v = document.getElementById(s.id).value;
+    document.getElementById(s.valId).textContent = s.fmt(v);
+  });
+  updateIDWSummary();
+}
+
+function updateIDWSummary() {
+  const p = getIDWParams();
+  const def = IDW_DEFAULTS;
+  const changed = [];
+  if (p.slpPower !== def.slpPower) changed.push(`slpPower: ${def.slpPower} → ${p.slpPower}`);
+  if (p.tmpPower !== def.tmpPower) changed.push(`tmpPower: ${def.tmpPower} → ${p.tmpPower}`);
+  if (p.gridW    !== def.gridW)    changed.push(`gridW:    ${def.gridW} → ${p.gridW}`);
+  if (p.gridH    !== def.gridH)    changed.push(`gridH:    ${def.gridH} → ${p.gridH}`);
+  if (p.chaikin  !== def.chaikin)  changed.push(`chaikin:  ${def.chaikin} → ${p.chaikin}`);
+  if (p.slpInt   !== def.slpInt)   changed.push(`slpInt:   ${def.slpInt} → ${p.slpInt} hPa`);
+  if (p.sigma    !== def.sigma)    changed.push(`sigma:    ${def.sigma} → ${p.sigma}`);
+  if (p.opFaint  !== def.opFaint)  changed.push(`opFaint:  ${def.opFaint} → ${p.opFaint.toFixed(2)}`);
+  if (p.opBold   !== def.opBold)   changed.push(`opBold:   ${def.opBold} → ${p.opBold.toFixed(2)}`);
+
+  const el = document.getElementById('idwSummary');
+  if (changed.length === 0) {
+    el.innerHTML = '<strong>All defaults — no changes to apply.</strong>';
+  } else {
+    el.innerHTML = '<strong>Changes vs defaults:</strong>\n' + changed.join('\n');
+  }
+}
+
+function idwReset() {
+  idwSliders.forEach(s => {
+    document.getElementById(s.id).value = IDW_DEFAULTS[s.key];
+  });
+  updateIDWLabels();
+  renderMap();
+}
+
+function initIDWPanel() {
+  idwSliders.forEach(s => {
+    document.getElementById(s.id).addEventListener('input', () => {
+      updateIDWLabels();
+      const heavy = ['tGridW','tGridH','tSlpPower','tTmpPower'];
+      if (!heavy.includes(s.id)) renderMap();
+    });
+    document.getElementById(s.id).addEventListener('change', renderMap);
+  });
+
+  document.getElementById('idwToggle').addEventListener('click', () => {
+    const body = document.getElementById('idwBody');
+    const hint = document.getElementById('idwCollapseHint');
+    const collapsed = body.style.display === 'none';
+    body.style.display = collapsed ? 'block' : 'none';
+    hint.textContent = collapsed ? '▲ collapse' : '▼ expand';
+  });
+
+  updateIDWLabels();
+}
+
+function mountIDWPanel() {
+  const target = document.getElementById('idwInline');
+  const panel = document.getElementById('idwPanel');
+  panel.style.display = '';
+  target.appendChild(panel);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => { initIDWPanel(); mountIDWPanel(); });
+} else {
+  initIDWPanel();
+  mountIDWPanel();
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// DEBUG: YEG / YYC anchor offset — logs to console after each render
+// ═══════════════════════════════════════════════════════════════
+function debugAnchorOffset() {
+  const TARGETS = ['CYEG', 'CYYC'];
+  TARGETS.forEach(icao => {
+    const st = STATION_MAP[icao];
+    if (!st) { console.warn('[DEBUG] not found:', icao); return; }
+
+    const truePixel = map.latLngToContainerPoint([st.lat, st.lon]);
+    const suffix = icao.slice(-3);
+    let markerEl = null;
+    document.querySelectorAll('.leaflet-marker-icon').forEach(el => {
+      el.querySelectorAll('text').forEach(t => {
+        if (t.textContent.trim() === suffix) markerEl = el;
+      });
+    });
+
+    if (!markerEl) { console.warn(`[DEBUG] ${icao}: marker not in DOM`); return; }
+
+    const mapRect = document.getElementById('map').getBoundingClientRect();
+    const iconRect = markerEl.getBoundingClientRect();
+    const iconCX = iconRect.left - mapRect.left + iconRect.width  / 2;
+    const iconCY = iconRect.top  - mapRect.top  + iconRect.height / 2;
+
+    console.log(
+      `[ANCHOR] ${icao}  true=(${truePixel.x.toFixed(1)}, ${truePixel.y.toFixed(1)})` +
+      `  iconCentre=(${iconCX.toFixed(1)}, ${iconCY.toFixed(1)})` +
+      `  OFFSET dx=${(iconCX - truePixel.x).toFixed(1)}  dy=${(iconCY - truePixel.y).toFixed(1)}`
+    );
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// END
+// ═══════════════════════════════════════════════════════════════
+</script>
+
+<!-- IDW TUNING PANEL (rendered inline inside #ctrl via JS) -->
+<div id="idwPanel" style="display:none;">
+  <h2 id="idwToggle">⚙ IDW / Contour Tuning <span id="idwCollapseHint">▼ expand</span></h2>
+  <div id="idwBody">
+
+    <div class="idw-row">
+      <label>SLP IDW Power</label>
+      <input type="range" id="tSlpPower" min="1" max="8" step="0.5" value="4">
+      <span class="idw-val" id="vSlpPower">4</span>
+    </div>
+
+    <div class="idw-row">
+      <label>Temp IDW Power</label>
+      <input type="range" id="tTmpPower" min="1" max="8" step="0.5" value="4">
+      <span class="idw-val" id="vTmpPower">4</span>
+    </div>
+
+    <div class="idw-row">
+      <label>Grid W (SLP)</label>
+<input type="range" id="tGridW" min="160" max="600" step="10" value="440">
+      <span class="idw-val" id="vGridW">220</span>
+    </div>
+
+    <div class="idw-row">
+      <label>Grid H (SLP)</label>
+<input type="range" id="tGridH" min="120" max="480" step="10" value="340">
+      <span class="idw-val" id="vGridH">170</span>
+    </div>
+
+    <div class="idw-row">
+      <label>Chaikin Passes</label>
+      <input type="range" id="tChaikin" min="0" max="5" step="1" value="1">
+      <span class="idw-val" id="vChaikin">1</span>
+    </div>
+
+    <div class="idw-row">
+      <label>SLP Interval</label>
+      <input type="range" id="tSlpInt" min="1" max="8" step="1" value="4">
+      <span class="idw-val" id="vSlpInt">4 hPa</span>
+    </div>
+
+    <div class="idw-row">
+      <label>Gauss Sigma</label>
+      <input type="range" id="tSigma" min="1" max="12" step="0.5" value="5">
+      <span class="idw-val" id="vSigma">5</span>
+    </div>
+
+    <div class="idw-row">
+      <label>Opacity (faint)</label>
+      <input type="range" id="tOpFaint" min="0.1" max="1" step="0.05" value="0.60">
+      <span class="idw-val" id="vOpFaint">0.60</span>
+    </div>
+
+    <div class="idw-row">
+      <label>Opacity (bold)</label>
+      <input type="range" id="tOpBold" min="0.1" max="1" step="0.05" value="0.90">
+      <span class="idw-val" id="vOpBold">0.90</span>
+    </div>
+
+    <div class="idw-btns">
+      <button onclick="idwReset()">↺ Reset</button>
+      <button class="apply" onclick="renderMap()">▶ Apply</button>
+    </div>
+
+    <div id="idwSummary"></div>
+  </div>
+</div>
+
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

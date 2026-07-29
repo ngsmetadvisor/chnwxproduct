@@ -1,0 +1,1625 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>4 Panels - Regional</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
+#hdr { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(22,33,62,0.95); border-bottom: 1px solid #0f3460; padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+#hdr h1 { font-size: 12px; font-weight: 600; color: #a0c4ff; flex: 1 1 180px; }
+label { font-size: 11px; color: #aaa; }
+input[type=text] { background: #0f3460; border: 1px solid #1a5276; color: #e0e0e0; padding: 3px 6px; border-radius: 3px; font-size: 11px; width: 160px; }
+input[type=number] { background: #0f3460; border: 1px solid #1a5276; color: #e0e0e0; padding: 3px 6px; border-radius: 3px; font-size: 11px; width: 50px; }
+button { background: #1a5276; border: 1px solid #2a6090; color: #fff; padding: 3px 9px; border-radius: 3px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+button:hover { background: #2471a3; }
+button:disabled { opacity: .4; cursor: default; }
+button.on  { background: #27ae60; border-color: #1e8449; }
+input[type=range] { width: 70px; accent-color: #27ae60; vertical-align: middle; cursor: pointer; }
+button.off { background: #555;    border-color: #444; }
+#hdr { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; }
+#sta { position: fixed; z-index: 999; left: 0; right: 0; background: rgba(22,33,62,0.97); border-bottom: 1px solid #0f3460; overflow: hidden; }
+#sta-msg { font-size: 11px; padding: 3px 10px; color: #00ff41; min-height: 18px; font-family: 'Courier New', Courier, monospace; font-weight: bold; letter-spacing: 0.04em; text-shadow: 0 0 6px #00ff41, 0 0 2px #00cc33; position: relative; z-index: 2; }
+#sta-msg.err { color: #ff6666; }
+#prog-wrap { height: 100%; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: transparent; display: none; z-index: 1; pointer-events: none; }
+#prog-bar  { height: 100%; background: rgba(39,174,96,0.18); width: 0%; transition: width 0.3s; border-right: 2px solid #27ae60; }
+#map { position: fixed; left: 0; right: 0; bottom: 0; top: 60px; }
+#ov  { position: fixed; left: 0; bottom: 0; top: 60px; pointer-events: none; z-index: 700; }
+#gps-dot { position: fixed; pointer-events: none; z-index: 750; display: none; }
+#timepanel { position: fixed; right: 8px; z-index: 1100; background: rgba(22,33,62,0.97); border: 1px solid #0f3460; border-radius: 5px; padding: 6px; display: none; width: 210px; }
+#timepanel input { width: 100%; background: #0f3460; border: 1px solid #1a5276; color: #e0e0e0; padding: 3px 6px; border-radius: 3px; font-size: 11px; margin-bottom: 4px; }
+#t-rdps { width: 100%; height: 260px; background: #0a1028; border: 1px solid #1a5276; color: #e0e0e0; font-size: 11px; border-radius: 3px; }
+#t-rdps option { padding: 2px 5px; }
+#t-rdps option.future { color: #66ddff; }
+#pnl { position: fixed; left: 8px; top: 68px; z-index: 800; background: rgba(22,33,62,0.93); border: 1px solid #0f3460; border-radius: 5px; padding: 6px 9px; font-size: 11px; max-height: 45vh; overflow-y: auto; min-width: 190px; display: none; }
+#pnl h3 { color: #a0c4ff; margin-bottom: 4px; font-size: 11px; }
+#legend-wrap { position: fixed; right: 8px; bottom: 28px; z-index: 900; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+.legend-item { background: rgba(22,33,62,0.92); border: 1px solid #0f3460; border-radius: 4px; padding: 3px 6px; display: flex; flex-direction: column; align-items: flex-start; }
+.legend-title { font-size: 10px; color: #a0c4ff; margin-bottom: 2px; font-family: system-ui; }
+.legend-img { max-width: 220px; max-height: 120px; display: block; }
+.pi { padding: 2px 0; border-bottom: 1px solid #0f3460; line-height: 1.5; }
+.pi:last-child { border: none; }
+.pk { color: #f0c040; font-weight: 600; }
+.pv { color: #7fd6ff; font-size: 10px; }
+</style>
+</head>
+<body>
+<div id="hdr">
+  <h1>RDPS 500mb Vorticity</h1>
+  <label>RDPS time</label>
+<button id="btn-timepicker" style="min-width:160px;text-align:left">Loading…</button>
+<button id="btn-prev" title="Previous time step">◀</button>
+<button id="btn-next" title="Next time step">▶</button>
+<button id="btn-gps" title="Centre on my location" style="display:none">⊕ GPS</button>
+<button id="btn-export" title="Export 6hr steps, 0–24h" style="background:#c0392b;border-color:#922b21;">⬇ Fast export (6hr, 0–24h)</button>
+<button id="btn-export-ext" title="Export 6hr steps, 0–84h" style="background:#6c3483;border-color:#512e5f;">⬇ Standard Export (6hr, 0–84h)</button>
+<button id="btn-gdps" title="GDPS" style="background:#1a237e;border-color:#0d47a1;color:white;cursor:pointer;" onclick="window.open('http://orangecore.net/met/wxchart/4panels-regional-GDPS.html', '_blank');">Extended (GDPS | 96-240h)</button>
+<span style="display:inline-flex;align-items:center;gap:4px;background:#0f3460;border:1px solid #1a5276;border-radius:4px;padding:2px 7px;">
+    <label style="color:#aaa;font-size:11px;margin-right:2px;">Overlay:</label>
+    <label style="font-size:11px;color:#e0e0e0;cursor:pointer;"><input type="radio" name="overlay-mode" value="vorticity" checked style="accent-color:#27ae60;cursor:pointer;"> Vorticity</label>
+    <label style="font-size:11px;color:#e0e0e0;cursor:pointer;"><input type="radio" name="overlay-mode" value="thickness" style="accent-color:#27ae60;cursor:pointer;"> Thickness</label>
+    <label style="font-size:11px;color:#e0e0e0;cursor:pointer;"><input type="radio" name="overlay-mode" value="850height" style="accent-color:#27ae60;cursor:pointer;"> 850mb height</label>
+    <label style="font-size:11px;color:#e0e0e0;cursor:pointer;"><input type="radio" name="overlay-mode" value="700moisture" style="accent-color:#27ae60;cursor:pointer;"> 700mb moisture</label>
+    <label style="font-size:11px;color:#e0e0e0;cursor:pointer;"><input type="radio" name="overlay-mode" value="none" style="accent-color:#27ae60;cursor:pointer;"> None</label>
+  </span>
+<button id="btn-vor"  class="on" style="display:none">Vor</button>
+  <button id="btn-raw"  class="off" style="display:none">Raw</button>
+  <button id="btn-sat"  class="on">Sat</button>
+  <input type="range" id="sat-opacity" min="0" max="100" value="85" title="Satellite opacity">
+  <button id="btn-hgt"  class="on" style="display:none">500 Height</button>
+  <button id="btn-500hgt" class="on" style="display:none">500 Height</button>
+</div>
+<div id="sta"><div id="sta-msg">Ready.</div><div id="prog-wrap"><div id="prog-bar"></div></div></div>
+<div id="export-log-wrap" style="display:none;position:fixed;bottom:18px;right:18px;z-index:2000;width:340px;background:#0a1028;border:1px solid #00ff41;border-radius:6px;box-shadow:0 0 18px rgba(0,255,65,0.18);font-family:'Courier New',Courier,monospace;overflow:hidden;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:#0f1e3a;border-bottom:1px solid #00ff41;">
+    <span style="color:#00ff41;font-size:11px;font-weight:bold;letter-spacing:0.08em;">▶ EXPORT STATUS</span>
+    <button onclick="document.getElementById('export-log-wrap').style.display='none'" style="background:none;border:none;color:#00ff41;font-size:14px;cursor:pointer;padding:0 2px;line-height:1;">✕</button>
+  </div>
+  <div id="export-log" style="padding:8px 10px;max-height:220px;overflow-y:auto;font-size:11px;color:#00ff41;line-height:1.7;text-shadow:0 0 5px #00ff41;"></div>
+  <div style="padding:4px 10px 6px;border-top:1px solid #0f3460;">
+    <div style="height:5px;background:#0f3460;border-radius:3px;overflow:hidden;">
+      <div id="export-log-bar" style="height:100%;width:0%;background:#00ff41;border-radius:3px;transition:width 0.3s;box-shadow:0 0 6px #00ff41;"></div>
+    </div>
+  </div>
+</div>
+<div id="map"></div>
+<canvas id="ov"></canvas>
+<canvas id="gps-dot" width="40" height="40"></canvas>
+<div id="timepanel">
+  <select id="t-rdps" size="14"></select>
+</div>
+<div id="legend-wrap"></div>
+<div id="pnl">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+    <h3 style="margin:0">Detected maxima</h3>
+    <button id="btn-collapse" style="padding:1px 7px;font-size:11px;line-height:1.4">▲</button>
+  </div>
+  <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px;">
+    <label style="color:#aaa;font-size:11px;white-space:nowrap;">Min sep (km)</label>
+    <input type="number" id="minsep" value="150" min="30" max="600" step="10" style="width:52px;">
+  </div>
+  <div style="display:flex;gap:4px;margin-bottom:5px;">
+    <button id="btn-raw-pnl"  class="off" style="flex:1">Raw</button>
+    <button id="btn-hgt-pnl"  class="on"  style="flex:1">500 Hgt</button>
+  </div>
+  <div id="pnl-list"></div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+const GEO    = "https://geo.weather.gc.ca/geomet";
+const VOR    = "RDPS_10km_AbsoluteVorticity_500mb";
+const HGT    = "RDPS_10km_GeopotentialHeight-Contour_500mb";
+const SAT    = "GOES-West_1km_DayCloudType-NightMicrophysics";
+const TT850       = "RDPS_10km_AirTemp_850mb";
+const TT850CTR    = "RDPS_10km_AirTemp-Contour_850mb";
+const HGT850      = "RDPS_10km_GeopotentialHeight-Contour_850mb";
+const RH700       = "RDPS_10km_RelativeHumidity_700mb";
+const TT700CTR    = "RDPS_10km_AirTemp-Contour_700mb";
+const HGT700      = "RDPS_10km_GeopotentialHeight-Contour_700mb";
+const THCK        = "RDPS_10km_Thickness_1000to500mb";
+const THCK_CONTOUR= "RDPS_10km_Thickness-Contour_1000to500mb";
+const MSL         = "RDPS_10km_Pressure_MSL-Contour";
+const BBOX = [-147.64, 40.78, -81.92, 66.78]; //[-175, 32, -75, 67]; //west, south, east, north
+// Tier weights for scoring — yellow (tier 1-2) counts meaningfully,
+// red (tier 4-5) counts more, but the CLUSTER score is what matters.
+const TIER_WEIGHT = [0, 1, 2, 4, 7, 10];
+// Minimum cluster size: a candidate must have at least this many coloured
+// pixels within a small neighbourhood radius to be accepted.
+const MIN_CLUSTER_PX = 12;   // ~12 pixels within r=6 neighbourhood
+const CLUSTER_RADIUS  =  6;  // pixels
+// ── Layout ────────────────────────────────────────────────────────────────────
+const hdr = document.getElementById("hdr");
+const sta = document.getElementById("sta");
+const mapDiv = document.getElementById("map");
+const ov  = document.getElementById("ov");
+const ovx = ov.getContext("2d");
+const pnl = document.getElementById("pnl");
+function layout() {
+  const hh = hdr.offsetHeight + sta.offsetHeight;
+  mapDiv.style.top = hh + "px";
+  ov.style.top  = hh + "px";
+  ov.width  = window.innerWidth;
+  ov.height = window.innerHeight - hh;
+  pnl.style.top = (hh + 8) + "px";
+  lmap && lmap.invalidateSize();
+}
+window.addEventListener("resize", () => { layout(); drawOv(); });
+// ── Leaflet ───────────────────────────────────────────────────────────────────
+const lmap = L.map("map", { zoomControl: true }).setView([53.5, -113.5], 5);
+lmap.createPane("satPane");
+lmap.createPane("thckPane");
+lmap.createPane("vorPane");
+lmap.createPane("hgtPane");
+lmap.getPane("satPane").style.zIndex = 201;
+lmap.getPane("thckPane").style.zIndex = 250;
+lmap.getPane("vorPane").style.zIndex = 300;
+lmap.getPane("hgtPane").style.zIndex = 400;
+L.tileLayer("https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png", {
+  maxZoom: 18, attribution: "© OpenStreetMap"
+}).addTo(lmap);
+lmap.on("move zoom viewreset", drawOv);
+document.getElementById("btn-export").addEventListener("click", async () => {
+  try {
+    const sel2 = document.getElementById("t-rdps");
+    const allTimes = Array.from(sel2.options).map(o => o.value).filter(v => /^\d{4}/.test(v));
+    if (!allTimes.length) { say("No times available for export.", true); return;  }
+    const firstTimeMs2 = new Date(allTimes[0]).getTime();
+    const targetOffsets = [0,6,12,18,24];
+    const exportTimes = targetOffsets.map(h => {
+      const target = firstTimeMs2 + h * 3600000;
+      return allTimes.reduce((best, t) => {
+        const d = Math.abs(new Date(t).getTime() - target);
+        const db = Math.abs(new Date(best).getTime() - target);
+        return d < db ? t : best;
+      }, allTimes[0]);
+    }).filter((t, i, a) => a.indexOf(t) === i); // deduplicate
+    say(`Exporting ${exportTimes.length} frames…`);
+    
+    const PW = 672, PH = 388;
+    const HEADER_H = 40;
+    const TITLE_H = 28;
+    const W = PW * 2;
+    const H = HEADER_H + (PH + TITLE_H) * 2;
+    const [lonMin, latMin, lonMax, latMax] = BBOX;
+    function mercY(lat) { return Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)); }
+    const mercYMin = mercY(latMin), mercYMax = mercY(latMax);
+    function latToY(lat, h) { return h - (mercY(lat) - mercYMin) / (mercYMax - mercYMin) * h; }
+    function lonToX(lon, w) { return (lon - lonMin) / (lonMax - lonMin) * w; }
+    async function drawBaseTiles(ctx, pw, ph) {
+      const zoom = 5;
+      function lon2tile(lon, z) { return Math.floor((lon + 180) / 360 * Math.pow(2, z)); }
+      function lat2tile(lat, z) { return Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z)); }
+      function tile2lon(x, z) { return x / Math.pow(2, z) * 360 - 180; }
+      function tile2lat(y, z) { const n = Math.PI - 2 * Math.PI * y / Math.pow(2, z); return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); }
+      const tileXMin = lon2tile(lonMin, zoom), tileXMax = lon2tile(lonMax, zoom);
+      const tileYMin = lat2tile(latMax, zoom), tileYMax = lat2tile(latMin, zoom);
+      const promises = [];
+      for (let tx = tileXMin; tx <= tileXMax; tx++) {
+        for (let ty = tileYMin; ty <= tileYMax; ty++) {
+          promises.push((async () => {
+            try {
+              const url = `https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/${zoom}/${tx}/${ty}.png`;
+              const img = await loadImgPixels(url);
+              const px0 = lonToX(tile2lon(tx, zoom), pw);
+              const px1 = lonToX(tile2lon(tx + 1, zoom), pw);
+              const py0 = latToY(tile2lat(ty, zoom), ph);
+              const py1 = latToY(tile2lat(ty + 1, zoom), ph);
+              ctx.drawImage(img, px0, py0, px1 - px0, py1 - py0);
+            } catch (e) {}
+          })());
+        }
+      }
+      await Promise.all(promises);
+    }
+    async function drawWMSPanel(ctx, layer, style, opacity, pw, ph, time) {
+      try {
+        function lon2m(lon) { return lon * 20037508.34 / 180; }
+        function lat2m(lat) { return Math.log(Math.tan((90 + lat) * Math.PI / 360)) * 20037508.34 / Math.PI; }
+        const xMin = lon2m(lonMin), xMax = lon2m(lonMax);
+        const yMin = lat2m(latMin), yMax = lat2m(latMax);
+        let url = `${GEO}?service=WMS&version=1.3.0&request=GetMap&layers=${layer}&styles=${encodeURIComponent(style || "")}&crs=EPSG:3857&bbox=${xMin},${yMin},${xMax},${yMax}&width=${pw}&height=${ph}&format=image/png&transparent=true&time=${time}`;
+        const img = await loadImgPixels(url);
+        ctx.globalAlpha = opacity;
+        ctx.drawImage(img, 0, 0, pw, ph);
+        ctx.globalAlpha = 1;
+      } catch (e) { console.warn("WMS panel failed:", layer, e.message); }
+    }
+    async function drawBordersPanel(ctx, pw, ph) {
+      function projectCoord(lon, lat) { return [lonToX(lon, pw), latToY(lat, ph)]; }
+      function drawLines(features, color, lw) {
+        ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = "round";
+        for (const f of features) {
+          const geom = f.geometry;
+          const rings = geom.type === "LineString" ? [geom.coordinates]
+                      : geom.type === "MultiLineString" ? geom.coordinates
+                      : geom.type === "Polygon" ? geom.coordinates
+                      : geom.type === "MultiPolygon" ? geom.coordinates.flat() : [];
+          for (const ring of rings) {
+            ctx.beginPath(); let started = false;
+            for (const [lon, lat] of ring) {
+              const [px, py] = projectCoord(lon, lat);
+              if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+        }
+      }
+      try {
+        const r1 = await fetch("https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_boundary_lines_land.geojson");
+drawLines((await r1.json()).features, "#6b3fa0", 1.0);
+        const r2 = await fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json");
+        const tj = await r2.json();
+        drawLines(topojson.feature(tj, tj.objects.states).features, "#6b3fa0", 0.5);
+        const r3 = await fetch("https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/canada.geojson");
+        drawLines((await r3.json()).features, "#6b3fa0", 0.5);
+      } catch (e) { console.warn("Border draw failed:", e.message); }
+    }
+    function drawPeaksPanel(ctx, pw, ph) {
+      ctx.textBaseline = "middle"; ctx.textAlign = "left";
+      p2Peaks.forEach((p) => {
+        const cx = lonToX(p.lon, pw);
+        const cy = latToY(p.lat, ph);
+        if (cx < -20 || cy < -20 || cx > pw + 20 || cy > ph + 20) return;
+        ctx.lineCap = "round"; ctx.lineWidth = 1; ctx.strokeStyle = "#000";
+        ctx.beginPath();
+        ctx.moveTo(cx - 5, cy); ctx.lineTo(cx + 5, cy);
+        ctx.moveTo(cx, cy - 5); ctx.lineTo(cx, cy + 5);
+        ctx.stroke();
+      });
+    }
+    async function renderPanel(ctx, mode, destX, destY, title, time) {
+      const pc = document.createElement("canvas");
+      pc.width = PW; pc.height = PH;
+      const c = pc.getContext("2d");
+      c.fillStyle = "#f0f0f0"; c.fillRect(0, 0, PW, PH);
+      await drawBaseTiles(c, PW, PH);
+if (mode === "vorticity") {
+        // fetch raw vorticity, filter pixels, detect centres, draw
+        let framePeaks = [];
+        try {
+          const IW2 = 800, IH2 = 600;
+const vorUrlEq = wmsUrl(VOR, time, IW2, IH2);
+          const vorImgEq = await loadImgPixels(vorUrlEq);
+          const eqC = document.createElement("canvas");
+          eqC.width = IW2; eqC.height = IH2;
+          const eqX = eqC.getContext("2d", {willReadFrequently: true});
+          eqX.drawImage(vorImgEq, 0, 0, IW2, IH2);
+          const eqId = eqX.getImageData(0, 0, IW2, IH2);
+          const frameMask = new Uint8Array(IW2 * IH2);
+          for (let i = 0; i < IW2 * IH2; i++)
+            frameMask[i] = classifyPx(eqId.data[i*4], eqId.data[i*4+1], eqId.data[i*4+2], eqId.data[i*4+3]);
+          const minSepKm2 = parseInt(document.getElementById("minsep").value);
+const minSepPx2 = Math.max(4, Math.round(minSepKm2 / ((BBOX[3] - BBOX[1]) / IH2 * 111)));
+          const rawCands2 = findCands(frameMask, IW2, IH2, minSepPx2);
+const p1f = rawCands2.map(c2 => ({
+            lat: BBOX[3] - (c2.y / IH2) * (BBOX[3] - BBOX[1]),
+            lon: BBOX[0] + (c2.x / IW2) * (BBOX[2] - BBOX[0]),
+            cls: c2.cls, score: c2.score
+          }));
+          if (p1f.length > 0) {
+            const maxS = Math.max(...p1f.map(p => p.score));
+            framePeaks = p1f.filter(p => p.score >= maxS * 0.10).sort((a,b) => b.score - a.score);
+          }
+          // draw filtered mercator vorticity
+          function lon2m(lon) { return lon * 20037508.34 / 180; }
+          function lat2m(lat) { return Math.log(Math.tan((90 + lat) * Math.PI / 360)) * 20037508.34 / Math.PI; }
+          const xMin = lon2m(lonMin), xMax = lon2m(lonMax);
+          const yMin = lat2m(latMin), yMax = lat2m(latMax);
+          const vorUrl = `${GEO}?service=WMS&version=1.3.0&request=GetMap&layers=${VOR}&styles=&crs=EPSG:3857&bbox=${xMin},${yMin},${xMax},${yMax}&width=${PW}&height=${PH}&format=image/png&transparent=true&time=${time}`;
+          const vorImg = await loadImgPixels(vorUrl);
+          const tmpC2 = document.createElement("canvas");
+          tmpC2.width = PW; tmpC2.height = PH;
+          const tmpX2 = tmpC2.getContext("2d", {willReadFrequently: true});
+          tmpX2.drawImage(vorImg, 0, 0, PW, PH);
+          const id2 = tmpX2.getImageData(0, 0, PW, PH);
+for (let i = 0; i < PW * PH; i++)
+            if (classifyPx(id2.data[i*4], id2.data[i*4+1], id2.data[i*4+2], id2.data[i*4+3]) < 3)
+              id2.data[i*4+3] = 0;
+          tmpX2.putImageData(id2, 0, 0);
+          c.drawImage(tmpC2, 0, 0, PW, PH);
+        } catch(e) { console.warn("Filtered vorticity export failed:", e.message); }
+        await drawWMSPanel(c, HGT, "", 1.0, PW, PH, time);
+        await drawBordersPanel(c, PW, PH);
+        // draw frame-specific peaks
+        framePeaks.forEach((p) => {
+          const cx = lonToX(p.lon, PW);
+          const cy = latToY(p.lat, PH);
+          if (cx < -20 || cy < -20 || cx > PW + 20 || cy > PH + 20) return;
+          c.lineCap = "round"; c.lineWidth = 1; c.strokeStyle = "#000";
+          c.beginPath();
+          c.moveTo(cx - 5, cy); c.lineTo(cx + 5, cy);
+          c.moveTo(cx, cy - 5); c.lineTo(cx, cy + 5);
+          c.stroke();
+        });
+        
+        
+      } else if (mode === "thickness") {
+        await drawWMSPanel(c, THCK, "Thickness_1000-500mb_510to570dam_Dis", 0.75, PW, PH, time);
+        await drawWMSPanel(c, THCK_CONTOUR, "", 0.75, PW, PH, time);
+        await drawWMSPanel(c, MSL, "SeaLevelPressure_940to1076mb-Int4mb-BoldLine24mb", 0.75, PW, PH, time);
+        await drawBordersPanel(c, PW, PH);
+      } else if (mode === "850height") {
+        await drawWMSPanel(c, TT850, "Temperature_-2.5to2.5C_Dis", 0.75, PW, PH, time);
+        await drawWMSPanel(c, TT850CTR, "Temperature_-40to40C_Contour", 0.75, PW, PH, time);
+        await drawWMSPanel(c, HGT850, "GeopotentialHeight_0to2100dam_6dam-Lines", 0.75, PW, PH, time);
+        await drawBordersPanel(c, PW, PH);
+      } else if (mode === "700moisture") {
+        await drawWMSPanel(c, RH700, "RelativeHumidity_50to90Pct_Dis", 0.75, PW, PH, time);
+                await drawWMSPanel(c, TT700CTR, "Temperature_-40to40C_Contour",             0.75, PW, PH, time);
+        await drawWMSPanel(c, HGT700, "GeopotentialHeight_0to2100dam_6dam-Lines", 0.75, PW, PH, time);
+        await drawBordersPanel(c, PW, PH);
+      }
+// Draw legends bottom-left of panel, half-size, stacked horizontally
+      const legendDefs = LEGEND_DEFS[mode] || [];
+      let legX = 4;
+      for (const ld of legendDefs) {
+        try {
+          const limg = await loadImgPixels(legendUrl(ld.layer, ld.style));
+          const lw = Math.round(limg.naturalWidth  * 0.5);
+          const lh = Math.round(limg.naturalHeight * 0.5);
+          const legY = PH - lh - 4;
+          c.globalAlpha = 0.88;
+          c.drawImage(limg, 0, 0, limg.naturalWidth, limg.naturalHeight, legX, legY, lw, lh);
+          c.globalAlpha = 1;
+          legX += lw + 4;
+        } catch(e) {}
+      }
+      const panelTop = HEADER_H + TITLE_H + destY * (PH + TITLE_H);
+      ctx.drawImage(pc, destX * PW, panelTop, PW, PH);
+      const titleY = HEADER_H + destY * (PH + TITLE_H);
+ctx.fillStyle = "#ffffff"; 
+ctx.fillRect(destX * PW, titleY, PW, TITLE_H); ctx.fillStyle = "#000000"; 
+ctx.font = "bold 13px system-ui";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(title, destX * PW + PW / 2, titleY + TITLE_H / 2);
+      ctx.strokeStyle = "#0f3460"; ctx.lineWidth = 1.5;
+      ctx.strokeRect(destX * PW, titleY, PW, TITLE_H + PH);
+ctx.font = "10px system-ui"; ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+      ctx.fillText(window._runLabel ? "Run:" + window._runLabel.replace(" — Run:", "") : "", destX * PW + PW - 4, titleY + TITLE_H + PH - 3);
+    }
+    // Pre-fetch borders once
+    await (async () => {
+      try {
+        await fetch("https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_boundary_lines_land.geojson");
+      } catch(e) {}
+    })();
+const zip = new JSZip();   for (let fi = 0; fi < exportTimes.length; fi++) {
+      const t = exportTimes[fi];
+      const offsetH = Math.round((new Date(t).getTime() - firstTimeMs2) / 3600000);
+      const offsetLabel2 = `+${String(offsetH).padStart(2,"0")}h`;
+const pct6 = Math.round(fi / exportTimes.length * 100);
+      await say(`Exporting frame ${fi+1}/${exportTimes.length}: ${offsetLabel2}…`);
+      logExport(`[${String(fi+1).padStart(2,"0")}/${exportTimes.length}] ${offsetLabel2}`, pct6);
+      await new Promise(r => setTimeout(r, 1500));
+      const finalCanvas = document.createElement("canvas");
+      finalCanvas.width = W; finalCanvas.height = H;
+      const fx = finalCanvas.getContext("2d");
+fx.fillStyle = "#ffffff"; 
+fx.fillRect(0, 0, W, HEADER_H);
+fx.fillStyle = "#000000"; 
+fx.font = "bold 16px system-ui";
+fx.textAlign = "center"; 
+fx.textBaseline = "middle";
+const timeLabel = t.replace("T", " ").replace(":00:00Z", " UTC");
+fx.fillText(
+  `RDPS Analysis  —  ${timeLabel}  ${offsetLabel2}  —  Source: Environment Canada GeoMet`,  W / 2,  HEADER_H / 2);
+      await renderPanel(fx, "vorticity",   0, 0, "500mb Absolute Vorticity + Height", t);
+      await renderPanel(fx, "thickness",   1, 1, "1000–500mb Thickness + MSLP", t);
+      await renderPanel(fx, "850height",   1, 0, "850mb Temperature + Height", t);
+      await renderPanel(fx, "700moisture", 0, 1, "700mb Relative Humidity + Height", t);
+await new Promise(r => setTimeout(r, 80));
+const filename = `rdps_4panel_${t.slice(0,16).replace("T","_").replace(/:/g,"-")}_${offsetLabel2}.png`;
+      const dataUrl = finalCanvas.toDataURL("image/png");
+      const base64 = dataUrl.split(",")[1];
+      zip.file(filename, base64, {base64: true});
+    }
+    say("Generating zip…");
+    const zipBlob = await zip.generateAsync({type: "blob"}, meta => {
+      say(`Compressing… ${meta.percent.toFixed(0)}%`);
+    });
+    const zipUrl = URL.createObjectURL(zipBlob);
+    const a = document.createElement("a");
+    a.href = zipUrl;
+    a.download = `rdps_4panel_0-24h_${new Date().toISOString().slice(0,10)}.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(zipUrl), 10000);
+say(`Export complete — ${exportTimes.length} panels zipped.`);
+    logExport(`✓ Done — ${exportTimes.length} frames zipped.`, 100);
+    hideExportLog();
+  } catch (e) {
+say("Export failed: " + e.message, true);
+    logExport(`✗ ERROR: ${e.message}`, 100, true);
+  }
+});
+    
+    
+// Intercept console.warn so WMS/tile errors appear in the export log
+const _origWarn = console.warn;
+console.warn = function(...args) {
+  _origWarn.apply(console, args);
+  const msg = args.map(a => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ");
+  const wrap = document.getElementById("export-log-wrap");
+  if (wrap && wrap.style.display === "block") {
+    logExport("⚠ " + msg, undefined, true);
+  }
+};
+
+const infoBox = L.control({position: "bottomright"});
+infoBox.onAdd = function() {
+  this._div = L.DomUtil.create("div");
+  this._div.style.cssText = "background:rgba(255,255,255,0.85);padding:2px 6px;font-size:10px;font-family:system-ui;color:#222;border-radius:3px;line-height:1.6;pointer-events:none;";
+  this.update();
+  return this._div;
+};
+infoBox.update = function() {
+  const c = lmap.getCenter();
+  this._div.innerHTML = `${c.lat.toFixed(3)}°N ${Math.abs(c.lng).toFixed(3)}°${c.lng<0?"W":"E"} &nbsp;z${lmap.getZoom()}`;
+};
+infoBox.addTo(lmap);
+lmap.on("move zoom viewreset", () => infoBox.update());
+setTimeout(layout, 100);
+// ── State ─────────────────────────────────────────────────────────────────────
+let satLyr = null, hgtLyr = null, vorLyr = null, rawLyr = null, borderLyr = null;
+let showVor = true, showRaw = false, showBorders = true;
+let showSat = true, showHgt = true;
+let showThck = false;
+let show700Moisture = false;
+let show850Height = false;
+let thckLyr = null, thckContourLyr = null, mslLyr = null;
+let rh700Lyr = null, tt700CtrLyr = null, hgt700Lyr = null;
+let tt850Lyr = null, tt850CtrLyr = null, hgt850Lyr = null;
+let showVorticity = true;
+let p1Peaks = [], p2Peaks = [];
+const staMsg  = document.getElementById("sta-msg");
+const progWrap= document.getElementById("prog-wrap");
+const progBar = document.getElementById("prog-bar");
+function say(msg, isErr=false) {
+  staMsg.textContent = msg;
+  staMsg.className = isErr ? "err" : "";
+  console.log(isErr?"ERROR:":"INFO:", msg);
+  // Force browser repaint so the status bar actually updates between async steps
+return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+}
+function logExport(msg, pct, isErr) {
+  const wrap = document.getElementById("export-log-wrap");
+  const log  = document.getElementById("export-log");
+  const bar  = document.getElementById("export-log-bar");
+  wrap.style.display = "block";
+  const line = document.createElement("div");
+  line.textContent = msg;
+  if (isErr) { line.style.color = "#ff6666"; line.style.textShadow = "0 0 5px #ff4444"; }
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+  if (pct !== undefined) bar.style.width = pct + "%";
+}
+function hideExportLog() {
+  setTimeout(() => {
+    document.getElementById("export-log-wrap").style.display = "none";
+    document.getElementById("export-log").innerHTML = "";
+    document.getElementById("export-log-bar").style.width = "0%";
+  }, 2500);
+}
+function setProgress(done, total, label) {
+  if(total <= 0) { progWrap.style.display="none"; layout(); return; }
+  const wasHidden = progWrap.style.display === "none";
+  progWrap.style.display = "block";
+  const pct = Math.round(done/total*100);
+  progBar.style.width = pct + "%";
+  progBar.style.background = pct===100 ? "#27ae60" : "#2471a3";
+  staMsg.textContent = `${label} — ${done}/${total} (${pct}%)`;
+  if(wasHidden) layout();
+}
+function clearProgress() {
+  progWrap.style.display = "none";
+  progBar.style.width = "0%";
+  layout();
+  requestAnimationFrame(() => requestAnimationFrame(drawOv));
+}
+// ── Toggle buttons ────────────────────────────────────────────────────────────
+function tog(id, state) {
+  const b = document.getElementById(id);
+  b.className = state ? "on" : "off";
+}
+document.getElementById("btn-vor").addEventListener("click", () => {
+  showVor = !showVor; tog("btn-vor", showVor);
+  vorLyr && (showVor ? lmap.addLayer(vorLyr) : lmap.removeLayer(vorLyr));
+});
+document.getElementById("btn-raw").addEventListener("click", () => {
+  showRaw = !showRaw; tog("btn-raw", showRaw);
+  if(showRaw) {
+    if(!rawLyr) {
+      rawLyr = L.tileLayer.wms(GEO, {
+        layers: VOR, styles: "", format: "image/png",
+        transparent: true, version: "1.3.0", opacity: 0.85, zIndex: 410,
+        attribution: "Environment Canada GeoMet"
+      });
+      if(window._rawTime) rawLyr.setParams({time: window._rawTime}, false);
+    }
+    lmap.addLayer(rawLyr);
+  } else {
+    rawLyr && lmap.removeLayer(rawLyr);
+  }
+});
+document.getElementById("btn-sat").addEventListener("click", () => {
+  showSat = !showSat; tog("btn-sat", showSat);
+  if (showSat) {
+    satLyr && lmap.addLayer(satLyr);
+  } else {
+    // Remove ALL layers from satPane, not just the current satLyr reference
+    lmap.getPane("satPane").querySelectorAll("*").forEach(el => el.remove());
+    satLyr && lmap.removeLayer(satLyr);
+  }
+});
+document.getElementById("btn-hgt").addEventListener("click", () => {
+  showHgt = !showHgt; tog("btn-hgt", showHgt);
+  hgtLyr && (showHgt ? lmap.addLayer(hgtLyr) : lmap.removeLayer(hgtLyr));
+});
+document.getElementById("btn-raw-pnl").addEventListener("click", () => {
+  showRaw = !showRaw; tog("btn-raw-pnl", showRaw); tog("btn-raw", showRaw);
+  if (showRaw) {
+    if (!rawLyr) {
+      rawLyr = L.tileLayer.wms(GEO, {
+        layers: VOR, styles: "", format: "image/png",
+        transparent: true, version: "1.3.0", opacity: 0.85, zIndex: 410,
+        attribution: "Environment Canada GeoMet"
+      });
+      if (window._rawTime) rawLyr.setParams({ time: window._rawTime }, false);
+    }
+    lmap.addLayer(rawLyr);
+  } else {
+    rawLyr && lmap.removeLayer(rawLyr);
+  }
+});
+document.getElementById("btn-hgt-pnl").addEventListener("click", () => {
+  showHgt = !showHgt; tog("btn-hgt-pnl", showHgt); tog("btn-500hgt", showHgt);
+  hgtLyr && (showHgt ? lmap.addLayer(hgtLyr) : lmap.removeLayer(hgtLyr));
+});
+document.querySelectorAll("input[name='overlay-mode']").forEach(radio => {
+  radio.addEventListener("change", () => applyOverlayMode(radio.value));
+});
+function applyOverlayMode(mode) {
+  const time = document.getElementById("t-rdps").value;
+  function makeTile(layerName, style, zIdx) {
+    const lyr = L.tileLayer.wms(GEO, {
+      layers: layerName, styles: style || "",
+      format: "image/png", transparent: true, version: "1.3.0",
+      opacity: 0.75, attribution: "Environment Canada GeoMet", zIndex: zIdx,
+      pane: "thckPane"
+    });
+    if (time) lyr.setParams({ time }, false);
+    return lyr;
+  }
+  const vorOn = mode === "vorticity";
+  showVorticity = vorOn;
+  if (vorLyr) vorOn ? lmap.addLayer(vorLyr) : lmap.removeLayer(vorLyr);
+  if (hgtLyr) vorOn ? lmap.addLayer(hgtLyr) : lmap.removeLayer(hgtLyr);
+  showHgt = vorOn;
+  tog("btn-500hgt", vorOn);
+  pnl.style.display = (p2Peaks.length && vorOn) ? "block" : "none";
+  const hgt850On = mode === "850height";
+  show850Height = hgt850On;
+  if (hgt850On) {
+    if (!tt850Lyr)    tt850Lyr    = makeTile(TT850,    "Temperature_-2.5to2.5C_Dis",      210);
+    if (!tt850CtrLyr) tt850CtrLyr = makeTile(TT850CTR, "Temperature_-40to40C_Contour",     220);
+    if (!hgt850Lyr)   hgt850Lyr   = makeTile(HGT850,   "GeopotentialHeight_0to2100dam_6dam-Lines", 230);
+    lmap.addLayer(tt850Lyr);
+    lmap.addLayer(tt850CtrLyr);
+    lmap.addLayer(hgt850Lyr);
+  } else {
+    tt850Lyr    && lmap.removeLayer(tt850Lyr);
+    tt850CtrLyr && lmap.removeLayer(tt850CtrLyr);
+    hgt850Lyr   && lmap.removeLayer(hgt850Lyr);
+  }
+  const moist700On = mode === "700moisture";
+  show700Moisture = moist700On;
+if (moist700On) {
+    if (!rh700Lyr)    rh700Lyr    = makeTile(RH700,   "RelativeHumidity_50to90Pct_Dis",           210);
+    if (!tt700CtrLyr) tt700CtrLyr = makeTile(TT700CTR, "Temperature_-40to40C_Contour",             215);
+    if (!hgt700Lyr)   hgt700Lyr   = makeTile(HGT700,  "GeopotentialHeight_0to2100dam_6dam-Lines",  220);
+    lmap.addLayer(rh700Lyr);
+    lmap.addLayer(tt700CtrLyr);
+    lmap.addLayer(hgt700Lyr);
+  } else {
+    rh700Lyr    && lmap.removeLayer(rh700Lyr);
+    tt700CtrLyr && lmap.removeLayer(tt700CtrLyr);
+    hgt700Lyr   && lmap.removeLayer(hgt700Lyr);
+  }
+  const thckOn = mode === "thickness";
+  showThck = thckOn;
+  if (thckOn) {
+    if (!thckLyr)        thckLyr        = makeTile(THCK,          "Thickness_1000-500mb_510to570dam_Dis", 210);
+    if (!thckContourLyr) thckContourLyr = makeTile(THCK_CONTOUR,  "",                                     220);
+    if (!mslLyr)         mslLyr         = makeTile(MSL,           "SeaLevelPressure_940to1076mb-Int4mb-BoldLine24mb", 230);
+    lmap.addLayer(thckLyr);
+    lmap.addLayer(thckContourLyr);
+    lmap.addLayer(mslLyr);
+  } else {
+    thckLyr        && lmap.removeLayer(thckLyr);
+    thckContourLyr && lmap.removeLayer(thckContourLyr);
+    mslLyr         && lmap.removeLayer(mslLyr);
+  }
+updateLegend(mode);
+  drawOv();
+}
+document.getElementById("btn-500hgt").addEventListener("click", () => {
+  showHgt = !showHgt; tog("btn-500hgt", showHgt);
+  hgtLyr && (showHgt ? lmap.addLayer(hgtLyr) : lmap.removeLayer(hgtLyr));
+});
+// ── WMS helpers ───────────────────────────────────────────────────────────────
+function wmsUrl(layer, time, W, H, style) {
+  const [lonMin,latMin,lonMax,latMax] = BBOX;
+  return `${GEO}?service=WMS&version=1.3.0&request=GetMap&layers=${layer}&styles=${style||""}&crs=EPSG:4326&bbox=${latMin},${lonMin},${latMax},${lonMax}&width=${W}&height=${H}&format=image/png&transparent=true&time=${time}`;
+}
+function wmsUrlMerc(layer, time, W, H) {
+  function lon2m(lon){ return lon * 20037508.34 / 180; }
+  function lat2m(lat){ return Math.log(Math.tan((90+lat)*Math.PI/360)) * 20037508.34 / Math.PI; }
+  const [lonMin,latMin,lonMax,latMax] = BBOX;
+  const xMin=lon2m(lonMin), xMax=lon2m(lonMax);
+  const yMin=lat2m(latMin), yMax=lat2m(latMax);
+  return `${GEO}?service=WMS&version=1.3.0&request=GetMap&layers=${layer}&styles=&crs=EPSG:3857&bbox=${xMin},${yMin},${xMax},${yMax}&width=${W}&height=${H}&format=image/png&transparent=true&time=${time}`;
+}
+function makeLyr(layer, time, opacity) {
+  let paneName = undefined;
+  if (layer === SAT) paneName = "satPane";
+  if (layer === HGT) paneName = "hgtPane";
+  const lyr = L.tileLayer.wms(GEO, {
+    layers: layer, format: "image/png", transparent: true,
+    version: "1.3.0", opacity: opacity || 1,
+    attribution: "Environment Canada GeoMet", pane: paneName
+  });
+  lyr.setParams({ time }, false);
+  return lyr;
+}
+// ── Image loader ──────────────────────────────────────────────────────────────
+function loadImg(src) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload  = () => res(img);
+    img.onerror = () => rej(new Error("IMG LOAD FAILED: " + src.slice(0, 80)));
+    img.src = src;
+  });
+}
+async function loadImgPixels(src) {
+  const resp = await fetch(src);
+  if (!resp.ok) throw new Error("Fetch failed: HTTP " + resp.status);
+  const blob = await resp.blob();
+  const url  = URL.createObjectURL(blob);
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload  = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Blob img failed")); };
+    img.src = url;
+  });
+}
+// ── Colour helpers ────────────────────────────────────────────────────────────
+function hsv(r, g, b) {
+  const rn=r/255, gn=g/255, bn=b/255;
+  const mx=Math.max(rn,gn,bn), mn=Math.min(rn,gn,bn), d=mx-mn;
+  let h=0;
+  if(d>0){if(mx===rn)h=((gn-bn)/d+6)%6;else if(mx===gn)h=(bn-rn)/d+2;else h=(rn-gn)/d+4;h/=6;}
+  return {h, s:mx>0?d/mx:0, v:mx};
+}
+// Returns tier 0–5. Tier 0 = no colour / blank.
+// RDPS vorticity palette: green(low) → yellow → orange → red(high)
+// We classify by hue and saturation:
+//   tier 1 = yellow-green (weakest signal worth noting)
+//   tier 2 = yellow
+//   tier 3 = orange-yellow
+//   tier 4 = orange-red
+//   tier 5 = deep red (strongest)
+function classifyPx(r,g,b,a) {
+  if(a < 30) return 0;
+  const {h,s,v} = hsv(r,g,b);
+  if(s < 0.25 || v < 0.30) return 0;   // grey / white / blank — hard reject
+  // deep red
+  if((h < 0.05 || h > 0.94) && s > 0.85) return 5;
+  if((h < 0.06 || h > 0.93) && s > 0.65) return 4;
+  // orange-red
+  if(h >= 0.03 && h < 0.08 && s > 0.55) return 4;
+  // orange
+  if(h >= 0.04 && h < 0.12 && s > 0.40) return 3;
+  // yellow-orange
+  if(h >= 0.08 && h < 0.17 && s > 0.35) return 3;
+  // yellow
+  //if(h >= 0.12 && h < 0.20 && s > 0.30) return 2;
+  // yellow-green
+  //if(h >= 0.18 && h < 0.28 && s > 0.28) return 1;
+  return 0;
+}
+// ── Scoring ───────────────────────────────────────────────────────────────────
+// Build a weighted score field: for each pixel, sum TIER_WEIGHT of all coloured
+// pixels within CLUSTER_RADIUS. This means a pixel surrounded by strong colour
+// wins over an isolated bright pixel on a blank background.
+function buildScoreField(mask, W, H) {
+  const score = new Float32Array(W * H);
+  const r = CLUSTER_RADIUS;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (mask[y * W + x] === 0) continue; // blank centre — skip entirely
+      let s = 0, cnt = 0;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (dx * dx + dy * dy > r * r) continue;
+          const ny = y + dy, nx = x + dx;
+          if (ny < 0 || ny >= H || nx < 0 || nx >= W) continue;
+          const t = mask[ny * W + nx];
+          s += TIER_WEIGHT[t];
+          if (t > 0) cnt++;
+        }
+      }
+      // HARD REJECT if cluster is too sparse (isolated noise pixel)
+      if (cnt < MIN_CLUSTER_PX) { score[y * W + x] = 0; continue; }
+      score[y * W + x] = s;
+    }
+  }
+  return score;
+}
+// ── Phase 1: cluster-score NMS ────────────────────────────────────────────────
+function findCands(mask, W, H, minSepPx) {
+  const score = buildScoreField(mask, W, H);
+  // Collect all pixels with nonzero score, sorted descending
+  const cands = [];
+  for (let i = 0; i < W * H; i++) {
+    if (score[i] > 0) cands.push(i);
+  }
+  cands.sort((a, b) => score[b] - score[a]);
+  const used = new Uint8Array(W * H);
+  const peaks = [];
+  function suppress(cx, cy) {
+    const r = minSepPx;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r * r) continue;
+        const ny = cy + dy, nx = cx + dx;
+        if (ny < 0 || ny >= H || nx < 0 || nx >= W) continue;
+        used[ny * W + nx] = 1;
+      }
+    }
+  }
+  for (const idx of cands) {
+    if (peaks.length >= 100) break;
+    if (used[idx]) continue;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    const s = score[idx];
+    if (s <= 0) break; // all remaining are zero
+    // Must be a true local maximum within CLUSTER_RADIUS*2
+    const localR = CLUSTER_RADIUS * 2;
+    let isMax = true;
+    outer:
+    for (let dy = -localR; dy <= localR && isMax; dy++) {
+      for (let dx = -localR; dx <= localR && isMax; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const ny = y + dy, nx = x + dx;
+        if (ny < 0 || ny >= H || nx < 0 || nx >= W) continue;
+        if (score[ny * W + nx] > s) { isMax = false; }
+      }
+    }
+    if (!isMax) continue;
+    // Accept
+    peaks.push({ x, y, score: s, cls: mask[y * W + x] });
+    suppress(x, y);
+  }
+  return peaks;
+}
+// ── Overlay drawing ───────────────────────────────────────────────────────────
+function s2c(lat, lon) {
+  const pt = lmap.latLngToContainerPoint([lat,lon]);
+  return {cx:pt.x, cy:pt.y};
+}
+function cross(cx, cy, sz, col, lw) {
+  ovx.lineCap = "round";
+  ovx.lineWidth = lw+3; ovx.strokeStyle = "rgba(0,0,0,0.65)";
+  ovx.beginPath(); ovx.moveTo(cx-sz,cy); ovx.lineTo(cx+sz,cy); ovx.moveTo(cx,cy-sz); ovx.lineTo(cx,cy+sz); ovx.stroke();
+  ovx.lineWidth = lw; ovx.strokeStyle = col;
+  ovx.beginPath(); ovx.moveTo(cx-sz,cy); ovx.lineTo(cx+sz,cy); ovx.moveTo(cx,cy-sz); ovx.lineTo(cx,cy+sz); ovx.stroke();
+}
+function drawOv() {
+  const W = ov.width, H = ov.height;
+  ovx.clearRect(0, 0, W, H);
+  if (!showVorticity) return;
+  p2Peaks.forEach((p) => {
+    const { cx, cy } = s2c(p.lat, p.lon);
+    if (cx < -30 || cy < -30 || cx > W + 30 || cy > H + 30) return;
+    ovx.lineCap = "round";
+    ovx.lineWidth = 1;          // thin
+    ovx.strokeStyle = "#000";   // simple black
+    ovx.beginPath();
+    ovx.moveTo(cx - 7, cy);     // half-size (was 14 → now 7)
+    ovx.lineTo(cx + 7, cy);
+    ovx.moveTo(cx, cy - 7);
+    ovx.lineTo(cx, cy + 7);
+    ovx.stroke();
+  });
+}
+// ── Legend helpers ────────────────────────────────────────────────────────────
+function legendUrl(layer, style) {
+  return `${GEO}?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=${layer}&style=${encodeURIComponent(style||"")}&format=image/png&SLD_VERSION=1.1.0`;
+}
+const LEGEND_DEFS = {
+  vorticity:   [{ layer: VOR,          style: "",                                          title: "500mb Abs. Vorticity" },
+                { layer: HGT,          style: "",                                          title: "500mb Height" }],
+  thickness:   [{ layer: THCK,         style: "Thickness_1000-500mb_510to570dam_Dis",      title: "1000–500mb Thickness" },
+                { layer: MSL,          style: "SeaLevelPressure_940to1076mb-Int4mb-BoldLine24mb", title: "MSLP" }],
+  "850height": [{ layer: TT850,        style: "Temperature_-2.5to2.5C_Dis",               title: "850mb Temp (±2.5°C)" },
+                { layer: TT850CTR,     style: "Temperature_-40to40C_Contour",             title: "850mb Temp Contour" },
+                { layer: HGT850,       style: "GeopotentialHeight_0to2100dam_6dam-Lines", title: "850mb Height" }],
+"700moisture":[{ layer: RH700,    style: "RelativeHumidity_50to90Pct_Dis",           title: "700mb RH" },
+                { layer: TT700CTR,  style: "Temperature_-40to40C_Contour",             title: "700mb Temp" },
+                { layer: HGT700,    style: "GeopotentialHeight_0to2100dam_6dam-Lines", title: "700mb Height" }],
+  none:        []
+};
+async function updateLegend(mode) {
+  const wrap = document.getElementById("legend-wrap");
+  wrap.innerHTML = "";
+  const defs = LEGEND_DEFS[mode] || LEGEND_DEFS["vorticity"];
+  for (const d of defs) {
+    try {
+      const url = legendUrl(d.layer, d.style);
+      // probe with tiny fetch to check it loads
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const item = document.createElement("div");
+      item.className = "legend-item";
+      const title = document.createElement("div");
+      title.className = "legend-title";
+      title.textContent = d.title;
+      const img = document.createElement("img");
+      img.className = "legend-img";
+      img.src = objUrl;
+      img.onload = () => URL.revokeObjectURL(objUrl);
+      item.appendChild(title);
+      item.appendChild(img);
+      wrap.appendChild(item);
+    } catch(e) { console.warn("Legend fetch failed:", d.layer, e.message); }
+  }
+}
+
+// ── Main load ─────────────────────────────────────────────────────────────────
+let _loadGen = 0; // generation counter — incremented on every new load
+
+async function runLoad() {
+  const myGen = ++_loadGen;
+  function cancelled() { return myGen !== _loadGen; }
+
+  say("Starting load…");
+  p1Peaks=[]; p2Peaks=[];
+  pnl.style.display="none";
+  drawOv();
+  if(satLyr){lmap.removeLayer(satLyr);satLyr=null;}
+  if(hgtLyr){lmap.removeLayer(hgtLyr);hgtLyr=null;}
+  if(vorLyr){lmap.removeLayer(vorLyr);vorLyr=null;}
+  if(rawLyr){lmap.removeLayer(rawLyr);rawLyr=null;}
+  // Force-clear any lingering sat tiles from the pane
+  const satPane = lmap.getPane("satPane");
+  if (satPane) satPane.querySelectorAll(".leaflet-layer").forEach(el => el.remove());
+  
+  try {
+    const time = document.getElementById("t-rdps").value;
+    if (!time) throw new Error("No RDPS time selected");
+    say(`Loading RDPS: ${time}`);
+
+ // ── Satellite ──────────────────────────────────────────────────────────
+    say("Loading satellite…");
+    {
+      const wallNow = Date.now();
+      const rdpsMs = new Date(time).getTime();
+      const p = n => String(n).padStart(2, "0");
+      let satLoaded = false;
+
+      if (rdpsMs > wallNow) {
+        // Future forecast — no sat
+        document.getElementById("btn-sat").textContent = "Sat";
+        say("No satellite for forecast times.");
+        satLoaded = true;
+      } else {
+        const satCeilMs = Math.min(rdpsMs, wallNow);
+        try {
+          const capResp = await fetch(
+            `${GEO}?service=WMS&version=1.3.0&request=GetCapabilities&LAYERS=${SAT}&_=${Date.now()}`,
+            { cache: "no-store" }
+          );
+          const capText = await capResp.text();
+          const m = capText.match(/<Dimension[^>]*name="time"[^>]*>([\s\S]*?)<\/Dimension>/i)
+                  || capText.match(/<Extent[^>]*name="time"[^>]*>([\s\S]*?)<\/Extent>/i);
+          if (m) {
+            const raw = m[1].trim();
+            let satTimes = [];
+            if (raw.includes("/") && raw.split("/").length === 3) {
+              const [start, end, period] = raw.split("/");
+              const stepMin = period.match(/PT(\d+)M/)?.[1]
+                            ? parseInt(period.match(/PT(\d+)M/)[1])
+                            : (period.match(/PT(\d+)H/)?.[1] ? parseInt(period.match(/PT(\d+)H/)[1]) * 60 : 10);
+              const stepMs = stepMin * 60000;
+              let t2 = new Date(start).getTime();
+              const endMs = new Date(end).getTime();
+              while (t2 <= endMs) { satTimes.push(t2); t2 += stepMs; }
+            } else {
+              satTimes = raw.split(",").map(s => new Date(s.trim()).getTime()).filter(t2 => !isNaN(t2));
+            }
+            const validTimes = satTimes.filter(t2 => t2 <= satCeilMs).sort((a, b) => b - a);
+            for (const t2ms of validTimes.slice(0, 6)) {
+              const d = new Date(t2ms);
+              const ts = `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:00Z`;
+try {
+                await loadImg(wmsUrl(SAT, ts, 4, 4));
+                if (cancelled()) return; // abort if superseded while probing
+                // Clear pane again right before adding — kills any stale layer
+                // that landed during the await above
+                const sp = lmap.getPane("satPane");
+                if (sp) sp.querySelectorAll(".leaflet-layer").forEach(el => el.remove());
+                satLyr = makeLyr(SAT, ts, 0.85);
+                if (showSat) satLyr.addTo(lmap);
+                document.getElementById("btn-sat").textContent = `Sat ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}Z`;
+                say(`Sat OK: ${ts}`);
+                satLoaded = true;
+                break;
+              } catch(e) {}
+            }
+          }
+        } catch(e) {
+          say("Sat capabilities failed: " + e.message);
+        }
+        if (!satLoaded) {
+          document.getElementById("btn-sat").textContent = "Sat --:--";
+          say("Satellite imagery unavailable for this time.");
+        }
+      }
+    }
+    if (cancelled()) return;
+
+    // ── Update existing overlay layers to new time ─────────────────────────
+    if (thckLyr)        thckLyr.setParams({ time }, false);
+    if (thckContourLyr) thckContourLyr.setParams({ time }, false);
+    if (mslLyr)         mslLyr.setParams({ time }, false);
+if (rh700Lyr)       rh700Lyr.setParams({ time }, false);
+    if (tt700CtrLyr)    tt700CtrLyr.setParams({ time }, false);
+    if (hgt700Lyr)      hgt700Lyr.setParams({ time }, false);
+    if (tt850Lyr)       tt850Lyr.setParams({ time }, false);
+    if (tt850CtrLyr)    tt850CtrLyr.setParams({ time }, false);
+    if (hgt850Lyr)      hgt850Lyr.setParams({ time }, false);
+
+    // ── 500 hPa height contour ─────────────────────────────────────────────
+    say("Loading 500hPa height…");
+    try {
+      hgtLyr = makeLyr(HGT, time, 1);
+      if (showHgt) hgtLyr.addTo(lmap);
+      say("Height OK.");
+    } catch(e) { say("Height failed: "+e.message); }
+    if (cancelled()) return;
+
+    // ── Vorticity pixels ───────────────────────────────────────────────────
+    say("Loading vorticity pixels…");
+    const IW = 800, IH = 600;
+    const tmpC = document.createElement("canvas");
+    tmpC.width=IW; tmpC.height=IH; tmpC.style.display="none";
+    document.body.appendChild(tmpC);
+    const tmpX = tmpC.getContext("2d", {willReadFrequently:true});
+    let rawPx;
+    try {
+      const vorImg = await loadImgPixels(wmsUrl(VOR, time, IW, IH));
+      say("Vorticity image loaded. Drawing to canvas…");
+      tmpX.drawImage(vorImg, 0, 0, IW, IH);
+      let id;
+      try {
+        id = tmpX.getImageData(0, 0, IW, IH);
+        say(`Pixels OK: ${id.data.length} bytes.`);
+      } catch(taintErr) {
+        say("getImageData error: " + taintErr.message);
+        document.body.removeChild(tmpC);
+        throw taintErr;
+      }
+      if (cancelled()) { document.body.removeChild(tmpC); return; }
+
+      rawPx = new Uint8ClampedArray(id.data);
+      say("Masking green pixels…");
+      for(let i=0;i<IW*IH;i++)
+        if(!classifyPx(id.data[i*4],id.data[i*4+1],id.data[i*4+2],id.data[i*4+3]))
+          id.data[i*4+3]=0;
+      tmpX.putImageData(id, 0, 0);
+
+      say("Fetching Mercator vorticity for display…");
+      const DW = 1024, DH = 1024;
+      const dispImg = await loadImgPixels(wmsUrlMerc(VOR, time, DW, DH));
+      const dispC = document.createElement("canvas");
+      dispC.width=DW; dispC.height=DH; dispC.style.display="none";
+      document.body.appendChild(dispC);
+      const dispX = dispC.getContext("2d", {willReadFrequently:true});
+      dispX.drawImage(dispImg, 0, 0, DW, DH);
+      const dispId = dispX.getImageData(0, 0, DW, DH);
+      for(let i=0;i<DW*DH;i++) {
+        const t = classifyPx(dispId.data[i*4],dispId.data[i*4+1],dispId.data[i*4+2],dispId.data[i*4+3]);
+        if(t < 3) dispId.data[i*4+3]=0;
+      }
+      dispX.putImageData(dispId, 0, 0);
+      const dispUrl = dispC.toDataURL("image/png");
+      document.body.removeChild(dispC);
+      vorLyr = L.imageOverlay(dispUrl, [[BBOX[1],BBOX[0]],[BBOX[3],BBOX[2]]], {
+        opacity: 1, pane: "vorPane"
+      });
+      if(showVor) vorLyr.addTo(lmap);
+      say("Vorticity overlay added.");
+    } finally {
+      if (tmpC.parentNode) document.body.removeChild(tmpC);
+    }
+    if (cancelled()) return;
+
+    // ── Phase 1 & 2 peak detection ─────────────────────────────────────────
+    const mask = new Uint8Array(IW * IH);
+    for(let i = 0; i < IW * IH; i++)
+      mask[i] = classifyPx(rawPx[i*4], rawPx[i*4+1], rawPx[i*4+2], rawPx[i*4+3]);
+    const minSepKm = parseInt(document.getElementById("minsep").value);
+    const [lnMin, ltMin, lnMax, ltMax] = BBOX;
+    const minSepPx = Math.max(4, Math.round(minSepKm / ((ltMax - ltMin) / IH * 111)));
+    say("Phase 1: cluster-score NMS…");
+    const rawCands = findCands(mask, IW, IH, minSepPx);
+    p1Peaks = rawCands.map(c => ({
+      lat: BBOX[3] - (c.y / IH) * (BBOX[3] - BBOX[1]),
+      lon: BBOX[0] + (c.x / IW) * (BBOX[2] - BBOX[0]),
+      cls: c.cls, score: c.score
+    }));
+    say(`Phase 1: ${p1Peaks.length} candidates.`);
+    say("Phase 2: score-threshold filter…");
+    if (p1Peaks.length > 0) {
+      const maxScore = Math.max(...p1Peaks.map(p => p.score));
+      const threshold = maxScore * 0.35;
+      p2Peaks = p1Peaks.filter(p => p.score >= threshold).sort((a, b) => b.score - a.score);
+    } else {
+      p2Peaks = [];
+    }
+    say(`Phase 2: ${p2Peaks.length} maxima after score filter.`);
+    document.getElementById("pnl-list").innerHTML = p2Peaks.map((p, i) =>
+      `<div class="pi"><span class="pk">#${i+1}</span> <span class="pv">score ${p.score.toFixed(0)}</span><br>${p.lat.toFixed(2)}°N &nbsp;${Math.abs(p.lon).toFixed(2)}°${p.lon<0?"W":"E"}</div>`
+    ).join("");
+    document.getElementById("pnl-list").style.display = "none";
+    document.getElementById("btn-collapse").textContent = "▼";
+    pnl.style.display = showVorticity ? "block" : "none";
+    const activeMode = document.querySelector("input[name='overlay-mode']:checked")?.value || "vorticity";
+    applyOverlayMode(activeMode);
+    clearProgress();
+    say(`Done — ${p2Peaks.length} maxima at ${time}.`);
+  } catch(e) {
+    clearProgress();
+    say("ERROR: "+e.message, true);
+    console.error(e);
+  }
+}
+// ── Time dropdown ─────────────────────────────────────────────────────────────
+async function populateTimeDropdown() {
+  const sel = document.getElementById("t-rdps");
+  const p   = n => String(n).padStart(2,"0");
+  const now = new Date();
+  sel.innerHTML = "<option>Loading…</option>";
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 5000);
+const resp = await fetch(`${GEO}?service=WMS&version=1.3.0&request=GetCapabilities&LAYERS=${VOR}&_=${Date.now()}`, {signal: ctrl.signal, cache: "no-store"});
+    clearTimeout(tid);
+    if(!resp.ok) throw new Error("HTTP "+resp.status);
+    const text = await resp.text();
+    const m = text.match(/<Dimension[^>]*name="time"[^>]*>([\s\S]*?)<\/Dimension>/i)
+           || text.match(/<Extent[^>]*name="time"[^>]*>([\s\S]*?)<\/Extent>/i);
+    if(!m) throw new Error("No time dimension in capabilities");
+    const raw = m[1].trim();
+    let times = [];
+    if(raw.includes("/") && raw.split("/").length === 3) {
+      const [start, end, period] = raw.split("/");
+      const stepH = period.match(/PT(\d+)H/)?.[1] || period.match(/P.*T.*(\d+)H/)?.[1] || 1;
+      const stepMs = parseInt(stepH) * 3600000;
+      let t = new Date(start).getTime();
+      const endMs = new Date(end).getTime();
+      while(t <= endMs) {
+        const d = new Date(t);
+        times.push(`${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:00:00Z`);
+        t += stepMs;
+      }
+    } else {
+      times = raw.split(",").map(s=>s.trim()).filter(s=>/^\d{4}/.test(s));
+    }
+if(!times.length) throw new Error("Could not parse time dimension");
+    times.sort();
+    sel.innerHTML = "";
+    let defaultVal = null;
+    const firstTimeMs = times.length ? new Date(times[0]).getTime() : null;
+    // Detect model run: last time whose hour is a multiple of 6 (00/06/12/18Z runs)
+const runTime = new Date(times[0]);
+    window._runLabel = ` — Run: ${runTime.getUTCFullYear()}-${p(runTime.getUTCMonth()+1)}-${p(runTime.getUTCDate())} ${p(runTime.getUTCHours())}Z`;
+    const runLabel = window._runLabel;
+    const labeledOffsets = new Set([0, 12, 24, 36, 48, 60, 72, 84]);
+    times.forEach(t => {
+      const isFuture = new Date(t) > now;
+      const opt = document.createElement("option");
+      opt.value = t;
+      let offsetLabel = "";
+      if (firstTimeMs !== null) {
+        const diffH = Math.round((new Date(t).getTime() - firstTimeMs) / 3600000);
+        if (labeledOffsets.has(diffH)) offsetLabel = ` +${diffH}h`;
+      }
+      opt.textContent = (isFuture ? "▶ " : "") + t.replace("T"," ").replace(":00:00Z","Z") + offsetLabel;
+      if(isFuture) opt.style.color = "#66ddff";
+      sel.appendChild(opt);
+if (!defaultVal && new Date(t) > now) defaultVal = t;
+    });
+if(defaultVal) sel.value = defaultVal;
+    else { sel.selectedIndex = sel.options.length - 1; defaultVal = sel.value; }
+    const nFuture = times.filter(t=>new Date(t)>now).length;
+    say(`${times.length} valid times (${nFuture} forecast). Auto-loading…`);
+const btnTPel = document.getElementById("btn-timepicker");
+    if(btnTPel && sel.value) btnTPel.textContent = sel.value.replace("T"," ").replace(":00:00Z","Z") + runLabel;
+  } catch(e) {
+    say("Capabilities unavailable — showing recent runs.");
+    sel.innerHTML = "";
+    const times = [];
+    for(let db=0; db<=2; db++) {
+      const d = new Date(now.getTime()-db*86400000);
+      for(const h of [18,12,6,0]) {
+        const t = new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),h));
+        if(t > now) continue;
+        times.push(`${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}T${p(h)}:00:00Z`);
+      }
+    }
+    times.forEach((t,i) => {
+      const opt = document.createElement("option");
+      opt.value = t; opt.textContent = t.replace("T"," ").replace(":00:00Z","Z");
+      if(i===0) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    const btnTPel2 = document.getElementById("btn-timepicker");
+    if(btnTPel2 && sel.options.length) btnTPel2.textContent = sel.options[0].value.replace("T"," ").replace(":00:00Z","Z");
+    console.warn("Time dropdown fallback:", e.message);
+  }
+  runLoad();
+}
+populateTimeDropdown();
+// ── Borders ───────────────────────────────────────────────────────────────────
+async function loadBorders() {
+  if(borderLyr) { lmap.removeLayer(borderLyr); borderLyr=null; }
+  borderLyr = L.layerGroup();
+  lmap.addLayer(borderLyr);
+  say("Loading borders…");
+  try {
+    const r = await fetch("https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_boundary_lines_land.geojson");
+    const gj = await r.json();
+    L.geoJSON(gj, { style:{ color:"#6b3fa0", weight:1.0, fill:false, opacity:1 }, pane:"overlayPane" }).addTo(borderLyr);
+    say("Country borders loaded.");
+  } catch(e) { say("Country borders failed: "+e.message); }
+  try {
+    const r = await fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json");
+    const tj = await r.json();
+    L.geoJSON(topojson.feature(tj, tj.objects.states), {
+      style:{ color:"#6b3fa0", weight:0.5, fill:false, opacity:0.9 }, pane:"overlayPane"
+    }).addTo(borderLyr);
+    say("US states loaded.");
+  } catch(e) { say("US states failed: "+e.message); }
+  const provSources = [
+    "https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/canada.geojson",
+    "https://raw.githack.com/codeforgermany/click_that_hood/main/public/data/canada.geojson"
+  ];
+  let provLoaded = false;
+  for(const url of provSources) {
+    try {
+      const r = await fetch(url);
+      if(!r.ok) continue;
+      const gj = await r.json();
+      const feats = gj.features.filter(f =>
+        !f.properties.country || f.properties.country === "Canada" ||
+        (f.properties.admin && f.properties.admin === "Canada")
+      );
+      const data = feats.length > 0 ? {...gj, features: feats} : gj;
+      L.geoJSON(data, { style:{ color:"#6b3fa0", weight:0.5, fill:false, opacity:0.9 }, pane:"overlayPane" }).addTo(borderLyr);
+      say("Canadian provinces loaded.");
+      provLoaded = true;
+      break;
+    } catch(e) { console.warn("Province source failed:", url, e.message); }
+  }
+  if(!provLoaded) {
+    try {
+      const adminLyr = L.tileLayer.wms("https://maps.geogratis.gc.ca/wms/canvec_en", {
+        layers: "geo:province_territory", format:"image/png",
+        transparent:true, version:"1.3.0", opacity:0.9
+      });
+      adminLyr.addTo(borderLyr);
+      say("Province borders loaded via GeoGratis WMS.");
+    } catch(e) { say("All province sources failed."); }
+  }
+}
+loadBorders();
+// ── Sat opacity slider ────────────────────────────────────────────────────────
+document.getElementById("sat-opacity").addEventListener("input", function() {
+  const val = parseInt(this.value) / 100;
+  if(satLyr) satLyr.setOpacity(val);
+});
+// ── Time picker ───────────────────────────────────────────────────────────────
+const timepanel  = document.getElementById("timepanel");
+const btnTP      = document.getElementById("btn-timepicker");
+const tSel       = document.getElementById("t-rdps");
+btnTP.addEventListener("click", e => {
+  e.stopPropagation();
+  const open = timepanel.style.display === "block";
+  timepanel.style.display = open ? "none" : "block";
+  const r = btnTP.getBoundingClientRect();
+  timepanel.style.top = (r.bottom + 4) + "px";
+  if (!open) setTimeout(() => tSel.focus(), 50);
+});
+document.addEventListener("click", e => {
+  if(!timepanel.contains(e.target) && e.target !== btnTP && document.activeElement !== tSel)
+    timepanel.style.display = "none";
+});
+
+
+function stepTime(delta) {
+  const idx = tSel.selectedIndex + delta;
+  if (idx < 0 || idx >= tSel.options.length) return;
+  tSel.selectedIndex = idx;
+  const v = tSel.value;
+  if (v) btnTP.textContent = v.replace("T"," ").replace(":00:00Z","Z") + (window._runLabel || "");
+  runLoad();
+}
+document.getElementById("btn-prev").addEventListener("click", () => stepTime(-1));
+document.getElementById("btn-next").addEventListener("click", () => stepTime(1));
+
+
+
+
+
+
+tSel.addEventListener("change", () => {
+  const v = tSel.value;
+  if(v) btnTP.textContent = v.replace("T"," ").replace(":00:00Z","Z") + (window._runLabel || "");
+  if (!tSel._arrowTimer) { timepanel.style.display = "none"; runLoad(); }
+});
+
+tSel.addEventListener("keydown", e => {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown" ||
+      e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    // let the select move naturally, then trigger load after a short debounce
+    clearTimeout(tSel._arrowTimer);
+tSel._arrowTimer = setTimeout(() => {
+      tSel._arrowTimer = null;
+      const v = tSel.value;
+      if (v) btnTP.textContent = v.replace("T"," ").replace(":00:00Z","Z") + (window._runLabel || "");
+      runLoad();
+    }, 300);
+  }
+});
+
+
+
+// ── Collapse peak list ────────────────────────────────────────────────────────
+document.getElementById("btn-collapse").addEventListener("click", () => {
+  const list = document.getElementById("pnl-list");
+  const btn  = document.getElementById("btn-collapse");
+  const isCollapsed = list.style.display === "none";
+  list.style.display = isCollapsed ? "" : "none";
+  btn.textContent   = isCollapsed ? "▲" : "▼";
+});
+// ── GPS ───────────────────────────────────────────────────────────────────────
+let gpsMarker = null;
+let gpsHeading = null;
+let gpsWatchId = null;
+const gpsDot = document.getElementById("gps-dot");
+const gpsDotCtx = gpsDot.getContext("2d");
+function drawGpsDot(heading) {
+  const S = 40, cx = 20, cy = 20, r = 10;
+  gpsDotCtx.clearRect(0, 0, S, S);
+  gpsDotCtx.beginPath();
+  gpsDotCtx.arc(cx, cy, r + 4, 0, Math.PI*2);
+  gpsDotCtx.fillStyle = "rgba(0,120,255,0.15)";
+  gpsDotCtx.fill();
+  if (heading !== null) {
+    const rad = (heading - 90) * Math.PI / 180;
+    gpsDotCtx.save();
+    gpsDotCtx.translate(cx, cy);
+    gpsDotCtx.rotate(rad + Math.PI/2);
+    gpsDotCtx.beginPath();
+    gpsDotCtx.moveTo(0, -r - 8);
+    gpsDotCtx.lineTo(-5, -r - 1);
+    gpsDotCtx.lineTo(5, -r - 1);
+    gpsDotCtx.closePath();
+    gpsDotCtx.fillStyle = "#2288ff";
+    gpsDotCtx.fill();
+    gpsDotCtx.restore();
+  }
+  gpsDotCtx.beginPath();
+  gpsDotCtx.arc(cx, cy, r, 0, Math.PI*2);
+  gpsDotCtx.fillStyle = "#2266ff";
+  gpsDotCtx.fill();
+  gpsDotCtx.strokeStyle = "#fff";
+  gpsDotCtx.lineWidth = 2.5;
+  gpsDotCtx.stroke();
+}
+function positionGpsDot(lat, lon) {
+  if (!lmap) return;
+  const pt = lmap.latLngToContainerPoint([lat, lon]);
+  gpsDot.style.left = (pt.x - 20) + "px";
+  gpsDot.style.top  = (pt.y + parseInt(document.getElementById("map").style.top || "60") - 20) + "px";
+  gpsDot.style.display = "block";
+}
+function onGpsPos(pos) {
+  const lat = pos.coords.latitude;
+  const lon = pos.coords.longitude;
+  gpsHeading = pos.coords.heading;
+  if (!gpsMarker) lmap.setView([lat, lon], Math.max(lmap.getZoom(), 5));
+  gpsMarker = {lat, lon};
+  drawGpsDot(gpsHeading);
+  positionGpsDot(lat, lon);
+  say(`GPS: ${lat.toFixed(4)}°N ${Math.abs(lon).toFixed(4)}°${lon<0?"W":"E"}${gpsHeading!==null?" hdg "+Math.round(gpsHeading)+"°":""}`);
+}
+function onGpsErr(err) { say("GPS error: " + err.message, true); }
+document.getElementById("btn-gps").addEventListener("click", () => {
+  if(!navigator.geolocation) { say("Geolocation not supported.", true); return; }
+  if(gpsWatchId !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null; gpsMarker = null;
+    gpsDot.style.display = "none";
+    document.getElementById("btn-gps").classList.remove("on");
+    say("GPS off."); return;
+  }
+  document.getElementById("btn-gps").classList.add("on");
+  say("Acquiring GPS…");
+  gpsWatchId = navigator.geolocation.watchPosition(onGpsPos, onGpsErr, {
+    enableHighAccuracy: true, maximumAge: 5000, timeout: 10000
+  });
+});
+lmap.on("move zoom viewreset", () => {
+  if(gpsMarker) positionGpsDot(gpsMarker.lat, gpsMarker.lon);
+});
+
+// ── Extended export: 6hr steps, 0–84h ────────────────────────────────────────
+document.getElementById("btn-export-ext").addEventListener("click", async () => {
+  try {
+    const sel2 = document.getElementById("t-rdps");
+    const allTimes = Array.from(sel2.options).map(o => o.value).filter(v => /^\d{4}/.test(v));
+    if (!allTimes.length) { say("No times available for export.", true); return; }
+    const firstTimeMs2 = new Date(allTimes[0]).getTime();
+    const targetOffsets = [0,6,12,18,24,30,36,42,48,54,60,66,72,78,84];
+    const exportTimes = targetOffsets.map(h => {
+      const target = firstTimeMs2 + h * 3600000;
+      return allTimes.reduce((best, t) => {
+        const d  = Math.abs(new Date(t).getTime() - target);
+        const db = Math.abs(new Date(best).getTime() - target);
+        return d < db ? t : best;
+      }, allTimes[0]);
+    }).filter((t, i, a) => a.indexOf(t) === i);
+    say(`Exporting ${exportTimes.length} frames (6hr, 0–84h)…`);
+    const PW = 672, PH = 388;
+    const HEADER_H = 40;
+    const TITLE_H = 28;
+    const W = PW * 2;
+    const H = HEADER_H + (PH + TITLE_H) * 2;
+    const [lonMin, latMin, lonMax, latMax] = BBOX;
+    function mercY(lat) { return Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)); }
+    const mercYMin = mercY(latMin), mercYMax = mercY(latMax);
+    function latToY(lat, h) { return h - (mercY(lat) - mercYMin) / (mercYMax - mercYMin) * h; }
+    function lonToX(lon, w) { return (lon - lonMin) / (lonMax - lonMin) * w; }
+    async function drawBaseTilesE(ctx, pw, ph) {
+      const zoom = 5;
+      function lon2tile(lon, z) { return Math.floor((lon + 180) / 360 * Math.pow(2, z)); }
+      function lat2tile(lat, z) { return Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z)); }
+      function tile2lon(x, z) { return x / Math.pow(2, z) * 360 - 180; }
+      function tile2lat(y, z) { const n = Math.PI - 2 * Math.PI * y / Math.pow(2, z); return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); }
+      const tileXMin = lon2tile(lonMin, zoom), tileXMax = lon2tile(lonMax, zoom);
+      const tileYMin = lat2tile(latMax, zoom), tileYMax = lat2tile(latMin, zoom);
+      const promises = [];
+      for (let tx = tileXMin; tx <= tileXMax; tx++) {
+        for (let ty = tileYMin; ty <= tileYMax; ty++) {
+          promises.push((async () => {
+            try {
+              const url = `https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/${zoom}/${tx}/${ty}.png`;
+              const img = await loadImgPixels(url);
+              const px0 = lonToX(tile2lon(tx, zoom), pw);
+              const px1 = lonToX(tile2lon(tx + 1, zoom), pw);
+              const py0 = latToY(tile2lat(ty, zoom), ph);
+              const py1 = latToY(tile2lat(ty + 1, zoom), ph);
+              ctx.drawImage(img, px0, py0, px1 - px0, py1 - py0);
+            } catch (e) {}
+          })());
+        }
+      }
+      await Promise.all(promises);
+    }
+    async function drawWMSPanelE(ctx, layer, style, opacity, pw, ph, time) {
+      try {
+        function lon2m(lon) { return lon * 20037508.34 / 180; }
+        function lat2m(lat) { return Math.log(Math.tan((90 + lat) * Math.PI / 360)) * 20037508.34 / Math.PI; }
+        const xMin = lon2m(lonMin), xMax = lon2m(lonMax);
+        const yMin = lat2m(latMin), yMax = lat2m(latMax);
+        const url = `${GEO}?service=WMS&version=1.3.0&request=GetMap&layers=${layer}&styles=${encodeURIComponent(style||"")}&crs=EPSG:3857&bbox=${xMin},${yMin},${xMax},${yMax}&width=${pw}&height=${ph}&format=image/png&transparent=true&time=${time}`;
+        const img = await loadImgPixels(url);
+        ctx.globalAlpha = opacity;
+        ctx.drawImage(img, 0, 0, pw, ph);
+        ctx.globalAlpha = 1;
+      } catch (e) { console.warn("WMS panel failed:", layer, e.message); }
+    }
+    async function drawBordersPanelE(ctx, pw, ph) {
+      function projectCoord(lon, lat) { return [lonToX(lon, pw), latToY(lat, ph)]; }
+      function drawLines(features, color, lw) {
+        ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = "round";
+        for (const f of features) {
+          const geom = f.geometry;
+          const rings = geom.type === "LineString" ? [geom.coordinates]
+                      : geom.type === "MultiLineString" ? geom.coordinates
+                      : geom.type === "Polygon" ? geom.coordinates
+                      : geom.type === "MultiPolygon" ? geom.coordinates.flat() : [];
+          for (const ring of rings) {
+            ctx.beginPath(); let started = false;
+            for (const [lon, lat] of ring) {
+              const [px, py] = projectCoord(lon, lat);
+              if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+        }
+      }
+      try {
+        const r1 = await fetch("https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_boundary_lines_land.geojson");
+        drawLines((await r1.json()).features, "#6b3fa0", 1.0);
+        const r2 = await fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json");
+        const tj = await r2.json();
+        drawLines(topojson.feature(tj, tj.objects.states).features, "#6b3fa0", 0.5);
+        const r3 = await fetch("https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/canada.geojson");
+        drawLines((await r3.json()).features, "#6b3fa0", 0.5);
+      } catch (e) { console.warn("Border draw failed:", e.message); }
+    }
+    async function renderPanelE(ctx, mode, destX, destY, title, time) {
+      const pc = document.createElement("canvas");
+      pc.width = PW; pc.height = PH;
+      const c = pc.getContext("2d");
+      c.fillStyle = "#f0f0f0"; c.fillRect(0, 0, PW, PH);
+      await drawBaseTilesE(c, PW, PH);
+      if (mode === "vorticity") {
+        let framePeaks = [];
+        try {
+          const IW2 = 800, IH2 = 600;
+          const vorUrlEq = wmsUrl(VOR, time, IW2, IH2);
+          const vorImgEq = await loadImgPixels(vorUrlEq);
+          const eqC = document.createElement("canvas"); eqC.width = IW2; eqC.height = IH2;
+          const eqX = eqC.getContext("2d", {willReadFrequently: true});
+          eqX.drawImage(vorImgEq, 0, 0, IW2, IH2);
+          const eqId = eqX.getImageData(0, 0, IW2, IH2);
+          const frameMask = new Uint8Array(IW2 * IH2);
+          for (let i = 0; i < IW2 * IH2; i++)
+            frameMask[i] = classifyPx(eqId.data[i*4], eqId.data[i*4+1], eqId.data[i*4+2], eqId.data[i*4+3]);
+          const minSepKm2 = parseInt(document.getElementById("minsep").value);
+          const minSepPx2 = Math.max(4, Math.round(minSepKm2 / ((BBOX[3] - BBOX[1]) / IH2 * 111)));
+          const rawCands2 = findCands(frameMask, IW2, IH2, minSepPx2);
+          const p1f = rawCands2.map(c2 => ({
+            lat: BBOX[3] - (c2.y / IH2) * (BBOX[3] - BBOX[1]),
+            lon: BBOX[0] + (c2.x / IW2) * (BBOX[2] - BBOX[0]),
+            cls: c2.cls, score: c2.score
+          }));
+          if (p1f.length > 0) {
+            const maxS = Math.max(...p1f.map(p => p.score));
+            framePeaks = p1f.filter(p => p.score >= maxS * 0.10).sort((a,b) => b.score - a.score);
+          }
+          function lon2m(lon) { return lon * 20037508.34 / 180; }
+          function lat2m(lat) { return Math.log(Math.tan((90 + lat) * Math.PI / 360)) * 20037508.34 / Math.PI; }
+          const xMin = lon2m(lonMin), xMax = lon2m(lonMax);
+          const yMin = lat2m(latMin), yMax = lat2m(latMax);
+          const vorUrl = `${GEO}?service=WMS&version=1.3.0&request=GetMap&layers=${VOR}&styles=&crs=EPSG:3857&bbox=${xMin},${yMin},${xMax},${yMax}&width=${PW}&height=${PH}&format=image/png&transparent=true&time=${time}`;
+          const vorImg = await loadImgPixels(vorUrl);
+          const tmpC2 = document.createElement("canvas"); tmpC2.width = PW; tmpC2.height = PH;
+          const tmpX2 = tmpC2.getContext("2d", {willReadFrequently: true});
+          tmpX2.drawImage(vorImg, 0, 0, PW, PH);
+          const id2 = tmpX2.getImageData(0, 0, PW, PH);
+          for (let i = 0; i < PW * PH; i++)
+            if (classifyPx(id2.data[i*4], id2.data[i*4+1], id2.data[i*4+2], id2.data[i*4+3]) < 3)
+              id2.data[i*4+3] = 0;
+          tmpX2.putImageData(id2, 0, 0);
+          c.drawImage(tmpC2, 0, 0, PW, PH);
+        } catch(e) { console.warn("Filtered vorticity export failed:", e.message); }
+        await drawWMSPanelE(c, HGT, "", 1.0, PW, PH, time);
+        await drawBordersPanelE(c, PW, PH);
+        framePeaks.forEach((p) => {
+          const cx = lonToX(p.lon, PW), cy = latToY(p.lat, PH);
+          if (cx < -20 || cy < -20 || cx > PW + 20 || cy > PH + 20) return;
+          c.lineCap = "round"; c.lineWidth = 1; c.strokeStyle = "#000";
+          c.beginPath();
+          c.moveTo(cx - 5, cy); c.lineTo(cx + 5, cy);
+          c.moveTo(cx, cy - 5); c.lineTo(cx, cy + 5);
+          c.stroke();
+        });
+      } else if (mode === "thickness") {
+        await drawWMSPanelE(c, THCK, "Thickness_1000-500mb_510to570dam_Dis", 0.75, PW, PH, time);
+        await drawWMSPanelE(c, THCK_CONTOUR, "", 0.75, PW, PH, time);
+        await drawWMSPanelE(c, MSL, "SeaLevelPressure_940to1076mb-Int4mb-BoldLine24mb", 0.75, PW, PH, time);
+        await drawBordersPanelE(c, PW, PH);
+      } else if (mode === "850height") {
+        await drawWMSPanelE(c, TT850, "Temperature_-2.5to2.5C_Dis", 0.75, PW, PH, time);
+        await drawWMSPanelE(c, TT850CTR, "Temperature_-40to40C_Contour", 0.75, PW, PH, time);
+        await drawWMSPanelE(c, HGT850, "GeopotentialHeight_0to2100dam_6dam-Lines", 0.75, PW, PH, time);
+        await drawBordersPanelE(c, PW, PH);
+} else if (mode === "700moisture") {
+        await drawWMSPanelE(c, RH700,    "RelativeHumidity_50to90Pct_Dis",           0.75, PW, PH, time);
+        await drawWMSPanelE(c, TT700CTR, "Temperature_-40to40C_Contour",             0.75, PW, PH, time);
+        await drawWMSPanelE(c, HGT700,   "GeopotentialHeight_0to2100dam_6dam-Lines",  0.75, PW, PH, time);
+        await drawBordersPanelE(c, PW, PH);
+      }
+// Draw legends bottom-left of panel, half-size, stacked horizontally
+      const legendDefsE = LEGEND_DEFS[mode] || [];
+      let legXE = 4;
+      for (const ld of legendDefsE) {
+        try {
+          const limg = await loadImgPixels(legendUrl(ld.layer, ld.style));
+          const lw = Math.round(limg.naturalWidth  * 0.5);
+          const lh = Math.round(limg.naturalHeight * 0.5);
+          const legY = PH - lh - 4;
+          c.globalAlpha = 0.88;
+          c.drawImage(limg, 0, 0, limg.naturalWidth, limg.naturalHeight, legXE, legY, lw, lh);
+          c.globalAlpha = 1;
+          legXE += lw + 4;
+        } catch(e) {}
+      }
+      const panelTop = HEADER_H + TITLE_H + destY * (PH + TITLE_H);
+      ctx.drawImage(pc, destX * PW, panelTop, PW, PH);
+      const titleY = HEADER_H + destY * (PH + TITLE_H);
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(destX * PW, titleY, PW, TITLE_H);
+      ctx.fillStyle = "#000000"; ctx.font = "bold 13px system-ui";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(title, destX * PW + PW / 2, titleY + TITLE_H / 2);
+      ctx.strokeStyle = "#0f3460"; ctx.lineWidth = 1.5;
+      ctx.strokeRect(destX * PW, titleY, PW, TITLE_H + PH);
+ctx.font = "10px system-ui"; ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+      ctx.fillText(window._runLabel ? "Run:" + window._runLabel.replace(" — Run:", "") : "", destX * PW + PW - 4, titleY + TITLE_H + PH - 3);
+    }
+    const zip = new JSZip();
+    for (let fi = 0; fi < exportTimes.length; fi++) {
+      const t = exportTimes[fi];
+      const offsetH = Math.round((new Date(t).getTime() - firstTimeMs2) / 3600000);
+      const offsetLabel2 = `+${String(offsetH).padStart(2,"0")}h`;
+const pct3 = Math.round(fi / exportTimes.length * 100);
+      await say(`Exporting frame ${fi+1}/${exportTimes.length}: ${offsetLabel2}…`);
+      logExport(`[${String(fi+1).padStart(2,"0")}/${exportTimes.length}] ${offsetLabel2}`, pct3);
+      await new Promise(r => setTimeout(r, 1500)); // rate-limit pause
+      const finalCanvas = document.createElement("canvas");
+      finalCanvas.width = W; finalCanvas.height = H;
+      const fx = finalCanvas.getContext("2d");
+fx.fillStyle = "#ffffff"; 
+fx.fillRect(0, 0, W, HEADER_H);
+fx.fillStyle = "#000000"; 
+fx.font = "bold 16px system-ui";
+fx.textAlign = "center"; 
+fx.textBaseline = "middle";
+const timeLabel = t.replace("T", " ").replace(":00:00Z", " UTC");
+fx.fillText(
+  `RDPS Analysis  —  ${timeLabel}  ${offsetLabel2}  —  Source: Environment Canada GeoMet`,  W / 2,  HEADER_H / 2);
+      await renderPanelE(fx, "vorticity",   0, 0, "500mb Absolute Vorticity + Height", t);
+      await renderPanelE(fx, "thickness",   1, 1, "1000–500mb Thickness + MSLP", t);
+      await renderPanelE(fx, "850height",   1, 0, "850mb Temperature + Height", t);
+      await renderPanelE(fx, "700moisture", 0, 1, "700mb Relative Humidity + Height", t);
+      await new Promise(r => setTimeout(r, 80));
+      const filename = `rdps_4panel_${t.slice(0,16).replace("T","_").replace(/:/g,"-")}_${offsetLabel2}.png`;
+      const base64 = finalCanvas.toDataURL("image/png").split(",")[1];
+      zip.file(filename, base64, {base64: true});
+    }
+    say("Generating zip…");
+    const zipBlob = await zip.generateAsync({type: "blob"}, meta => {
+      say(`Compressing… ${meta.percent.toFixed(0)}%`);
+    });
+    const zipUrl = URL.createObjectURL(zipBlob);
+    const a = document.createElement("a");
+    a.href = zipUrl;
+    a.download = `rdps_4panel_0-84h_${new Date().toISOString().slice(0,10)}.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(zipUrl), 10000);
+say(`Export complete — ${exportTimes.length} panels zipped.`);
+    logExport(`✓ Done — ${exportTimes.length} frames zipped.`, 100);
+    hideExportLog();
+  } catch (e) {
+say("Export failed: " + e.message, true);
+    logExport(`✗ ERROR: ${e.message}`, 100, true);
+  }
+});
+</script>
+</body>
+</html>
+
