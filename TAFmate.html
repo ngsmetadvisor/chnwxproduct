@@ -1,0 +1,3387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TAF mate</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;500&display=swap');
+
+:root {
+  --bg:       #f0f2f6;
+  --surface:  #ffffff;
+  --surface2: #e8ecf2;
+  --border:   #c8d0de;
+  --border2:  #a8b4c8;
+  --accent:   #0066cc;
+  --text:     #1a2234;
+  --text2:    #3a4f6e;
+  --text3:    #7a90b0;
+--mono: 'Courier New', Courier, monospace;
+  --sans: 'Barlow', sans-serif;
+  --cond: 'Barlow Condensed', sans-serif;
+
+  --vfr-bg:   #d4f5e0; --vfr-fg:   #006622;
+  --mvfr-bg:  #d0e8f8; --mvfr-fg:  #004a8a;
+  --ifr-bg:   #fde0e0; --ifr-fg:   #cc0000;
+  --lifr-bg:  #ead0f5; --lifr-fg:  #7700bb;
+  --noTAF-bg: #fff0cc; --noTAF-fg: #885500;
+
+--below-bg: #ff0000; --below-fg: #ffffff;
+  --atlim-bg: #ffd700; --atlim-fg: #000000;
+
+  --row-h: 26px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  min-height: 100vh;
+}
+
+#topbar {
+  background: var(--surface);
+  border-bottom: 2px solid var(--border2);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+.logo {
+  font-family: var(--cond);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 5px;
+  color: var(--accent);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.logo span { color: var(--text3); font-weight: 300; }
+
+.clock-block {
+  font-size: 13px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  background: #e8f0fc;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #b8d0f0;
+}
+.clock-label { color: var(--text3); font-size: 10px; margin-right: 4px; }
+.dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#00aa44; animation:pulse 2s infinite; vertical-align:middle; margin-right:4px; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.input-row label {
+  font-family: var(--cond);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text3);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+input[type=text] {
+  background: #f8fafc;
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 3px 5px;
+  text-transform: uppercase;
+  outline: none;
+  width: 50px;
+}
+input[type=text]:focus { border-color: var(--accent); background: #fff; box-shadow: 0 0 0 2px #0066cc22; }
+input[type=text].narrow { width: 44px; }
+
+.btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--cond);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 5px 14px;
+  text-transform: uppercase;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.btn:hover { background: #004499; }
+.btn:disabled { background: var(--border2); color: #888; cursor: not-allowed; }
+.btn-sm { padding: 3px 9px; font-size: 11px; }
+.btn-ghost {
+  background: #f0f2f6;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: #e8f0fc; }
+
+.db-pill {
+  font-family: var(--cond);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  white-space: nowrap;
+  background: #f0f2f6;
+}
+.db-pill.ok  { color: #006622; border-color: #88ddaa; background: #d4f5e0; }
+.db-pill.err { color: #cc0000; border-color: #ffaaaa; background: #fde0e0; }
+
+.db-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.db-pill {
+  border-radius: 0;
+  border-right: none;
+}
+.db-dl-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 0 10px 10px 0;
+  border: 1px solid var(--border2);
+  border-left: 1px solid rgba(0,0,0,.08);
+  background: #e4e8f0;
+  color: var(--text3);
+  cursor: pointer;
+  font-family: var(--cond);
+  font-size: 10px;
+  letter-spacing: 1px;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.db-dl-btn:not([disabled]):hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.db-dl-btn[disabled] { opacity: .4; cursor: not-allowed; }
+.db-dl-btn.ok { border-color: #88ddaa; background: #c0eecc; color: #004d18; }
+.db-dl-btn.ok:hover { background: #006622; color: #fff; border-color: #006622; }
+
+
+#legend {
+  display: flex;
+  gap: 10px;
+  padding: 4px 12px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--cond);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.leg { display:flex; align-items:center; gap:4px; }
+.leg-box { width:12px; height:12px; border-radius:2px; border:1px solid rgba(0,0,0,.1); }
+
+#status-bar {
+  font-family: var(--cond);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 5px 14px;
+  min-height: 26px;
+  color: var(--text2);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.spinner { width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+#grid-wrap { overflow: visible; }
+#grid-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--accent) var(--surface2); }
+#grid-table thead tr:first-child th { position: sticky; top: 0; z-index: 30; background: inherit; }
+#grid-table thead tr:nth-child(2) th { position: sticky; top: 20px; z-index: 30; background: inherit; }
+#grid-table {
+  border-collapse: collapse;
+  white-space: nowrap;
+  min-width: max-content;
+  background: var(--surface);
+}
+
+#grid-table th, #grid-table td {
+  padding: 0 4px;
+  height: var(--row-h);
+  vertical-align: middle;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  font-size: 12px; font-family: var(--cond);
+}
+
+.sticky-l  { position:sticky; left:0;     z-index:10; background:var(--surface); }
+.sticky-l2 { position:sticky; left:200px; z-index:10; background:var(--surface); border-right:2px solid var(--border2) !important; }
+
+.col-ap   { width:200px; text-align:left; padding-left:6px; font-size:11px; font-weight:bold; color:var(--accent); letter-spacing:1px; vertical-align:top; }
+.col-info { width:210px; text-align:left; padding-left:6px; font-size:10px; color:var(--text2); }
+
+.hr-cell {→ width:44px; min-width:44px; max-width:44px; font-size:12px; font-family:var(--cond);}
+
+.date-hdr { background:#dce4f0; color:var(--text2); font-family:var(--cond); font-size:12px; letter-spacing:1px; }
+
+.date-hdr-new { color:var(--accent); border-left:2px solid var(--accent); background:#ccdcf8; }
+.time-hdr { background:var(--surface2); font-size:12px; height:20px; font-family:var(--cond); }
+.time-hdr.now-col { color:var(--accent); font-weight:bold; background:#d4e8ff; }
+
+.row-label {
+  font-family:var(--cond);
+  font-size:14px;
+  letter-spacing:1px;
+  color:var(--text3);
+  text-align:right;
+  padding-right:6px;
+  padding-left:4px;
+  background:var(--surface);
+  white-space:nowrap;
+}
+
+.c-vfr  { color:var(--vfr-fg); }
+.c-mvfr { color:var(--mvfr-fg); }
+.c-ifr  { color:var(--ifr-fg); }
+.c-lifr { color:var(--lifr-fg); }
+.c-notaf{ background:var(--noTAF-bg);color:var(--noTAF-fg); }
+.c-dim  { color:var(--text3); background:var(--surface); }
+.c-now  { outline:2px solid var(--accent); outline-offset:-2px; z-index:5; position:relative; }
+.c-past { opacity:.45; }
+.ceil-good { color:#005599; }
+.ceil-warn { color:#885500; }
+.ceil-bad  { color:#cc0000; font-weight:bold; }
+.ceil-sky  { color:var(--text3); }
+.vis-good  { color:#006622; }
+.vis-warn  { color:#885500; }
+.vis-bad   { color:#cc0000; font-weight:bold; }
+
+.wind-high { color:#7700bb; font-size:11px; }
+.wind-warn { color:#cc0000; font-size:11px; }
+.wind-ok   { color:var(--text); font-size:11px; }
+
+.wx-cell   { font-size:11px; overflow:hidden; text-overflow:ellipsis; max-width:38px; color:#550077; }
+.wx-ts     { background:#fff0cc; color:#884400; }
+.wx-fz     { background:#ddeeff; color:#003388; }
+.wx-sn     { background:#eef4ff; color:#224488; }
+
+.below-min { background:var(--below-bg) !important; color:var(--below-fg) !important; font-weight:bold; }
+.at-limit  { background:var(--atlim-bg) !important; color:var(--atlim-fg) !important; font-weight:bold; }
+
+.stat-badge {
+  display:inline-block; font-family:var(--cond); font-size:11px;
+  font-weight:700; letter-spacing:1px; padding:2px 6px; border-radius:3px;
+  border:1px solid rgba(0,0,0,.1);
+}
+.stat-badge.VFR  { background:var(--vfr-bg);  color:var(--vfr-fg); }
+.stat-badge.MVFR { background:var(--mvfr-bg); color:var(--mvfr-fg); }
+.stat-badge.IFR  { background:var(--ifr-bg);  color:var(--ifr-fg); }
+.stat-badge.LIFR { background:var(--lifr-bg); color:var(--lifr-fg); }
+.stat-badge.NOTAF{ background:var(--noTAF-bg);color:var(--noTAF-fg); }
+.stat-badge.BELOW{ background:#ff0000;color:#ffffff;font-weight:bold; }
+.stat-badge.ATLIM{ background:#ffd700;color:#000000;font-weight:bold; }
+
+.ils-badge {
+  display:inline-block; background:#d4f5e0; color:#006622;
+  border:1px solid #88cc99; border-radius:2px; padding:0 4px;
+  font-size:9px; font-family:var(--cond); letter-spacing:1px;
+}
+.ils-badge.zero { background:#fde0e0; color:#990000; border-color:#ffaaaa; }
+
+/* Raw TAF high-impact highlights */
+.taf-hi-wx   { background:#fde0e0; color:#cc0000; font-weight:bold; border-radius:2px; padding:0 2px; }
+.taf-hi-ceil { background:#ead0f5; color:#7700bb; font-weight:bold; border-radius:2px; padding:0 2px; }
+.taf-hi-vis  { background:#fff0cc; color:#885500; font-weight:bold; border-radius:2px; padding:0 2px; }
+
+
+
+/* Per-runway approach badges */
+.rwy-badges { display:flex; flex-wrap:wrap; gap:3px; align-items:center; }
+.rwy-badge {
+  display:inline-flex; align-items:center; gap:2px;
+  border-radius:3px; padding:1px 5px;
+  font-family:var(--cond); font-size:9px; letter-spacing:.5px;
+  border:1px solid rgba(0,0,0,.12); white-space:nowrap;
+}
+.rwy-badge .rwy-num { font-weight:700; }
+/* Approach type colour coding */
+.rwy-cat3  { background:#c8a0f0; color:#3a0080; border-color:#9955dd; }
+.rwy-cat2  { background:#ead0f5; color:#5500aa; border-color:#cc88ee; }
+.rwy-ils   { background:#d0e8f8; color:#004a8a; border-color:#88aadd; }
+.rwy-rnav  { background:#d4f5e0; color:#005522; border-color:#66bb88; }
+.rwy-other { background:#f0f0f0; color:#444;    border-color:#bbb; }
+.rwy-none  { background:#fff0cc; color:#885500; border-color:#ddaa44; }
+
+.taf-info-row td {
+  background:#f0f4fa;
+  font-family:var(--cond);
+  font-size:11px;
+  color:var(--text3);
+  letter-spacing:.5px;
+  text-align:left;
+  padding:2px 6px;
+  border-bottom:1px solid var(--border);
+}
+@media (max-width:768px) {
+  .taf-info-row td {
+    overflow-x:auto;
+    white-space:nowrap;
+    max-width:0;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .taf-info-row td::-webkit-scrollbar { display:none; }
+}
+.taf-time-block {
+  display:inline-block;
+  background:#e0e8f8;
+  color:var(--accent);
+  border-radius:3px;
+  padding:1px 5px;
+  margin-right:8px;
+  font-size:12px;
+}
+.taf-time-block.next  { background:#fff3cc; color:#885500; }
+.taf-time-block.valid { background:#d4f5e0; color:#006622; }
+
+.sep-row td { height:5px; background:#000000; border:none; padding:0; }
+
+.section-toggle { cursor:pointer; user-select:none; }
+.section-toggle:hover { filter:brightness(.92); }
+.section-rows.collapsed { visibility:collapse; }
+
+.ap-name-cell {
+  font-family:var(--cond); font-size:13px; font-weight:600;
+  color:var(--text); text-align:left; padding-left:4px;
+}
+
+.no-taf-msg { color:var(--noTAF-fg); background:var(--noTAF-bg); font-family:var(--cond); font-size:10px; letter-spacing:1px; }
+
+::-webkit-scrollbar { width:6px; height:8px; }
+::-webkit-scrollbar-track { background: var(--surface2); }
+::-webkit-scrollbar-thumb { background: var(--accent); border-radius:3px; opacity:0.7; }
+::-webkit-scrollbar-thumb:hover { background: #004499; }
+
+@media (max-width:768px) {
+  .col-ap       { display:none !important; }
+  .sticky-l     { display:none !important; }
+  .sticky-l2    { left:0 !important; width:110px !important; min-width:110px !important; max-width:110px !important; }
+  .hr-cell      { width:28px; min-width:28px; max-width:28px; font-size:10px; }
+  .row-label    { font-size:11px !important; padding-right:3px !important; }
+  .ap-name-cell { font-size:11px !important; }
+  .rwy-badges   { display:flex; flex-wrap:nowrap; overflow:visible; }
+  .taf-time-block { font-size:10px !important; }
+  #topbar       { padding:5px 8px; gap:6px; }
+  .logo         { font-size:16px; letter-spacing:3px; }
+  .clock-block  { font-size:11px; }
+  .input-row    { display:grid; grid-template-columns:auto 1fr auto 1fr auto 1fr; gap:3px 5px; align-items:center; width:100%; }
+  .db-group     { grid-column:1/-1; }
+  .btn          { padding:4px 10px; font-size:11px; }
+  #taf-modal    { width:100vw !important; max-height:100vh !important; border-radius:0 !important; border:none !important; position:fixed !important; inset:0 !important; }
+  #mins-modal   { width:100vw !important; max-height:100vh !important; border-radius:0 !important; border:none !important; position:fixed !important; inset:0 !important; }
+  #taf-modal-overlay, #mins-modal-overlay { align-items:flex-start !important; }
+  .mins-table   { font-size:9px; }
+  .mins-table th, .mins-table td { padding:2px 4px; }
+}
+@media (max-width:400px) {
+  .input-row { grid-template-columns:auto 1fr auto 1fr; }
+  .hr-cell   { width:22px; min-width:22px; font-size:9px; }
+  .sticky-l2 { width:90px !important; min-width:90px !important; max-width:90px !important; }
+  .row-label { font-size:10px !important; }
+}
+#grid-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+#taf-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10,18,40,.45);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+#taf-modal-overlay.open { display: flex; }
+
+#taf-modal {
+  background: var(--surface);
+  border: 2px solid var(--border2);
+  border-radius: 6px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.18);
+  width: min(860px, 94vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#taf-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border2);
+  flex-shrink: 0;
+}
+#taf-modal-title {
+  font-family: var(--cond);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--accent);
+}
+#taf-modal-meta {
+  font-family: var(--cond);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+#taf-modal-close {
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 9px;
+  font-family: var(--mono);
+  line-height: 1.4;
+}
+#taf-modal-close:hover { background: var(--ifr-bg); color: var(--ifr-fg); border-color: var(--ifr-fg); }
+
+#taf-modal-body {
+  overflow-y: auto;
+  padding: 14px 16px;
+  flex: 1;
+  max-height: calc(80vh - 80px);
+}
+
+#taf-modal-body pre {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.taf-kw-fm    { color: #0055bb; font-weight: bold; }
+.taf-kw-tempo { color: #885500; font-weight: bold; }
+.taf-kw-becmg { color: #006622; font-weight: bold; }
+.taf-kw-prob  { color: #7700bb; font-weight: bold; }
+
+.ap-code-btn {
+  cursor: pointer;
+  text-decoration: underline dotted var(--border2);
+  text-underline-offset: 3px;
+  transition: color .1s;
+  user-select: none;
+}
+.ap-code-btn:hover { color: #003a99; text-decoration-color: var(--accent); }
+.ap-code-btn:active { opacity: .7; }
+
+#mins-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10,18,40,.45);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+#mins-modal-overlay.open { display: flex; }
+
+#mins-modal {
+  background: var(--surface);
+  border: 2px solid var(--border2);
+  border-radius: 6px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.18);
+  width: min(700px, 94vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#mins-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border2);
+  flex-shrink: 0;
+}
+#mins-modal-title {
+  font-family: var(--cond);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--accent);
+}
+#mins-modal-meta {
+  font-family: var(--cond);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+#mins-modal-close {
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 9px;
+  font-family: var(--mono);
+  line-height: 1.4;
+}
+#mins-modal-close:hover { background: var(--ifr-bg); color: var(--ifr-fg); border-color: var(--ifr-fg); }
+
+#mins-modal-body {
+  overflow-y: auto;
+  padding: 14px 16px;
+  flex: 1;
+}
+
+.mins-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.mins-table th {
+  background: var(--surface2);
+  color: var(--text2);
+  font-family: var(--cond);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.mins-table td {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  text-align: center;
+  vertical-align: middle;
+}
+.mins-table tr:hover td { background: #f0f4fa; }
+.mins-rule {
+  font-family: var(--cond);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: .5px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-top: 12px;
+  line-height: 1.8;
+}
+.mins-rule b { color: var(--accent); }
+.mins-highlight { background: #fff3cc; color: #885500; font-weight: bold; border-radius: 2px; padding: 0 3px; }
+.mins-below { background: #fde0e0; color: #cc0000; font-weight: bold; border-radius: 2px; padding: 0 3px; }
+.mins-ok    { background: #d4f5e0; color: #006622; font-weight: bold; border-radius: 2px; padding: 0 3px; }
+.below-lnd { background:#ff6600 !important; color:#ffffff !important; font-weight:bold; }
+.at-lnd    { background:#ffaa00 !important; color:#000000 !important; font-weight:bold; }
+
+.mins-section-hdr {
+  font-family: var(--cond);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text2);
+  margin: 14px 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--border2);
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">TAF<span>mate</span></div>
+  <div class="clock-block"><span class="dot"></span><span class="clock-label">UTC</span><span id="clock">000000Z</span></div>
+
+  <div class="input-row">
+    <label>AP1</label><input type="text" id="ap1" maxlength="4" placeholder="ICAO">
+    <label>AP2</label><input type="text" id="ap2" maxlength="4" placeholder="ICAO">
+    <label>AP3</label><input type="text" id="ap3" maxlength="4" placeholder="ICAO">
+    <label>AP4</label><input type="text" id="ap4" maxlength="4" placeholder="ICAO">
+    <label>AP5</label><input type="text" id="ap5" maxlength="4" placeholder="ICAO">
+    <label>AP6</label><input type="text" id="ap6" maxlength="4" placeholder="ICAO">
+    <label>AP7</label><input type="text" id="ap7" maxlength="4" placeholder="ICAO">
+    <label>AP8</label><input type="text" id="ap8" maxlength="4" placeholder="ICAO">
+    <label>AP9</label><input type="text" id="ap9" maxlength="4" placeholder="ICAO">
+
+    <label style="margin-left:6px">Airline (Pref Alt)</label>
+    <input type="text" class="narrow" id="airline" placeholder="ACB" value="ACB" maxlength="4">
+
+    <button class="btn" id="fetch-btn" onclick="fetchAll()">&#9654; GET TAF</button>
+<input type="file" id="db-file" accept=".json,.csv" style="display:none" onchange="loadDb(event)">
+    <div class="db-group">
+<button class="btn btn-sm btn-ghost" onclick="document.getElementById('db-file').click()" title="Upload DB file (.csv or .json)">&#128194; DB</button>
+      <button class="btn btn-sm btn-ghost" onclick="openDbEditor()" title="Edit airport database">&#9998; EDIT DB</button>
+      <span class="db-pill" id="db-status">No DB</span><button class="db-dl-btn" id="db-dl-btn" onclick="exportCSV()" title="Download current DB as CSV" disabled>&#8595; CSV</button>
+    </div>
+  </div>
+</div>
+
+
+</div>
+
+<div id="status-bar">Ready &mdash; enter ICAOs and press GET TAF</div>
+<div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:var(--surface);border-top:1px solid var(--border);padding:3px 10px;display:flex;justify-content:space-between;align-items:center;font-family:var(--cond);font-size:10px;letter-spacing:1px;color:#aaa;">
+  <a href="https://buymeacoffee.com/dispatcher" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#FFDD00;color:#000;font-family:var(--cond);font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 10px;border-radius:4px;text-decoration:none;pointer-events:auto;">&#9749; BUY ME A COFFEE</a>
+  <span style="pointer-events:none;user-select:none;">Produced by Charlie Hotel November</span>
+</div>
+<div id="grid-wrap" style="padding-bottom:24px;">  <div id="grid-scroll">
+    <div id="grid-container"></div>
+  </div>
+</div>
+
+<!-- DB Editor Modal -->
+<div id="db-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,18,40,.55);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:2px solid var(--accent);border-radius:6px;box-shadow:0 8px 40px rgba(0,0,0,.25);width:min(900px,96vw);height:min(85vh,700px);display:flex;flex-direction:column;overflow:hidden;">
+    <div style="background:var(--surface2);border-bottom:1px solid var(--border2);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div>
+        <div style="font-family:var(--cond);font-size:15px;font-weight:700;letter-spacing:3px;color:var(--accent)">✏ EDIT AIRPORT DB</div>
+        <div style="font-family:var(--cond);font-size:10px;color:var(--text3);letter-spacing:1px;margin-top:2px">Edit CSV directly. Two sections separated by a blank line: airports, then airline alternates. Changes saved to browser storage.</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button onclick="resetDbToDefault()" style="background:#885500;border:none;border-radius:3px;color:#fff;cursor:pointer;font-family:var(--cond);font-size:11px;font-weight:700;letter-spacing:1px;padding:4px 10px;">↺ RESET DEFAULT</button>
+        <button onclick="saveDbEditor()" style="background:#006622;border:none;border-radius:3px;color:#fff;cursor:pointer;font-family:var(--cond);font-size:11px;font-weight:700;letter-spacing:2px;padding:4px 14px;">✓ SAVE</button>
+        <button onclick="closeDbEditor()" style="background:none;border:1px solid var(--border2);border-radius:3px;color:var(--text2);cursor:pointer;font-size:14px;padding:2px 9px;font-family:var(--mono);line-height:1.4;">✕ CANCEL</button>
+      </div>
+    </div>
+
+    <!-- Search/filter bar -->
+    <div style="padding:6px 14px;background:#f8fafc;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;">
+      <span style="font-family:var(--cond);font-size:10px;color:var(--text3);letter-spacing:1px;">FIND:</span>
+      <input type="text" id="db-editor-search" placeholder="ICAO, name, or city…" style="width:200px;font-size:11px;" oninput="filterDbEditor()">
+      <span id="db-editor-match" style="font-family:var(--cond);font-size:10px;color:var(--text3);letter-spacing:1px;"></span>
+      <span style="flex:1"></span>
+      <span style="font-family:var(--cond);font-size:10px;color:var(--text3);letter-spacing:1px;">
+        Columns: icao, name, province, country, remarks, rwy, eqp, dh_agl, vis, num_ils, alt_ht, alt_vis, can_std_ld, can_std_vis
+      </span>
+    </div>
+
+    <!-- Tab bar -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border2);flex-shrink:0;background:var(--surface2);">
+      <button id="dbtab-table" onclick="switchDbTab('table')" style="font-family:var(--cond);font-size:11px;font-weight:700;letter-spacing:1px;padding:6px 16px;border:none;border-bottom:2px solid var(--accent);background:var(--surface);color:var(--accent);cursor:pointer;">TABLE VIEW</button>
+      <button id="dbtab-raw" onclick="switchDbTab('raw')" style="font-family:var(--cond);font-size:11px;font-weight:700;letter-spacing:1px;padding:6px 16px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--text3);cursor:pointer;">RAW CSV</button>
+    </div>
+
+<!-- Table view -->
+    <div id="db-editor-table-view" style="flex:1;overflow:auto;padding:0;">
+      <table id="db-editor-table" style="border-collapse:collapse;width:100%;font-family:var(--mono);font-size:10px;white-space:nowrap;">
+        <thead id="db-editor-thead" style="position:sticky;top:0;z-index:10;background:var(--surface2);"></thead>
+        <tbody id="db-editor-tbody"></tbody>
+      </table>
+
+      <!-- Prefer Alt section -->
+      <div style="padding:8px 10px 4px;background:var(--surface2);border-top:2px solid var(--border2);border-bottom:1px solid var(--border);font-family:var(--cond);font-size:11px;font-weight:700;letter-spacing:2px;color:var(--text2);display:flex;align-items:center;gap:10px;">
+        AIRLINE PREFERRED ALTERNATES
+        <span style="font-weight:400;font-size:10px;color:var(--text3);letter-spacing:.5px;">airline → destination → preferred alternate ICAO</span>
+      </div>
+      <table style="border-collapse:collapse;width:100%;font-family:var(--mono);font-size:10px;white-space:nowrap;">
+        <thead style="position:sticky;top:0;z-index:10;background:var(--surface2);">
+          <tr>
+            <th style="padding:3px 6px;border:1px solid var(--border);font-family:var(--cond);font-size:10px;letter-spacing:1px;color:var(--text2);text-align:left;min-width:80px;">airline</th>
+            <th style="padding:3px 6px;border:1px solid var(--border);font-family:var(--cond);font-size:10px;letter-spacing:1px;color:var(--text2);text-align:left;min-width:80px;">dest</th>
+            <th style="padding:3px 6px;border:1px solid var(--border);font-family:var(--cond);font-size:10px;letter-spacing:1px;color:var(--text2);text-align:left;min-width:120px;">alt</th>
+            <th style="padding:3px 6px;border:1px solid var(--border);background:var(--surface2);width:30px;"></th>
+          </tr>
+        </thead>
+        <tbody id="db-editor-alt-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Raw CSV view -->
+    <div id="db-editor-raw-view" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
+      <textarea id="db-editor-textarea" spellcheck="false"
+        style="flex:1;font-family:var(--mono);font-size:11px;color:var(--text);background:#f8fafc;border:none;padding:12px 14px;resize:none;outline:none;line-height:1.6;width:100%;height:100%;"></textarea>
+    </div>
+
+  </div>
+</div>
+
+<!-- Raw TAF modal -->
+<div id="taf-modal-overlay" onclick="closeTafModal(event)">
+  <div id="taf-modal">
+    <div id="taf-modal-header">
+      <div>
+        <div id="taf-modal-title">ICAO &mdash; RAW TAF</div>
+        <div id="taf-modal-meta"></div>
+      </div>
+      <button id="taf-modal-close" onclick="closeTafModal(null)">&times; CLOSE</button>
+    </div>
+    <div id="taf-modal-body">
+      <pre id="taf-modal-text"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- TEST TAF Input Modal -->
+<div id="test-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,18,40,.55);z-index:2000;align-items:center;justify-content:center;">
+  <div id="test-modal" style="background:var(--surface);border:2px solid var(--accent);border-radius:6px;box-shadow:0 8px 40px rgba(0,0,0,.25);width:min(720px,94vw);display:flex;flex-direction:column;overflow:hidden;">
+    <div style="background:var(--surface2);border-bottom:1px solid var(--border2);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div>
+        <div style="font-family:var(--cond);font-size:15px;font-weight:700;letter-spacing:3px;color:var(--accent)">TEST — TAF SANDBOX</div>
+        <div style="font-family:var(--cond);font-size:10px;color:var(--text3);letter-spacing:1px;margin-top:2px">Paste or type any TAF below. Airport DB uses CYMM. ICAO in TAF will be overridden to TEST.</div>
+      </div>
+      <button onclick="closeTestModal()" style="background:none;border:1px solid var(--border2);border-radius:3px;color:var(--text2);cursor:pointer;font-size:14px;padding:2px 9px;font-family:var(--mono);line-height:1.4;">&times; CANCEL</button>
+    </div>
+    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+      <div style="font-family:var(--cond);font-size:10px;color:var(--text3);letter-spacing:1px;">EXAMPLE: <span style="color:var(--accent);font-family:var(--mono)">TAF CYMM 301700Z 3018/3118 36015KT P6SM FEW030 TEMPO 3020/3024 VRB20G35KT 1SM -SN BKN008 PROB30 3102/3110 OVC004 1/4SM FZFG</span></div>
+      <textarea id="test-taf-input" spellcheck="false" style="font-family:var(--mono);font-size:12px;color:var(--text);background:#f8fafc;border:1px solid var(--border2);border-radius:4px;padding:10px;resize:vertical;min-height:160px;outline:none;line-height:1.7;width:100%;" placeholder="TAF CYMM 301700Z 3018/3118 36015KT P6SM FEW030&#10;TEMPO 3020/3024 VRB20G35KT 1SM -SN BKN008&#10;PROB30 3102/3110 OVC004 1/4SM FZFG"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button onclick="submitTestTaf()" class="btn" style="letter-spacing:2px;">&#9654; RUN TAF</button>
+        <button onclick="loadExampleTaf(1)" class="btn" style="background:#006622;letter-spacing:1px;font-size:11px;">EX 1 — PROB LIFR</button>
+        <button onclick="loadExampleTaf(2)" class="btn" style="background:#885500;letter-spacing:1px;font-size:11px;">EX 2 — TEMPO IFR</button>
+        <button onclick="loadExampleTaf(3)" class="btn" style="background:#7700bb;letter-spacing:1px;font-size:11px;">EX 3 — BECMG + PROB</button>
+        <button onclick="loadExampleTaf(4)" class="btn" style="background:#004499;letter-spacing:1px;font-size:11px;">EX 4 — BELOW MINS</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Alt Minima Modal -->
+<div id="mins-modal-overlay" onclick="closeMinsModal(event)">
+  <div id="mins-modal">
+    <div id="mins-modal-header">
+      <div>
+        <div id="mins-modal-title">ICAO — ALT MINIMA</div>
+        <div id="mins-modal-meta"></div>
+      </div>
+      <button id="mins-modal-close" onclick="closeMinsModal(null)">&times; CLOSE</button>
+    </div>
+    <div id="mins-modal-body">
+      <div id="mins-modal-content"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+const TAF_PROXY  = './tafProxy.php';
+const HOURS_BACK = 2;
+const HOURS_FWD  = 48;
+
+// Fixed thresholds
+const WARN_CEIL = 3000, WARN_VIS = 3;
+const CRIT_CEIL = 1000, CRIT_VIS = 2;
+const WARN_WIND = 10,   CRIT_WIND = 15;
+
+// ═══════════════════════════════════════════
+// DEFAULT DB  (embedded — overridden by file upload)
+// ═══════════════════════════════════════════
+const DEFAULT_CSV = `icao,name,province,country,remarks,rwy,eqp,dh_agl,vis,num_ils,alt_ht,alt_vis,can_std_ld,can_std_vis
+CAL4,Albian,AB,CA,,,,,,,,,,
+CCL3,Christina Lake,AB,CA,"JetA. if poor WX, +600lbs ADDNL for CET2. Gracel RWY. See OneNote",,,,,,,,,
+CET2,Conklin Leismer,AB,CA,JA-1,,,,,,,,,
+CFN6,Primrose,AB,CA,"No fuel. If poor weather at destination, include 600 lbs ADDNL fuel for CET2 approach and ensure MUVUD included in alternate route.",,,,,,,,,
+CRL4,Kirby Lake,AB,CA,"if poor WX, include 600 lbs ADDNL fuel for CET2 approach. See OneNote",,,,,,,,,
+CYAL,Alert Bay,BC,CA,,,,,,,,,,
+CYAZ,Tofino,BC,CA,,,,,,,,,,
+CYB3,Nelson,BC,CA,,,,,,,,,,
+CYBA,Banff,AB,CA,,,,,,,,,,
+CYBD,Bella Coola,BC,CA,,,,,,,,,,
+CYBE,Uranium City,SK,CA,,,,,,,,,,
+CYBF,Bonnyville,AB,CA,no Deice,,,,,,,,,
+CYBL,Campbell River,BC,CA,,,,,,,,,,
+CYBP,Brooks,AB,CA,,,,,,,,,,
+CYBR,Brandon,MB,CA,,08,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYBU,Nipawin,SK,CA,,,,,,,,,,
+CYBW,Springbank,AB,CA,,,,,,,,,,
+CYCD,Nanaimo,BC,CA,,16,ILS,411.0,1.0,1.0,711.0,2.0,600.0,2.0
+CYCG,Castlegar,BC,CA,,,,,,,,,,
+CYCP,Blue River,BC,CA,,,,,,,,,,
+CYCQ,Chetwynd,BC,CA,,,,,,,,,,
+CYCT,Coronation,AB,CA,,,,,,,,,,
+CYCW,Chilliwack,BC,CA,,,,,,,,,,
+CYCZ,Fairmont Hot Springs,BC,CA,,,,,,,,,,
+CYDC,Princeton,BC,CA,,,,,,,,,,
+CYDL,Dease Lake,BC,CA,,,,,,,,,,
+CYDQ,Dawson Creek,BC,CA,,,,,,,,,,
+CYEA,Empress,AB,CA,,,,,,,,,,
+CYEG,Edmonton,AB,CA,,02,ILS,200.0,0.5,2.0,400.0,1.0,400.0,1.0
+CYEG,Edmonton,AB,CA,,12,ILS,200.0,0.5,2.0,400.0,1.0,400.0,1.0
+CYEG,Edmonton,AB,CA,,30,ILS,200.0,0.5,2.0,400.0,1.0,400.0,1.0
+CYEN,Estevan,SK,CA,,,,,,,,,,
+CYET,Edson,AB,CA,,,,,,,,,,
+CYEV,Inuvik,NT,CA,,06,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYFI,Fort McKay,AB,CA,,,,,,,,,,
+CYGB,Texada Island,BC,CA,,,,,,,,,,
+CYGE,Golden,BC,CA,,,,,,,,,,
+CYHB,Hudson Bay,SK,CA,,,,,,,,,,
+CYHE,Hope,BC,CA,,,,,,,,,,
+CYHY,Hay River,NT,CA,,32,ILS,250.0,1.0,1.0,600.0,2.0,600.0,2.0
+CYJA,Jasper,AB,CA,,,,,,,,,,
+CYJM,Fort St. James,BC,CA,,,,,,,,,,
+CYJQ,Bella Bella,BC,CA,,,,,,,,,,
+CYKA,Kamloops,BC,CA,,09,ILS,325.0,1.0,1.0,625.0,2.0,600.0,2.0
+CYKC,Collins Bay,SK,CA,,,,,,,,,,
+CYKJ,Key Lake,SK,CA,,,,,,,,,,
+CYKY,Kindersley,SK,CA,,,,,,,,,,
+CYLB,Lac La Biche,AB,CA,,,,,,,,,,
+CYLI,Lillooet,BC,CA,,,,,,,,,,
+CYLJ,Meadow Lake,SK,CA,,,,,,,,,,
+CYLL,Lloydminster,AB,CA,,08/26,RNAV GNSS,250.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYLL,Lloydminster,AB,CA,,,,,,,,,,
+CYLW,Kelowna,BC,CA,,16,ILS Y,267.0,1.0,1.0,600.0,2.0,600.0,2.0
+CYLW,Kelowna,BC,CA,,34,RNAV GNSS,1719.0,5.25,0.0,2019.0,6.25,800.0,2.0
+CYMJ,Moose Jaw,SK,CA,,,,,,,,,,
+CYMM,Fort Mcmurray,AB,CA,"If bad Wind cannot use ILS, use CYEG as alt for oilsands.",26,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYMM,Fort Mcmurray,AB,CA,,08,RNAV GNSS,250.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYNH,Hudson's Hope,BC,CA,,,,,,,,,,
+CYNJ,Langley,BC,CA,,,,,,,,,,
+CYNL,Points North Landing,SK,CA,,,,,,,,,,
+CYNR,Fort McKay,AB,CA,,,,,,,,,,
+CYOD,Cold Lake,AB,CA,,,,,,,,,,
+CYOJ,High Level,AB,CA,,13/31,RNAV GNSS,250.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYOP,Rainbow Lake,AB,CA,,,,,,,,,,
+CYPA,Prince Albert,SK,CA,,8,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYPE,Peace River,AB,CA,,04/22,RNAV GNSS,250.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYPK,Pitt Meadows,BC,CA,,,,,,,800.0,,800.0,2.0
+CYPR,PRINCE RUPERT,BC,CA,,13,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYPS,Pemberton,BC,CA,,,,,,,,,,
+CYPU,Puntzi Mountain,BC,CA,,,,,,,,,,
+CYPW,Powell River,BC,CA,,,,,,,,,,
+CYPY,Fort Chipewyan,AB,CA,no fuel,04/22,RNAV GNSS,374.0,1.25,1.0,674.0,2.25,600.0,2.0
+CYPZ,Burns Lake,BC,CA,,,,,,,,,,
+CYQD,The Pas,MB,CA,,,,,,,,,,
+CYQF,Red Deer,AB,CA,,17,RNAV GNSS,378.0,1.25,0.0,800.0,2.25,800.0,2.0
+CYQF,Red Deer,AB,CA,,12,RNAV GNSS,515.0,1.25,0.0,815.0,2.25,800.0,2.0
+CYQF,Red Deer,AB,CA,,30,RNAV GNSS,391.0,1.25,0.0,800.0,2.25,800.0,2.0
+CYQF,Red Deer,AB,CA,,35,RNAV GNSS,381.0,1.25,0.0,800.0,2.25,800.0,2.0
+CYQL,Lethbridge,AB,CA,,06,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYQQ,Comox,BC,CA,,,,,,,,,,
+CYQR,Regina,SK,CA,,13,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYQR,Regina,SK,CA,,31,RNAV GNSS,316.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYQR,Regina,SK,CA,,08,RNAV GNSS,250.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYQR,Regina,SK,CA,,26,RNAV GNSS,277.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYQU,Grande Prairie,AB,CA,,30,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYQV,Yorkton,SK,CA,,,,,,,,,,
+CYQW,North Battleford,SK,CA,,,,,,,,,,
+CYQZ,Quesnel,BC,CA,,,,,,,,,,
+CYRM,Rocky Mountain House,AB,CA,,,,,,,,,,
+CYRS,Red Sucker Lake,MB,CA,,,,,,,,,,
+CYRV,Revelstoke,BC,CA,,,,,,,,,,
+CYSD,Suffield,AB,CA,,,,,,,,,,
+CYSE,Squamish,BC,CA,,,,,,,,,,
+CYSF,Stony Rapids,SK,CA,,06/24,RNAV GNSS,619.0,2.0,0.0,919.0,3.0,800.0,2.0
+CYSM,Fort Smith,NT,CA,,12,RNAV GNSS,267.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYSM,Fort Smith,NT,CA,,30,RNAV GNSS,267.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYSQ,Atlin,BC,CA,,,,,,,,,,
+CYST,St. Theresa Point,MB,CA,,,,,,,,,,
+CYSW,Sparwood,BC,CA,,,,,,,,,,
+CYTH,Thompson,MB,CA,,06,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYVC,La Ronge,SK,CA,,,,,,,,,,
+CYVD,Virden,MB,CA,,,,,,,,,,
+CYVG,Vermilion,AB,CA,,,,,,,,,,
+CYVK,Vernon,BC,CA,,,,,,,,,,
+CYVQ,Norman Wells,NT,CA,,08LR/26RL/10/28,RNAV GNSS,301.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYVR,Vancouver,BC,CA,,08,CAT II,100.0,0.25,3.0,400.0,1.0,400.0,1.0
+CYVR,Vancouver,BC,CA,,26,CAT II,100.0,0.25,3.0,400.0,1.0,400.0,1.0
+CYVR,Vancouver,BC,CA,,13,ILS,250.0,1.0,3.0,450.0,1.5,400.0,1.0
+CYVR,Vancouver,BC,CA,,31,RNAV GNSS,346.0,1.25,0.0,800.0,2.25,800.0,2.0
+CYVT,Buffalo Narrows,SK,CA,,,,,,,,,,
+CYWG,Winnipeg,MB,CA,,13/31/36 CAT II,ILS,100.0,0.25,3.0,400.0,1.0,400.0,1.0
+CYWL,Williams Lake,BC,CA,,12/30,RNAV GNSS,500.0,1.75,0.0,800.0,2.75,800.0,2.0
+CYWM,Athabasca,AB,CA,,,,,,,,,,
+CYWN,Wainwright,AB,CA,,,,,,,,,,
+CYWV,Wainwright,AB,CA,,,,,,,,,,
+CYXC,Cranbrook,BC,CA,,,,,,,,,,
+CYXE,Saskatoon,SK,CA,,09,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYXE,Saskatoon,SK,CA,,,,,,,,,,
+CYXH,Medicine Hat,AB,CA,,03/21,RNAV GNSS,250.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYXJ,Fort Smith,BC,CA,,30,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYXS,Prince George,BC,CA,,15,ILS Y,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYXY,Whitehorse,YT,CA,,32L,ILS Y,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYXT,Terrace,BC,CA,,33,ILS Y,250.0,1.0,1.0,600.0,2.0,600.0,2.0
+CYXX,Abbotsford,BC,CA,,07,ILS,250.0,1.0,1.0,600.0,2.0,600.0,2.0
+CYYC,Calgary,AB,CA,,17,CAT II 17L/35R only,100.0,0.25,2.0,400.0,1.0,400.0,1.0
+CYYC,Calgary,AB,CA,,35,CAT II 17L/35R only,100.0,0.25,2.0,400.0,1.0,400.0,1.0
+CYYC,Calgary,AB,CA,,11,ILS,250.0,1.0,3.0,450.0,1.5,400.0,1.0
+CYYC,Calgary,AB,CA,,29,ILS,200.0,1.0,2.0,400.0,1.5,400.0,1.0
+CYYD,Smithers,BC,CA,RNAV Z  RWY15 DRESD,15/33,RNAV GNSS,671.0,2.0,0.0,971.0,3.0,800.0,2.0
+CYYE,Fort Nelson,BC,CA,,04,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYYF,Penticton,BC,CA,,,,,,,,,,
+CYYJ,Victoria,BC,CA,,09,ILS,250.0,1.0,1.0,600.0,2.0,600.0,2.0
+CYYJ,Victoria,BC,CA,,27,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYYL,Lynn Lake,MB,CA,,,,,,,800.0,,800.0,2.0
+CYYM,Cowley,AB,CA,,,,,,,800.0,,800.0,2.0
+CYYN,Swift Current,SK,CA,,,,,,,800.0,,800.0,2.0
+CYYO,Wynyard,SK,CA,,,,,,,800.0,,800.0,2.0
+CYYQ,Churchill,MB,CA,,0,0,0.0,0.0,0.0,800.0,2.0,800.0,2.0
+CYZF,Yellowknife,NT,CA,,34,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYZH,Slave Lake,AB,CA,,10,RNAV GNSS,596.0,1.75,0.0,896.0,2.75,800.0,2.0
+CYZP,Sandspit,BC,CA,,13,ILS,254.0,1.0,1.0,600.0,2.0,600.0,2.0
+CYZT,Port Hardy,BC,CA,,,,,,,800.0,,800.0,2.0
+CYZU,Whitecourt,AB,CA,,,,,,,,,,
+CYZY,Mackenzie,BC,CA,,,,,,,,,,
+CZAC,York Factory First Nation,MB,CA,,,,,,,,,,
+CZAM,Salmon Arm,BC,CA,,,,,,,,,,
+CZBB,Delta,BC,CA,,,,,,,,,,
+CZBD,Ilford,MB,CA,,,,,,,,,,
+CZEE,Kelsey,MB,CA,,,,,,,,,,
+CZFD,Fond-du-Lac,SK,CA,,,,,,,,,,
+CZFG,Pukatawagan,MB,CA,,,,,,,,,,
+CZGF,Grand Forks,BC,CA,,,,,,,,,,
+CZGI,Gods River,MB,CA,,,,,,,,,,
+CZGR,Little Grand Rapids,MB,CA,,,,,,,,,,
+CZHP,High Prairie,AB,CA,,,,,,,,,,
+CZJG,Jenpeg,MB,CA,,,,,,,,,,
+CZJN,Swan River,MB,CA,,,,,,,,,,
+CZLQ,Thicket Portage,MB,CA,,,,,,,,,,
+CZML,108 Mile Ranch,BC,CA,,,,,,,,,,
+CZMN,Pikwitonei,MB,CA,,,,,,,,,,
+CZMT,Masset,BC,CA,,,,,,,,,,
+CZNG,Poplar River First Nation,MB,CA,,,,,,,,,,
+CZNL,Nelson,BC,CA,,,,,,,,,,
+CZPC,Pincher Creek,AB,CA,,,,,,,,,,
+CZPO,Pinehouse,SK,CA,,,,,,,,,,
+CZSN,South Indian Lake,MB,CA,,,,,,,,,,
+CZST,Stewart,BC,CA,,,,,,,,,,
+CZSW,Prince Rupert,BC,CA,,,,,,,,,,
+CZTA,Bloodvein First Nation,MB,CA,,,,,,,,,,
+CZTM,Shamattawa,MB,CA,,,,,,,,,,
+CZVL,Villeneuve,AB,CA,,,,,,,,,,
+CZWH,Lac Brochet,MB,CA,,,,,,,,,,
+CZWL,Wollaston Lake,SK,CA,,,,,,,,,,
+KABQ,Albuquerque,New Mexico,US,,,,,,,400.0,1.0,,
+KLAX,Los Angeles,California,US,,,,,,,400.0,1.0,,
+NSTU,PAGO PAGO,,US,Flaps 15,05,ILS,812.0,1.875,1.0,1212.0,2.875,600.0,2.0
+PGSN,Saipan,,US,,07,ILS,200.0,0.5,1.0,600.0,1.5,600.0,2.0
+PGSN,Saipan,,US,,25,RNAV GNSS,390.0,1.125,0.0,790.0,2.125,800.0,2.0
+PGUM,Guam,,US,Flaps 5,06,ILS,334.0,0.5,2.0,734.0,1.5,400.0,1.0
+PGUM,Guam,,US,Flaps 5,24,RNAV GNSS,887.0,2.75,0.0,1287.0,3.75,800.0,2.0
+PHLI,Lihue,,US,,35,ILS,200.0,0.5,1.0,600.0,1.5,600.0,2.0
+PHNL,Honolullu,,US,,26,RNAV GNSS,250.0,0.75,1.0,650.0,1.75,600.0,2.0
+PHNL,Honolullu,,US,,08,ILS,200.0,0.5,2.0,600.0,1.5,400.0,1.0
+PHNL,Honolullu,,US,,04,ILS,300.0,0.5,2.0,700.0,1.5,400.0,1.0
+PKMJ,MAJURO,,US,RWY performance check is required. Flaps 15. Change to Bleeds off/APU on if higher MTOW required,07,RNAV GNSS,453.0,1.375,0.0,853.0,2.375,800.0,2.0
+PKWA,KWAJALEIN,,US,"No LGT for night operation. Flaps 15. JP-5 only, no refuel",06,RNAV GNSS,464.0,1.25,0.0,864.0,2.25,800.0,2.0
+PMDY,Midway,,US,,06,RNAV GNSS,448.0,1.375,0.0,848.0,2.375,800.0,2.0
+PTKK,CHUUK,,US,RWY performance check is required. Flaps 15,04,RNAV GNSS,410.0,3.0,0.0,810.0,4.0,,
+PTPN,POHNPEI,,US,RWY performance check is required. Flaps 15. Fuel available,09,RNAV GNSS,951.0,3.0,0.0,1351.0,4.0,,
+PTRO,Palau International,,US,Flaps 15,09,RNAV GNSS,483.0,1.375,0.0,883.0,2.375,,
+PTSA,KOSRAE,,US,Flaps 15,05,RNAV GNSS,450.0,2.0,0.0,850.0,3.0,,
+RCNN,Taiwan,,US,,,,,,,400.0,1.0,,
+RJAA,NARITA INTL,,US,,,,,,,400.0,1.0,,
+VHHH,Hong Kong,,US,Take max of 2 approaches +800m vis & +200ft ceiling,07,CAT II,100.0,0.186411,3.0,500.0,1.186411,400.0,1.0
+VHHH,Hong Kong,,US,Take max of 2 approaches +800m vis & +200ft ceiling,25,CAT II,100.0,0.21748,3.0,500.0,1.2174800000000001,400.0,1.0
+VMMC,Macau,,US,,16/34,CAT II ILS X,100.0,0.25,1.0,500.0,1.25,600.0,2.0
+YSSY,Sydney,,US,,16R/34L,CAT II,100.0,0.2,3.0,500.0,1.2,400.0,1.0
+YSSY,Sydney,,US,,07/25,ILS,210.0,1.0,3.0,610.0,2.0,400.0,1.0
+YSSY,Sydney,,US,,16L/34R,ILS,207.0,0.8,3.0,607.0,1.8,400.0,1.0
+NCRG,Rarotonga,,US,,08/26,ILS,400.0,1.24,2.0,800.0,2.24,400.0,1.0
+NSFA,Faleolo,,US,,08,ILS,292.0,0.8,1.0,692.0,1.8,600.0,2.0
+PWAK,Wake Island,,US,Military,10,RNAV GNSS,437.0,1.25,0.0,837.0,2.25,800.0,2.0
+PWAK,Wake Island,,US,Military,28,RNAV GNSS,440.0,1.25,0.0,840.0,2.25,800.0,2.0
+PTYA,Yap,,US,Flaps 15,07/25,RNAV GNSS,509.0,1.5,,909.0,2.5,800.0,2.0
+---,No Entry,,,,---,,-1.0,-1.0,,,,800.0,2.0
+KMIA,Miami Int,,US,,,,,,,400.0,1.0,800.0,2.0
+MYNN,Lynden Int,,US,,,,,,,400.0,1.0,800.0,2.0
+MTPP,"Toussaint, Haiti",,US,,10,ILS,486.0,1.5,1.0,886.0,2.5,600.0,2.0
+CYCX,Gagetown,,CA,,,,,,,800.0,,800.0,2.0
+CYSJ,Saint John,NB,CA,,05/23,ILS,200.0,0.5,2.0,400.0,1.0,400.0,1.0
+CYQI,Yarmouth,NS,CA,,06/15/24/33,RNAV GNSS,250.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYFC,Frederiction,NB,CA,,09,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+KMCO,Orlando,,US,,17LR/35RL/18R/36R,ILS,200.0,0.5,6.0,600.0,1.5,400.0,1.0
+MDSD,Las Americas,,US,,17/35,RNAV GNSS,450.0,,,850.0,1.0,,
+CYHM,Hamilton,,CA,,12,ILS,100.0,0.25,1.0,600.0,2.0,600.0,2.0
+KRSW,SW Florida Int,,US,,06/24,RNAV GNSS,348.0,1.25,0.0,748.0,2.25,800.0,2.0
+CYUL,Montreal,QC,CA,,06/24,ILS,200.0,0.5,2.0,400.0,1.0,400.0,1.0
+CYQB,Quebec,QC,CA,,06,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+MUVR,"Varadero, Matanzas, CU",,CA,,06,,230.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYFB,Iqaluit,NU,CA,,34,ILS,200.0,0.75,1.0,600.0,2.0,600.0,2.0
+CYYZ,Toronto,ON,CA,,05/06LR/15LR/23/24LR/33LR,ILS,200.0,0.5,5.0,400.0,1.0,400.0,1.0
+CYHD,Dryden,ON,CA,,12,ILS,250.0,1.0,1.0,600.0,2.0,600.0,2.0
+CYQT,Thunder Bay,ON,CA,,07,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYXL,Sioux Lookout,ON,CA,,16/34,RNAV GNSS,447.0,1.5,0.0,800.0,2.5,800.0,2.0
+CYVZ,Deer Lake,ON,CA,No Fuel. TAF refer to CZSJ,13/31,RNAV GNSS,663.0,2.0,0.0,963.0,3.0,800.0,2.0
+CZSJ,Sandy Lake,ON,CA,"TAF for Deer Lake, RWY info as CYVZ",13/31,RNAV GNSS,663.0,2.0,0.0,963.0,3.0,800.0,2.0
+PGRO,Manglona International,,US,,09/27,RNAV GNSS,493.0,1.375,0.0,893.0,2.375,800.0,2.0
+CYVP,Kuujjuaq,QC,CA,,07,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+VVTS,Ho Chi Ming,,US,,,,,,,400.0,1.0,,
+CYQX,Gander Int',NL,CA,,03/13,ILS,200.0,0.5,2.0,400.0,1.0,400.0,1.0
+CYYT,St. John's Int',NL,CA,,10/28/16,ILS,200.0,0.5,3.0,400.0,1.0,400.0,1.0
+LFML,Marseille/Provence,,CA,,13LR/31R,ILS,300.0,,3.0,500.0,,400.0,1.0
+PHTO,Hilo,,US,,26,ILS,250.0,0.75,1.0,650.0,1.75,600.0,2.0
+PHTO,Hilo,,US,,08,No,999.0,999.0,0.0,1399.0,1000.0,800.0,2.0
+VECC,"Kolkata, West Bengal, IN",,US,,19,CAT II,100.0,0.186411,2.0,500.0,1.186411,400.0,1.0
+VECC,"Kolkata, West Bengal, IN",,US,,01,CAT II,100.0,0.186411,2.0,500.0,1.186411,400.0,1.0
+MPTO,Panama City,,US,,03,ILS,203.0,0.497097,1.0,603.0,1.4970970000000001,600.0,2.0
+MPTO,Panama City,,US,,21,RNAV GNSS,1006.0,2.982582,0.0,1406.0,3.982582,800.0,2.0
+PHKO,KONA,,US,,17,ILS,200.0,0.5,1.0,600.0,1.5,600.0,2.0
+PHKO,KONA,,US,,35,RNAV GNSS,420.0,1.125,0.0,820.0,2.125,800.0,2.0
+KOAK,Oakland,,US,,30,ILS,100.0,0.25,3.0,500.0,1.25,400.0,1.0
+KOAK,Oakland,,US,CAT 1 available,12,ILS,200.0,0.5,3.0,600.0,1.5,400.0,1.0
+KOAK,Oakland,,US,,28,L,378.0,1.0,2.0,778.0,2.0,400.0,1.0
+KSJC,San Jose,,US,,30,CAT II,100.0,0.25,2.0,500.0,1.25,400.0,1.0
+KSJC,San Jose,,US,,12,ILS,205.0,0.5,2.0,605.0,1.5,400.0,1.0
+CYYR,Goose Bay,NL,CA,,08,ILS,200.0,0.5,1.0,600.0,2.0,600.0,2.0
+CYYR,Goose Bay,NL,CA,,26,RNAV GNSS,250.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYYR,Goose Bay,NL,CA,,15,RNAV GNSS,250.0,1.0,0.0,800.0,2.0,800.0,2.0
+CYYR,Goose Bay,NL,CA,,33,RNAV GNSS,417.0,1.25,0.0,800.0,2.25,800.0,2.0
+EGLL,Heathrow,,US,,09,CAT II,100.0,0.2,2.0,500.0,1.2,400.0,1.0
+EGLL,Heathrow,,US,,27,CAT II,100.0,0.2,2.0,500.0,1.2,400.0,1.0
+NFTF,Tonga,,US,NOT Open on SUNDAY!!! Sat FLT cant use,11,RNAV GNSS,338.0,1.0,0.0,738.0,2.0,800.0,2.0
+NFTF,Tonga,,US,NOT Open on SUNDAY!!! Sat FLT cant use,29,RNAV GNSS,396.0,1.5,0.0,796.0,2.5,800.0,2.0
+
+airline,dest,alt
+ACB,CYYC,CYEG
+ACB,CYEG,CYYC
+ACB,CYVR,CYYJ
+ACB,CYMM,CYEG
+ACB,CET2,CYMM
+ACB,CFN6,CYEG
+ACB,CRL4,CYMM
+ACB,CAL4,CYMM
+ACB,CCL3,CYMM
+ACB,CYXJ,CYQU
+ACB,CYXT,CYXS
+ACB,CYCD,CYVR
+ACB,CYLW,CYVR
+ACB,CYKA,CTVR
+ACB,CYXS,CYQU
+ACB,CYZF,N/A
+ACB,CYVR,CYYJ
+CFL,CYZF,CYEG/CYHY
+CFL,CYEG,CYQF
+CFL,CYEV,CYVQ
+CFL,CYVQ,CYEG
+NGE,PKMJ,PKWA
+NGE,PKWA,PKMJ
+NGE,NSTU,NSFA
+NGE,PGUM,PGSN
+NGE,PHNL,PHLI
+NGE,PTPN,PTKK
+NGE,PGUM,PGSN
+NGE,PGSN,PGUM
+NGE,PTKK,PTPN
+NGE,PTRO,PTYA
+NGE,PTSA,PKWA
+NGE,RCNN,RCTP
+NGE,RJAA,RJGG
+NGE,KLAX,KONT
+NGE,KABQ,KPHX
+NGE,YSSY,YSBC
+NGE,VHHH,VMMC
+ACB,CYLL,CYEG`;
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let airportDB  = {};
+let preferAlt  = {};
+let rawTafStore = {};
+
+// ═══════════════════════════════════════════
+// PARSE CSV TEXT → populate airportDB / preferAlt
+// ═══════════════════════════════════════════
+function parseAndLoadCSV(raw){
+  const sections = raw.split(/\n\s*\n/);
+  const parseCSVSection = txt => {
+    const lines = txt.trim().split('\n').filter(l=>l.trim());
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
+    return lines.slice(1).map(line=>{
+      const vals = splitCSVLine(line);
+      const obj = {};
+      headers.forEach((h,i)=>{ obj[h]=vals[i]||''; });
+      return obj;
+    });
+  };
+  const airports = sections.length>=1 ? parseCSVSection(sections[0]).map(r=>({
+    icao:        (r.icao||'').toUpperCase(),
+    name:        r.name||'',
+    province:    r.province||'',
+    country:     r.country||'',
+    remarks:     r.remarks||'',
+    rwy:         r.rwy||'',
+    eqp:         r.eqp||'',
+    dh_agl:      r.dh_agl!==''&&r.dh_agl!=null?parseFloat(r.dh_agl):null,
+    vis:         r.vis!==''&&r.vis!=null?parseFloat(r.vis):null,
+    num_ils:     r.num_ils!==''&&r.num_ils!=null?parseFloat(r.num_ils):null,
+    alt_ht:      r.alt_ht!==''&&r.alt_ht!=null?parseFloat(r.alt_ht):null,
+    alt_vis:     r.alt_vis!==''&&r.alt_vis!=null?parseFloat(r.alt_vis):null,
+    can_std_ld:  r.can_std_ld!==''&&r.can_std_ld!=null?parseFloat(r.can_std_ld):null,
+    can_std_vis: r.can_std_vis!==''&&r.can_std_vis!=null?parseFloat(r.can_std_vis):null,
+  })) : [];
+  const prefAlts = sections.length>=2 ? parseCSVSection(sections[1]).map(r=>({
+    airline:(r.airline||'').toUpperCase(),
+    dest:   (r.dest||'').toUpperCase(),
+    alt:    (r.alt||'').toUpperCase()
+  })) : [];
+
+  airportDB = {};
+  airports.forEach(ap=>{
+    if (!ap.icao||ap.icao==='---') return;
+    const k=ap.icao;
+    if (!airportDB[k]) airportDB[k]=[];
+    airportDB[k].push(ap);
+  });
+  preferAlt = {};
+  prefAlts.forEach(p=>{
+    if (!p.airline||!p.dest) return;
+    preferAlt[`${p.airline} ${p.dest}`]=(p.alt||'').toUpperCase();
+  });
+  return Object.keys(airportDB).length;
+}
+
+
+
+// ═══════════════════════════════════════════
+// PRE-FILL
+// ═══════════════════════════════════════════
+['CYEG','CYQF','CYYC','CYMM','CYVR'].forEach((ap,i)=>{
+  const el = document.getElementById(`ap${i+1}`);
+  if (el) el.value = ap;
+});
+
+// ═══════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════
+function updateClock(){
+  const n = new Date();
+  const dd = String(n.getUTCDate()).padStart(2,'0');
+  const hh = String(n.getUTCHours()).padStart(2,'0');
+  const mm = String(n.getUTCMinutes()).padStart(2,'0');
+  document.getElementById('clock').textContent = `${dd}${hh}${mm}Z`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ═══════════════════════════════════════════
+// DB LOAD
+// ═══════════════════════════════════════════
+function loadDb(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const st = document.getElementById('db-status');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const raw = ev.target.result;
+      let csvText = raw;
+      if (!file.name.endsWith('.csv')) {
+        // JSON fallback: convert to internal structure directly
+        const d = JSON.parse(raw);
+        const list = Array.isArray(d) ? d : (d.airports||[]);
+        airportDB = {};
+        list.forEach(ap=>{
+          if (!ap.icao) return;
+          const k=ap.icao.toUpperCase();
+          if (!airportDB[k]) airportDB[k]=[];
+          airportDB[k].push(ap);
+        });
+        preferAlt = {};
+        (d.prefer_alt||[]).forEach(p=>{
+          if (!p.airline||!p.dest) return;
+          preferAlt[`${p.airline.toUpperCase()} ${p.dest.toUpperCase()}`]=(p.alt||'').toUpperCase();
+        });
+st.textContent=`\u2713 ${Object.keys(airportDB).length} AP`;
+        st.className='db-pill ok';
+        const dlBtn=document.getElementById('db-dl-btn'); if(dlBtn){dlBtn.disabled=false;dlBtn.classList.add('ok');}
+        
+        return;
+      }
+      const n = parseAndLoadCSV(csvText);
+      st.textContent = `\u2713 ${n} AP`;
+      st.className = 'db-pill ok';
+    } catch(err) {
+      st.textContent = '\u2717 Parse error';
+      st.className = 'db-pill err';
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function splitCSVLine(line){
+  const result = []; let cur = ''; let inQ = false;
+  for (let i=0;i<line.length;i++){
+    const c = line[i];
+    if (c==='"'){ inQ=!inQ; }
+    else if (c===','&&!inQ){ result.push(cur.trim()); cur=''; }
+    else cur+=c;
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+// Load default DB immediately
+(function(){
+  const n = parseAndLoadCSV(DEFAULT_CSV);
+  const st = document.getElementById('db-status');
+
+    if (st){ st.textContent=`\u2713 ${n} AP (default)`; st.className='db-pill ok'; }
+  const dlBtn=document.getElementById('db-dl-btn'); if(dlBtn){dlBtn.disabled=false;dlBtn.classList.add('ok');}
+})();
+
+// ═══════════════════════════════════════════
+// FETCH
+// ═══════════════════════════════════════════
+async function fetchAll(){
+  const icaos = [];
+  for (let i=1;i<=9;i++){
+    const v=(document.getElementById(`ap${i}`)?.value||'').trim().toUpperCase();
+    if (v.length>=3) icaos.push(v);
+  }
+  if (!icaos.length) return;
+
+  // If TEST is in the list, open the sandbox modal and stop normal fetch
+  if (icaos.includes('TEST')) {
+    openTestModal();
+    // Still fetch the other real airports in the background
+    const realIcaos = icaos.filter(i=>i!=='TEST');
+    if (realIcaos.length) {
+      const btn = document.getElementById('fetch-btn');
+      btn.disabled = true;
+      try {
+        const url = `${TAF_PROXY}?ids=${encodeURIComponent(realIcaos.join(','))}`;
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const raw = await resp.text();
+          if (raw && !raw.startsWith('ERROR')) {
+            const tafMap = parseTAFBundle(raw);
+            Object.assign(rawTafStore, tafMap);
+          }
+        }
+      } catch(e){}
+      btn.disabled = false;
+    }
+    return;
+  }
+
+  const btn = document.getElementById('fetch-btn');
+  btn.disabled = true;
+  setStatus(`<div class="spinner"></div> Fetching TAF for ${icaos.join(', ')}\u2026`);
+
+  try {
+    const url = `${TAF_PROXY}?ids=${encodeURIComponent(icaos.join(','))}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const raw = await resp.text();
+    if (!raw||raw.startsWith('ERROR')) throw new Error(raw||'Empty response');
+
+    const tafMap = parseTAFBundle(raw);
+    rawTafStore = tafMap;
+    const now = new Date();
+    buildGrid(icaos, tafMap, now);
+    setStatus(`Updated ${fmtUTC(now)} \u2014 ${icaos.length} airports`);
+  } catch(err){
+    setStatus(`\u2717 ${err.message}`);
+  }
+  btn.disabled = false;
+}
+
+function setStatus(html){
+  document.getElementById('status-bar').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════
+// TAF PARSE
+// ═══════════════════════════════════════════
+function parseTAFBundle(raw){
+  const map = {};
+  const lines = raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  let curIcao=null, curLines=[];
+
+const flush=()=>{
+    if (curIcao&&curLines.length){
+      let joined = curLines.join(' ').replace(/\s+/g,' ').trim();
+      // Strip any METAR/SPECI data that got concatenated after the TAF
+      const metarCut = joined.search(/\b(METAR|SPECI)\b/);
+      if (metarCut > -1) joined = joined.slice(0, metarCut).trim();
+      map[curIcao] = joined;
+    }
+    curIcao=null; curLines=[];
+  };
+
+  lines.forEach(line=>{
+    const t = line.trim();
+    if (!t) return;
+    const tafM = t.match(/^TAF(?:\s+AMD|\s+COR)?\s+([A-Z]{4})\b/);
+    if (tafM){ flush(); curIcao=tafM[1]; curLines=[t]; return; }
+    if (!curIcao&&t.match(/^[A-Z]{4}\s+\d{6}Z\b/)) return;
+    if (curIcao) curLines.push(t);
+  });
+  flush();
+  return map;
+}
+
+function parseTAF(raw, refDate){
+  const text = raw.replace(/\s+/g,' ').trim();
+  const groups = [];
+
+  let issueTime = null;
+  const itM = text.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
+  if (itM){
+    issueTime = d2date(+itM[1], +itM[2]);
+  }
+
+  function d2date(dd,hh){
+    const y=refDate.getUTCFullYear(), mo=refDate.getUTCMonth(), curD=refDate.getUTCDate();
+    let m=mo;
+    if (dd<curD-15){m=mo+1;} else if (dd>curD+15){m=mo-1;}
+    if (m>11) m=0; if (m<0) m=11;
+    return new Date(Date.UTC(y,m,dd,hh,0,0));
+  }
+
+const vM = text.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b(?!\d)/);
+  const validFrom = vM ? d2date(+vM[1],+vM[2]) : null;
+  const validTo   = vM ? d2date(+vM[3],+vM[4]) : null;
+
+  let nextFcst = null;
+  if (issueTime){
+    const h = issueTime.getUTCHours();
+    const nextH = [0,6,12,18,24].find(x=>x>h) || 24;
+    nextFcst = new Date(issueTime);
+    nextFcst.setUTCHours(nextH<24?nextH:0,0,0,0);
+    if (nextH>=24) nextFcst.setUTCDate(nextFcst.getUTCDate()+1);
+    nextFcst = new Date(nextFcst.getTime()+30*60000);
+  }
+
+  const SEP = /\b(FM\d{6}|TEMPO\s+\d{4}\/\d{4}|BECMG\s+\d{4}\/\d{4}|PROB\d{2}(?:\s+TEMPO)?\s+\d{4}\/\d{4})\b/g;
+  const positions=[]; let m;
+  while((m=SEP.exec(text))!==null) positions.push({idx:m.index,kw:m[0]});
+
+  function kwToTime(kw){
+    const fm=kw.match(/FM(\d{2})(\d{2})(\d{2})/);
+    if (fm) return d2date(+fm[1],+fm[2]);
+    const t4=kw.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+    if (t4) return d2date(+t4[1],+t4[2]);
+    return null;
+  }
+
+const isMetric = !/(?:P6SM|\d+SM|\d+\/\d+SM)/.test(text);
+  const initTxt = positions.length ? text.slice(0,positions[0].idx) : text;
+  if (validFrom){
+    groups.push({type:'BASE',from:validFrom,to:positions.length?(kwToTime(positions[0].kw)||validTo):validTo,wx:parseWx(initTxt,isMetric)});
+  }
+  positions.forEach((pos,i)=>{
+    const nextPos=positions[i+1];
+    const seg=text.slice(pos.idx, nextPos?nextPos.idx:text.length);
+    const kw=pos.kw;
+    let type='FM',from=null,to=null;
+if (kw.startsWith('FM')){
+      type='FM'; from=kwToTime(kw);
+      const nextFM=positions.slice(i+1).find(p=>p.kw.startsWith('FM')||p.kw.startsWith('BECMG'));
+      to=nextFM?(kwToTime(nextFM.kw)||validTo):validTo;
+    } else {
+      const t4=kw.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+      if (t4){from=d2date(+t4[1],+t4[2]);to=d2date(+t4[3],+t4[4]);}
+      if (kw.includes('BECMG')) type='BECMG';
+      else if (kw.includes('TEMPO')) type='TEMPO';
+      else {const p=kw.match(/PROB(\d+)/); type=p?`PROB${p[1]}`:'PROB';}
+    }
+if (from) {
+      // Strip group header (e.g. "PROB40 0107/0113 ") before parsing wx.
+      // Without this, "0113 1/2SM" gets parsed as integer 0113 + fraction 1/2 = 113.5SM → P6.
+      const wxSeg = seg.replace(/^(?:FM\d{6}|TEMPO\s+\d{4}\/\d{4}|BECMG\s+\d{4}\/\d{4}|PROB\d{2}(?:\s+TEMPO)?\s+\d{4}\/\d{4})\s*/,'');
+      groups.push({type,from,to,wx:parseWx(wxSeg,isMetric)});
+    }
+  });
+
+  return {groups,validFrom,validTo,issueTime,nextFcst,rawText:text};
+}
+
+function parseWx(text, isMetric){
+  const wx={windDir:null,windSpd:null,windGust:null,wind:null,vis:null,visTxt:null,ceiling:null,clouds:[],phenomena:[]};
+  // Strip TX/TN temperature groups before any other parsing
+  text = text.replace(/\bT[XN]-?\d+\/\d{4}Z\b/g,'');
+  const wM=text.match(/\b(VRB|\d{3})(\d{2,3})(G(\d{2,3}))?KT\b/);
+  if (wM){wx.windDir=wM[1];wx.windSpd=+wM[2];wx.windGust=wM[4]?+wM[4]:null;wx.wind=wM[0];}
+
+  // Vis parsing — SM TAF vs Metric TAF
+  let vM;
+  if (isMetric){
+    // KM TAF: match 9999 or standalone 4-digit metres (DDHH/DDHH validity windows excluded by requiring no / before or after)
+    vM = text.match(/(?:^|\s)(9999|0[0-9]{3}|[1-8]\d{3}|9[0-8]\d{2})(?=\s|$)/);
+  } else {
+    // SM TAF: match P6SM, fractions, integers with SM suffix
+    vM = text.match(/\b(P6SM|(?:\d+\s+)?\d+\/\d+SM|\d+SM)/);
+  }
+
+  if (vM){
+    const vs=(vM[1]||vM[0]).trim(); wx.visTxt=vs;
+    if (vs==='9999'){
+      wx.vis=6.5; wx.visDisp='9999'; wx.visMetric=true;
+    } else if (/^\d{4}$/.test(vs)){
+      const metres=parseInt(vs,10);
+      wx.vis=metres/1609.34;
+      wx.visDisp=metres>=1000?`${metres/1000}km`:`${metres}m`;
+      wx.visMetric=true;
+    } else if (vs.startsWith('P')){
+      wx.vis=6.5; wx.visDisp=vs.replace('SM','').trim();
+    } else {
+      wx.vis=parseFrac(vs.replace('SM','').trim());
+      wx.visDisp=vs.replace('SM','').trim();
+    }
+  }
+
+  const cP=/\b(FEW|SCT|BKN|OVC)(\d{3})\b/g; let cm;
+  while((cm=cP.exec(text))!==null) wx.clouds.push({cover:cm[1],ht:+cm[2]*100});
+
+if (/\b(SKC|CLR|NSC|NCD)\b/.test(text)){wx.ceiling=99999;wx.clouds.push({cover:'SKC',ht:99999});}
+  else if (/\bCAVOK\b/.test(text)){wx.ceiling=99999;wx.vis=6.5;wx.visTxt='CAVOK';wx.clouds.push({cover:'CAVOK',ht:99999});}
+  else {
+    const brk=wx.clouds.filter(c=>c.cover==='BKN'||c.cover==='OVC');
+    const vvM=text.match(/\bVV(\d{3})\b/);
+    const vvHt=vvM?+vvM[1]*100:null;
+    const candidates=[...brk.map(c=>c.ht), ...(vvHt!==null?[vvHt]:[])];
+    if (candidates.length) wx.ceiling=Math.min(...candidates);
+  }
+
+  const PHENOM=['TSRA','+TSRA','-TSRA','FZRA','-FZRA','+FZRA','-FZDZ','FZDZ','+FZDZ','FZFG','BCFG','FG','SHSNRA','-SHSNRA','+SHSNRA','SHRASN','-SHRASN','+SHRASN','SHSN','-SHSN','+SHSN','SHRA','-SHRA','+SHRA','RASN','-RASN','+RASN','-RA','+RA','RA','RADZ','-RADZ','+RADZ','-SN','+SN','SN','-DZ','+DZ','DZ','BR','HZ','TS','GR','GS','SQ','BLSN','VA','PO','FC','PL','+PL','-PL','-SNPL','SNPL','+SNPL','-RAPL','+RAPL','RAPL','-GR','GR','+GR','-GS','GS','+GS'];
+  const rмkIdx = text.search(/\bRMK\b/);
+  const wxText = rмkIdx > -1 ? text.slice(0, rмkIdx) : text;
+  const wxNorm = wxText.replace(/\b(\d)\s+(\d\/\d+SM)\b/g, '$1 $2');
+  const tokens = wxNorm.split(/\s+/).filter(t => !/^\d+$/.test(t) || false);
+PHENOM.forEach(p=>{
+    if (tokens.includes(p) && !wx.phenomena.includes(p)) wx.phenomena.push(p);
+  });
+  // Catch any TS variant not in the list (TSGR, TSRAGR, +TSRASN, etc.)
+  tokens.forEach(tok=>{
+    if (/^[+-]?TS/.test(tok) && !wx.phenomena.includes(tok)) wx.phenomena.push(tok);
+  });
+  
+  
+  return wx;
+}
+
+function parseFrac(s){
+  s=s.trim();
+  return s.split(/\s+/).reduce((sum,p)=>{
+    if (p.includes('/')){ const [n,d]=p.split('/'); return sum+parseFloat(n)/parseFloat(d); }
+    return sum+(parseFloat(p)||0);
+  },0);
+}
+
+// ═══════════════════════════════════════════
+// WX AT HOUR
+// ═══════════════════════════════════════════
+function getWxAtHour(groups, hourDate){
+  const main=groups.filter(g=>['BASE','FM','BECMG'].includes(g.type));
+  const overlays=groups.filter(g=>g.type==='TEMPO');  let base=null;
+  for (let i=main.length-1;i>=0;i--){
+    if (main[i].from<=hourDate){base=main[i];break;}
+  }
+  let overlay=null;
+for (const o of overlays){
+    if (hourDate>=o.from&&o.to&&hourDate<o.to){overlay=o;break;}
+  }
+if (!base) return null;
+  const wx={...base.wx};
+  if (overlay){
+    const o=overlay.wx;
+    if (o.windSpd!==null){wx.windSpd=o.windSpd;wx.windGust=o.windGust;wx.windDir=o.windDir;wx.wind=o.wind;}
+if (o.vis!==null){wx.vis=o.vis;wx.visTxt=o.visTxt;wx.visDisp=o.visDisp;wx.visMetric=o.visMetric;}    if (o.ceiling!==null) wx.ceiling=o.ceiling;
+    if (o.phenomena.length) wx.phenomena=[...new Set([...o.phenomena])];
+    wx.overlayType=overlay.type;
+  }
+const becmgGroups=groups.filter(g=>g.type==='BECMG');
+  const fmGroups=groups.filter(g=>g.type==='FM'||g.type==='BASE');
+  for (const bg of becmgGroups){
+    const b=bg.wx;
+    if (hourDate<bg.from) continue;
+    // Skip this BECMG entirely if an FM group starts between bg.from and hourDate
+    // i.e. an FM has superseded this BECMG
+const superseded=fmGroups.some(fm=>fm.from>bg.from&&fm.from<=hourDate);
+    if (superseded) continue;
+    const afterEnd=bg.to&&hourDate>=bg.to;
+    if (b.windSpd!==null){
+      const peakBase=Math.max(wx.windSpd??0,wx.windGust??0);
+      const peakBecmg=Math.max(b.windSpd,b.windGust??0);
+      if (peakBecmg>=peakBase||afterEnd){
+        wx.windSpd=b.windSpd;wx.windGust=b.windGust;wx.windDir=b.windDir;wx.wind=b.wind;
+      }
+    }
+    if (b.vis!==null){wx.vis=b.vis;wx.visTxt=b.visTxt;wx.visDisp=b.visDisp;wx.visMetric=b.visMetric;}
+    if (b.ceiling!==null) wx.ceiling=b.ceiling;
+    if (b.phenomena.length) wx.phenomena=[...new Set([...b.phenomena])];
+  }
+  return wx;
+}
+
+function getCategory(ceil,vis){
+  if (ceil===null&&vis===null) return 'UNK';
+  const c=ceil??99999, v=vis??99;
+  if (c<500||v<1) return 'LIFR';
+  if (c<1000||v<3) return 'IFR';
+  if (c<3000||v<5) return 'MVFR';
+  return 'VFR';
+}
+
+function limitCheck(val, threshold, type){
+  if (val===null||threshold===null) return null;
+  if (type==='ceil'){
+    if (val < threshold) return 'BELOW';
+    if (val < threshold*1.1 || val===threshold) return 'ATLIM';
+  } else {
+    if (val < threshold) return 'BELOW';
+    if (val < threshold*1.1 || val===threshold) return 'ATLIM';
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════
+// BUILD GRID
+// ═══════════════════════════════════════════
+function buildGrid(icaos, tafMap, now){
+  const airline=(document.getElementById('airline')?.value||'ACB').trim().toUpperCase();
+
+  // Build hours array
+  const hours=[];
+  const startH=new Date(now);
+  startH.setUTCMinutes(0,0,0);
+  startH.setUTCHours(startH.getUTCHours()-HOURS_BACK);
+  for (let i=0;i<=HOURS_BACK+HOURS_FWD;i++){
+    const h=new Date(startH); h.setUTCHours(h.getUTCHours()+i); hours.push(h);
+  }
+  const nowHourIdx=HOURS_BACK;
+
+  // Date header row
+let dayHdrRow='';
+  let hourHdrRow='';
+  let runDay=-1, isFirstDay=true;
+
+  hours.forEach((h,idx)=>{
+    const day=h.getUTCDate();
+    const isNow=idx===nowHourIdx;
+    const hh=String(h.getUTCHours()).padStart(2,'0');
+    if (day!==runDay){
+      runDay=day; isFirstDay=false;
+    }
+    hourHdrRow+=`<th class="hr-cell time-hdr ${isNow?'now-col':''}">${hh}</th>`;
+  });
+  
+  
+  // Per-airport rows
+  let bodyHtml='';
+
+  icaos.forEach(icao=>{
+    const tafRaw=tafMap[icao];
+    const dbEntries=airportDB[icao]||[];
+    const db=dbEntries[0]||null;
+    const prefAlt=preferAlt[`${airline} ${icao}`]||null;
+
+// Best minimums — computed dynamically, wind-independent fallback for labels
+computeAltMinima._windDir = null;
+    computeAltMinima._windSpd = 0;
+    const _fallbackMins = computeAltMinima(dbEntries);
+    const altHt  = _fallbackMins ? _fallbackMins.alt_ht  : null;
+    const altVis = _fallbackMins ? _fallbackMins.alt_vis : null;
+
+    const numIls=dbEntries.reduce((mx,e)=>Math.max(mx,e.num_ils||0),0);
+    const apName=db?.name||'';
+    const rwy=dbEntries.map(e=>e.rwy).filter(Boolean).join('/');
+    const eqp=dbEntries.map(e=>e.eqp).filter(Boolean).join('/');
+    const remarks=db?.remarks||'';
+
+    let parsed=null;
+    if (tafRaw){ try{ parsed=parseTAF(tafRaw,now); }catch(e){} }
+    const probGroups = parsed ? parsed.groups.filter(g=>g.type.startsWith('PROB')) : [];
+
+
+    const hourlyWx=hours.map(h=>{
+      if (!parsed) return null;
+      if (parsed.validFrom&&h<parsed.validFrom) return null;
+      if (parsed.validTo&&h>parsed.validTo) return null;
+      return getWxAtHour(parsed.groups,h);
+    });
+
+    const curWx=hourlyWx[nowHourIdx];
+    const curCat=curWx?getCategory(curWx.ceiling,curWx.vis):(tafRaw?'UNK':'NOTAF');
+
+let overallLimit=null;
+    for (let i=nowHourIdx;i<hours.length;i++){
+      const wx=hourlyWx[i];
+      if (!wx) continue;
+      const hrMins = computeAltMinima(dbEntries) || {alt_ht:altHt, alt_vis:altVis};
+      if (!hrMins.alt_ht && !hrMins.alt_vis) continue;
+      const cc=wx.ceiling!==null?limitCheck(wx.ceiling,hrMins.alt_ht,'ceil'):null;
+      const vc=wx.vis!==null?limitCheck(wx.vis,hrMins.alt_vis,'vis'):null;
+      if (cc==='BELOW'||vc==='BELOW'){ overallLimit='BELOW'; break; }
+      if ((cc==='ATLIM'||vc==='ATLIM')&&overallLimit!=='BELOW') overallLimit='ATLIM';
+    }
+    if (parsed) {
+      for (let i=nowHourIdx;i<hours.length;i++){
+        const h=hours[i];
+        if (parsed.validFrom&&h<parsed.validFrom) continue;
+        if (parsed.validTo&&h>parsed.validTo) continue;
+for (const pg of probGroups){
+          if (h>=pg.from&&pg.to&&h<pg.to){
+            const wx=pg.wx;
+            const altMins=computeAltMinima(dbEntries)||{alt_ht:altHt,alt_vis:altVis};
+            if (!altMins.alt_ht&&!altMins.alt_vis) continue;
+            const cc=wx.ceiling!==null?limitCheck(wx.ceiling,altMins.alt_ht,'ceil'):null;
+            const vc=wx.vis!==null?limitCheck(wx.vis,altMins.alt_vis,'vis'):null;
+            if ((cc==='BELOW'||cc==='ATLIM'||vc==='BELOW'||vc==='ATLIM')&&overallLimit!=='BELOW')
+              overallLimit='ATLIM';
+          }
+        }
+      }
+    }
+
+    // TAF validity info
+    let tafInfoHtml='';
+    if (parsed){
+      const iss=parsed.issueTime?`<span class="taf-time-block">ISSUE ${fmtUTC(parsed.issueTime)}</span>`:'';
+      const vld=parsed.validTo?`<span class="taf-time-block valid">VALID TO ${fmtUTC(parsed.validTo)}</span>`:'';
+      const nxt=parsed.nextFcst?`<span class="taf-time-block next">NEXT FCST ${fmtUTC(parsed.nextFcst)}</span>`:'';
+      tafInfoHtml=`${iss}${vld}${nxt}`;
+    } else if (!tafRaw){
+      tafInfoHtml=`<span style="color:var(--noTAF-fg)">No TAF available for ${icao}</span>`;
+    }
+
+    // Label helpers — declared once per airport iteration
+    const altCeilLabel = altHt  ? `<span style="font-weight:bold;color:#005599">${altHt}ft</span>` : '';
+    const altVisLabel  = altVis ? `<span style="font-weight:bold;color:#006622">${altVis}SM</span>` : '';
+    const altLabel     = prefAlt
+      ? `<span style="color:#006622;font-family:var(--cond);font-size:9px;letter-spacing:.5px">ALT:&nbsp;${prefAlt}</span>`
+      : '';
+
+    // Per-runway approach badges
+    function eqpClass(eqp){
+      const u=(eqp||'').toUpperCase();
+      if (/CAT\s*III/.test(u))          return 'rwy-cat3';
+      if (/CAT\s*II/.test(u))           return 'rwy-cat2';
+      if (/ILS/.test(u))                return 'rwy-ils';
+      if (/RNAV|GNSS|LPV|RNP/.test(u)) return 'rwy-rnav';
+      if (u===''||u==='NO')             return 'rwy-none';
+      return 'rwy-other';
+    }
+    // Collect runway entries that have data; show "No approach data" if none
+    const rwyEntries = dbEntries.filter(e=>e.rwy&&e.rwy.trim()&&e.rwy!=='---');
+    let rwyBadgesHtml;
+    if (rwyEntries.length){
+      rwyBadgesHtml = '<div class="rwy-badges">'
+        + rwyEntries.map(e=>{
+            const cls = eqpClass(e.eqp);
+            const eqpShort = (e.eqp||'').replace(/\s+/g,' ').trim() || '—';
+            const minTip = [
+              e.dh_agl!=null?`DH ${e.dh_agl}ft`:'',
+              e.vis!=null?`Vis ${e.vis}SM`:'',
+            ].filter(Boolean).join(' / ');
+            return `<span class="rwy-badge ${cls}" title="RWY ${e.rwy} · ${eqpShort}${minTip?' · '+minTip:''}">
+              <span class="rwy-num">${e.rwy}</span>
+              <span class="rwy-eqp">${eqpShort}</span>
+            </span>`;
+          }).join('')
+        + '</div>';
+    } else {
+      rwyBadgesHtml = '<span class="rwy-badge rwy-none"><span class="rwy-eqp">No approach data</span></span>';
+    }
+
+// Separator
+    bodyHtml+=`<tr class="sep-row"><td colspan="${2+hours.length}"></td></tr>`;
+
+    // ── Section label row helper ──
+    let sectionSeq=0;
+    function sectionLabelRow(label, bgColor, textColor, spanCount, collapsible=false, collapsed=false) {
+      const id=collapsible?`sec-${icao}-${sectionSeq++}`:null;
+      const toggleAttr=id?`onclick="toggleSection('${id}')" class="section-toggle"`:'';
+      const arrow=collapsible?(collapsed?'▶ ':'▼ '):'';
+      sectionLabelRow._lastId=id;
+      sectionLabelRow._lastCollapsed=collapsed;
+return `<tr>
+        <td class="sticky-l2" colspan="1" ${toggleAttr} style="background:${bgColor};color:${textColor};font-family:var(--cond);font-size:10px;font-weight:700;letter-spacing:1.5px;padding:2px 6px;border-bottom:1px solid var(--border2);text-align:right;">${label}${arrow}</td>
+        ${Array(spanCount).fill(`<td ${toggleAttr} style="background:${bgColor};border-bottom:1px solid var(--border2)"></td>`).join('')}
+      </tr>`;
+    }
+
+    // ── renderDataRows helper ──
+function renderDataRows(hourlyWxArr, isProb) {
+const becmgStyle='box-shadow:inset 0 0 0 2px #006622;';
+      const becmgTitle='title="BECMG — gradual change in progress during this hour"';
+      const becmgOutline = hours.map(h=>{
+        if (!parsed) return {wind:false,vis:false,ceil:false,wx:false};
+        const out={wind:false,vis:false,ceil:false,wx:false};
+        for (const bg of (parsed.groups.filter(g=>g.type==='BECMG'))){
+          if (h>=bg.from && bg.to && h<bg.to){
+            if (bg.wx.windSpd!==null) out.wind=true;
+            if (bg.wx.vis!==null)     out.vis=true;
+            if (bg.wx.ceiling!==null) out.ceil=true;
+            if (bg.wx.phenomena.length) out.wx=true;
+          }
+        }
+        return out;
+      });
+
+let catRow = `<tr>
+        <td class="sticky-l2 row-label" style="font-weight:700;letter-spacing:.5px;text-align:right;padding-right:6px;">Flight Rule</td>
+        ${hours.map((_,idx)=>{
+          const isNow=idx===nowHourIdx, isPast=idx<nowHourIdx;
+          const wx=hourlyWxArr[idx];
+          if (!wx) return `<td class="hr-cell c-dim ${isNow?'c-now':''} ${isPast?'c-past':''}">&#8212;</td>`;
+          const cat=getCategory(wx.ceiling,wx.vis);
+          const cls={VFR:'c-vfr',MVFR:'c-mvfr',IFR:'c-ifr',LIFR:'c-lifr',UNK:'c-dim'}[cat]||'c-dim';
+          return `<td class="hr-cell ${cls} ${isNow?'c-now':''} ${isPast?'c-past':''}">${cat}</td>`;
+        }).join('')}
+      </tr>`;
+
+// Scan future hours for worst ceiling limit breach in this wx set
+      let ceilLabelStatus = null;
+      for (let idx = nowHourIdx; idx < hours.length; idx++) {
+        const wx = hourlyWxArr[idx];
+        if (!wx || wx.ceiling === null) continue;
+        let limHt;
+        if (isProb) {
+          const lndMins = computeLandingMinima(dbEntries, hourlyWxArr[idx]?.windDir ?? null, hourlyWxArr[idx]?.windSpd ?? 0);
+limHt = lndMins ? lndMins.lnd_ht : null;
+
+        } else {
+computeAltMinima._windDir = wx?.windDir ?? null;
+          computeAltMinima._windSpd = wx?.windSpd ?? 0;
+          const hrMins = computeAltMinima(dbEntries) || {alt_ht: altHt};
+          limHt = hrMins.alt_ht;
+          limHt = hrMins.alt_ht;
+        }
+        const lim = limitCheck(wx.ceiling, limHt, 'ceil');
+        if (lim === 'BELOW') { ceilLabelStatus = 'BELOW'; break; }
+        if (lim === 'ATLIM') ceilLabelStatus = 'ATLIM';
+      }
+const ceilLabelStyle = ceilLabelStatus === 'BELOW'
+        ? 'background:var(--below-bg);color:#ffffff;'
+        : ceilLabelStatus === 'ATLIM'
+          ? 'background:var(--atlim-bg);color:var(--atlim-fg);'
+          : '';
+const ceilLimitNote = isProb
+        ? (computeLandingMinima(dbEntries, null, 0)?.lnd_ht ? ` ${computeLandingMinima(dbEntries, null, 0).lnd_ht}ft` : '')
+        : (altHt ? ` ${altHt}ft` : '');
+        
+let ceilRow = `<tr>
+<td class="sticky-l2 row-label" style="text-align:right;padding-right:6px;height:var(--row-h);vertical-align:middle;white-space:nowrap;overflow:hidden;font-size:12px;cursor:pointer;text-decoration:underline dotted;${ceilLabelStyle}"
+          onclick="showMinsModal('${icao}', ${hourlyWxArr[nowHourIdx]?.windDir!==undefined?(hourlyWxArr[nowHourIdx].windDir==='VRB'?`'VRB'`:hourlyWxArr[nowHourIdx].windDir):'null'}, ${hourlyWxArr[nowHourIdx]?.windSpd??0})"
+          title="Click to view alt minima breakdown">
+          Alt min: Ceiling - ${ceilLimitNote} &#9432;
+        </td>
+        ${hours.map((_,idx)=>{
+          const isNow=idx===nowHourIdx, isPast=idx<nowHourIdx;
+          const wx=hourlyWxArr[idx];
+          const ceilOutline=becmgOutline[idx].ceil ? becmgStyle : '';
+if (!wx||wx.ceiling===null) return `<td class="hr-cell ${isNow?'c-now':''} ${isPast?'c-past':''}" style="${ceilOutline}background:#d0e8f8;color:#004a8a;" ${ceilOutline?becmgTitle:''}>&#8212;</td>`;
+          const c=wx.ceiling;
+        let ceilThreshold;
+          if (isProb) {
+            const lndMins = computeLandingMinima(dbEntries, wx?.windDir ?? null, wx?.windSpd ?? 0);
+ceilThreshold = lndMins ? lndMins.lnd_ht : null;
+          } else {
+computeAltMinima._windDir = wx?.windDir ?? null;
+            computeAltMinima._windSpd = wx?.windSpd ?? 0;
+            const hrMins = computeAltMinima(dbEntries) || {alt_ht: altHt};
+            ceilThreshold = hrMins.alt_ht;
+          }
+          const lim = limitCheck(c, ceilThreshold, 'ceil');
+let cls;
+          if      (lim==='BELOW') cls=isProb?'below-lnd':'below-min';
+          else if (lim==='ATLIM') cls=isProb?'at-lnd':'at-limit';
+          else if (c<=CRIT_CEIL)  cls='ceil-bad';
+          else if (c<WARN_CEIL)   cls='ceil-warn';
+          else if (c>=99990)      cls='ceil-sky';
+          else                    cls='ceil-good';
+// Override cls with flight-rule-based fill colors when no limit breach
+          let ceilStyle = ceilOutline;
+if      (lim==='BELOW') ceilStyle += 'background:#ff0000;color:#fff;font-weight:bold;';
+          else if (lim==='ATLIM') ceilStyle += 'background:#ffd700;color:#000;font-weight:bold;';
+else if (c>=99990)      ceilStyle += 'background:#d0e8f8;color:#004a8a;';
+          else if (c>=3000)       ceilStyle += 'background:#d4f5e0;color:#1a4a2a;';
+          else if (c>=1000)       ceilStyle += 'background:#fff8cc;color:#5a4000;';
+          else if (c>=500)        ceilStyle += 'background:#fde0c0;color:#7a2800;';
+          else                    ceilStyle += 'background:#fde0e0;color:#aa0000;font-weight:bold;';
+          return `<td class="hr-cell ${isNow?'c-now':''} ${isPast?'c-past':''}" style="${ceilStyle}" title="${c}ft${ceilOutline?' — BECMG transition period':''}">${c>=99990?'SKC':String(Math.round(c/100)).padStart(3,'0')}</td>`;
+        }).join('')}
+      </tr>`;
+
+
+// Scan future hours for worst vis limit breach in this wx set
+      let visLabelStatus = null;
+      for (let idx = nowHourIdx; idx < hours.length; idx++) {
+        const wx = hourlyWxArr[idx];
+        if (!wx || wx.vis === null) continue;
+        let limVis;
+        if (isProb) {
+          const lndMins = computeLandingMinima(dbEntries, hourlyWxArr[idx]?.windDir ?? null, hourlyWxArr[idx]?.windSpd ?? 0);
+limVis = lndMins ? lndMins.lnd_vis : null;
+        } else {
+computeAltMinima._windDir = wx?.windDir ?? null;
+          computeAltMinima._windSpd = wx?.windSpd ?? 0;
+          const hrMins = computeAltMinima(dbEntries) || {alt_vis: altVis};
+          limVis = hrMins.alt_vis;
+        }
+        const lim = limitCheck(wx.vis, limVis, 'vis');
+        if (lim === 'BELOW') { visLabelStatus = 'BELOW'; break; }
+        if (lim === 'ATLIM') visLabelStatus = 'ATLIM';
+      }
+const visLabelStyle = visLabelStatus === 'BELOW'
+        ? 'background:var(--below-bg);color:#ffffff;'
+        : visLabelStatus === 'ATLIM'
+          ? 'background:var(--atlim-bg);color:var(--atlim-fg);'
+          : '';
+const visLimitNote = isProb
+        ? (computeLandingMinima(dbEntries, null, 0)?.lnd_vis ? ` ${computeLandingMinima(dbEntries, null, 0).lnd_vis}SM` : '')
+        : (altVis ? ` ${altVis}SM` : '');
+        
+let visRow = `<tr>
+<td class="sticky-l2 row-label" style="text-align:right;padding-right:6px;height:var(--row-h);vertical-align:middle;white-space:nowrap;overflow:hidden;font-size:12px;cursor:pointer;text-decoration:underline dotted;${visLabelStyle}"
+          onclick="showMinsModal('${icao}', ${hourlyWxArr[nowHourIdx]?.windDir!==undefined?(hourlyWxArr[nowHourIdx].windDir==='VRB'?`'VRB'`:hourlyWxArr[nowHourIdx].windDir):'null'}, ${hourlyWxArr[nowHourIdx]?.windSpd??0})"
+          title="Click to view alt minima breakdown">
+          Alt min: Visibility - ${visLimitNote} &#9432;
+        </td>
+        ${hours.map((_,idx)=>{
+          const isNow=idx===nowHourIdx, isPast=idx<nowHourIdx;
+          const wx=hourlyWxArr[idx];
+          const visOutline=becmgOutline[idx].vis ? becmgStyle : '';
+          if (!wx||wx.vis===null) return `<td class="hr-cell c-dim ${isNow?'c-now':''} ${isPast?'c-past':''}" style="${visOutline}" ${visOutline?becmgTitle:''}>&#8212;</td>`;
+          const v=wx.vis;
+       let visThreshold;
+          if (isProb) {
+const lndMins = computeLandingMinima(dbEntries, wx?.windDir ?? null, wx?.windSpd ?? 0);
+visThreshold = lndMins ? lndMins.lnd_vis : null;
+          } else {
+computeAltMinima._windDir = wx?.windDir ?? null;
+            computeAltMinima._windSpd = wx?.windSpd ?? 0;
+            const hrMins = computeAltMinima(dbEntries) || {alt_vis: altVis};
+            visThreshold = hrMins.alt_vis;
+          }
+const lim = limitCheck(v, visThreshold, 'vis');
+          const visDisp=v>=6.5?(wx.visMetric?'9999':'P6'):(wx.visDisp||(wx.visMetric?`${Math.round(v*1609.34)}m`:String(v)));
+          let visStyle = visOutline;
+          if      (lim==='BELOW') visStyle += 'background:#ff0000;color:#fff;font-weight:bold;';
+          else if (lim==='ATLIM') visStyle += 'background:#ffd700;color:#000;font-weight:bold;';
+else if (v>=5)          visStyle += 'background:#d4f5e0;color:#1a4a2a;';
+          else if (v>=3)          visStyle += 'background:#fff8cc;color:#5a4000;';
+          else if (v>=1)          visStyle += 'background:#fde0c0;color:#7a2800;';
+          else                    visStyle += 'background:#fde0e0;color:#aa0000;font-weight:bold;';
+          return `<td class="hr-cell ${isNow?'c-now':''} ${isPast?'c-past':''}" style="${visStyle}" ${visOutline?becmgTitle:''}>${visDisp}</td>`;
+        }).join('')}
+      </tr>`;
+
+let windRow = `<tr>
+        <td class="sticky-l2 row-label" style="text-align:right;padding-right:6px;">Wind</td>
+        ${hours.map((_,idx)=>{
+          const isNow=idx===nowHourIdx, isPast=idx<nowHourIdx;
+          const wx=hourlyWxArr[idx];
+          const outline=becmgOutline[idx].wind ? becmgStyle : '';
+          if (!wx||wx.windSpd===null) return `<td class="hr-cell c-dim ${isNow?'c-now':''} ${isPast?'c-past':''}" style="${outline}" ${outline?becmgTitle:''}>&#8212;</td>`;
+          const spd=wx.windSpd, gst=wx.windGust||0;
+
+  
+  const dir=wx.windDir==='VRB'?'VRB':String(wx.windDir).padStart(3,'0');
+          const spdFmt=String(spd).padStart(2,'0');
+          const dirArrow=(()=>{
+            if(wx.windDir==='VRB') return '↻';
+            const d=+wx.windDir;
+            const arrows=['↓','↙','←','↖','↑','↗','→','↘','↓'];
+            return arrows[Math.round(d/45)%8];
+          })();
+          const txt=wx.windGust
+            ? `${dir} ${dirArrow}<br>${spdFmt}G${wx.windGust}`
+            : `${dir} ${dirArrow}<br>${spdFmt}`;
+const rwyBest=bestRunway(dbEntries,wx.windDir==='VRB'?null:+(wx.windDir??0),wx.windSpd??0);
+window._windPopup=(e,_wx,_best)=>{
+            e.stopPropagation();
+            document.getElementById('wind-chart-popup')?.remove();
+            if(typeof _wx==='string') _wx=JSON.parse(_wx);
+            if(typeof _best==='string') _best=JSON.parse(_best);
+            if(!_best||_wx.windDir==='VRB'||_wx.windSpd===null) return;
+            const wdDeg=+_wx.windDir, rwyHdg=_best.hdg, spd=_wx.windSpd, gst=_wx.windGust;
+            const hw=_best.hw, xw=_best.xw, tw=hw<0?Math.abs(hw):0;
+            const rwyShortL=((_best.rwy.match(/^(\d{2}[LRC]?)/)||['',''])[1]);
+            // SVG geometry
+            const cx=90,cy=90,r=68,scale=r/Math.max(spd,1);
+            // Wind blows FROM wdDeg — arrow points in direction wind is going (wdDeg+180)
+            const windToRad=(wdDeg+180)*Math.PI/180-Math.PI/2;
+            const rwyRad=rwyHdg*Math.PI/180-Math.PI/2;
+            const oppRad=rwyRad+Math.PI;
+            // Wind vector tip
+            const wvx=cx+Math.cos(windToRad)*spd*scale, wvy=cy+Math.sin(windToRad)*spd*scale;
+            // Runway endpoints (full diameter)
+            const rx1=cx+Math.cos(rwyRad)*r,   ry1=cy+Math.sin(rwyRad)*r;
+            const rx2=cx+Math.cos(oppRad)*r,   ry2=cy+Math.sin(oppRad)*r;
+            // HW/TW projection along runway axis from centre
+            const hwDir=hw>=0?rwyRad:oppRad;
+            const hwLen=Math.abs(hw)*scale;
+            const hx=cx+Math.cos(hwDir)*hwLen, hy=cy+Math.sin(hwDir)*hwLen;
+            // XW projection perpendicular — determine left/right of runway
+            const xwSign=Math.sign(Math.sin((wdDeg+180)*Math.PI/180 - rwyHdg*Math.PI/180));
+            const perpRad=rwyRad+Math.PI/2;
+            const xx=cx+Math.cos(perpRad)*xw*scale*xwSign, xy=cy+Math.sin(perpRad)*xw*scale*xwSign;
+            // Angle arc between wind vector and runway
+            const angleDeg=Math.abs(((wdDeg+180-rwyHdg)+360)%360);
+            const dispAngle=Math.min(angleDeg,360-angleDeg);
+            // Arc for angle display
+            const arcR=22;
+            const a1=rwyRad, a2=windToRad;
+            const arcX1=cx+Math.cos(a1)*arcR, arcY1=cy+Math.sin(a1)*arcR;
+            const arcX2=cx+Math.cos(a2)*arcR, arcY2=cy+Math.sin(a2)*arcR;
+            const largeArc=dispAngle>180?1:0;
+            // Component right-angle box corner
+            const boxSize=7;
+            const bx=hx+Math.cos(perpRad)*boxSize*xwSign, by=hy+Math.sin(perpRad)*boxSize*xwSign;
+            const bx2=hx+Math.cos(windToRad)*boxSize,    by2=hy+Math.sin(windToRad)*boxSize;
+
+            const pop=document.createElement('div');
+            pop.id='wind-chart-popup';
+            pop.style.cssText=`position:fixed;z-index:9999;background:#fff;border:2px solid #a8b4c8;border-radius:8px;box-shadow:0 6px 32px rgba(0,0,0,.22);padding:12px 14px;font-family:'Barlow Condensed',sans-serif;font-size:12px;letter-spacing:.5px;user-select:none;`;
+            const px=Math.min(e.clientX+14,window.innerWidth-260), py=Math.min(e.clientY+14,window.innerHeight-320);
+            pop.style.left=px+'px'; pop.style.top=py+'px';
+
+            pop.innerHTML=`
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <span style="font-weight:700;font-size:14px;color:#0066cc;letter-spacing:2px;">RY${rwyShortL} · ${String(wdDeg).padStart(3,'0')}° ${spd}kt${gst?' G'+gst+'kt':''}</span>
+                <button id="wcp-close" style="background:none;border:1px solid #c8d0de;border-radius:3px;cursor:pointer;font-size:13px;padding:1px 8px;color:#3a4f6e;margin-left:10px;">✕</button>
+              </div>
+              <svg width="180" height="180" style="display:block;margin:0 auto 10px;overflow:visible;">
+                <defs>
+                  <marker id="wcp-arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                    <path d="M0,0 L7,3.5 L0,7 Z" fill="#0066cc"/>
+                  </marker>
+                  <marker id="wcp-hw" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                    <path d="M0,0 L7,3.5 L0,7 Z" fill="#006622"/>
+                  </marker>
+                  <marker id="wcp-tw" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                    <path d="M0,0 L7,3.5 L0,7 Z" fill="#cc4400"/>
+                  </marker>
+                  <marker id="wcp-xw" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                    <path d="M0,0 L7,3.5 L0,7 Z" fill="#7700bb"/>
+                  </marker>
+                </defs>
+                <!-- compass ring -->
+                <circle cx="${cx}" cy="${cy}" r="${r}" fill="#f8fafc" stroke="#dce4f0" stroke-width="1.5"/>
+                <circle cx="${cx}" cy="${cy}" r="${r*.55}" fill="none" stroke="#edf1f8" stroke-width="1" stroke-dasharray="3,4"/>
+                <!-- compass labels -->
+                <text x="${cx}" y="${cy-r-5}" text-anchor="middle" fill="#7a90b0" font-size="10" font-family="Barlow Condensed" font-weight="600">N</text>
+                <text x="${cx}" y="${cy+r+13}" text-anchor="middle" fill="#7a90b0" font-size="10" font-family="Barlow Condensed" font-weight="600">S</text>
+                <text x="${cx+r+8}" y="${cy+4}" text-anchor="middle" fill="#7a90b0" font-size="10" font-family="Barlow Condensed" font-weight="600">E</text>
+                <text x="${cx-r-8}" y="${cy+4}" text-anchor="middle" fill="#7a90b0" font-size="10" font-family="Barlow Condensed" font-weight="600">W</text>
+                <!-- runway axis — thick bar -->
+                <line x1="${rx1}" y1="${ry1}" x2="${rx2}" y2="${ry2}" stroke="#004a8a" stroke-width="5" stroke-linecap="round" opacity=".25"/>
+                <line x1="${rx1}" y1="${ry1}" x2="${rx2}" y2="${ry2}" stroke="#004a8a" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+                <!-- runway threshold markers -->
+                <line x1="${rx1+Math.cos(rwyRad+Math.PI/2)*8}" y1="${ry1+Math.sin(rwyRad+Math.PI/2)*8}" x2="${rx1-Math.cos(rwyRad+Math.PI/2)*8}" y2="${ry1-Math.sin(rwyRad+Math.PI/2)*8}" stroke="#004a8a" stroke-width="2" opacity=".7"/>
+                <!-- angle arc -->
+                <path d="M ${arcX1} ${arcY1} A ${arcR} ${arcR} 0 ${largeArc} 1 ${arcX2} ${arcY2}" fill="none" stroke="#cc8800" stroke-width="1.5" stroke-dasharray="3,2"/>
+                <text x="${cx+Math.cos((a1+a2)/2)*arcR*1.55}" y="${cy+Math.sin((a1+a2)/2)*arcR*1.55+4}" text-anchor="middle" fill="#cc8800" font-size="9" font-family="Barlow Condensed" font-weight="700">${Math.round(dispAngle)}°</text>
+                <!-- right-angle box at wind vector foot -->
+                <polyline points="${hx+Math.cos(perpRad)*boxSize*xwSign},${hy+Math.sin(perpRad)*boxSize*xwSign} ${hx+Math.cos(perpRad)*boxSize*xwSign+Math.cos(rwyHdg*Math.PI/180-Math.PI/2)*(hw>=0?-1:1)*boxSize},${hy+Math.sin(perpRad)*boxSize*xwSign+Math.sin(rwyHdg*Math.PI/180-Math.PI/2)*(hw>=0?-1:1)*boxSize} ${hx},${hy}" fill="none" stroke="#888" stroke-width="1" opacity=".6"/>
+                <!-- crosswind component (purple dashed) -->
+                ${xw>0?`<line x1="${cx}" y1="${cy}" x2="${xx}" y2="${xy}" stroke="#7700bb" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#wcp-xw)"/>`:''}
+                <!-- headwind component (green dashed) -->
+                ${hw>0?`<line x1="${cx}" y1="${cy}" x2="${hx}" y2="${hy}" stroke="#006622" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#wcp-hw)"/>`:''}
+                <!-- tailwind component (red dashed) -->
+                ${tw>0?`<line x1="${cx}" y1="${cy}" x2="${hx}" y2="${hy}" stroke="#cc4400" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#wcp-tw)"/>`:''}
+                <!-- actual wind vector (solid blue) -->
+                <line x1="${cx}" y1="${cy}" x2="${wvx}" y2="${wvy}" stroke="#0066cc" stroke-width="2.5" marker-end="url(#wcp-arr)"/>
+                <!-- wind FROM label -->
+                <text x="${cx+Math.cos(wdDeg*Math.PI/180-Math.PI/2)*(r+14)}" y="${cy+Math.sin(wdDeg*Math.PI/180-Math.PI/2)*(r+14)+4}" text-anchor="middle" fill="#0066cc" font-size="9" font-family="Barlow Condensed" font-weight="700">FROM</text>
+                <!-- centre -->
+                <circle cx="${cx}" cy="${cy}" r="3.5" fill="#1a2234"/>
+              </svg>
+              <table style="width:100%;border-collapse:collapse;font-size:12px;letter-spacing:.3px;">
+                <tr><td style="padding:3px 8px;color:#0066cc;font-weight:700;">⟶ Wind</td><td style="padding:3px 8px;font-weight:700;color:#0066cc;">${String(wdDeg).padStart(3,'0')}° @ ${spd}kt${gst?' G'+gst+'kt':''}</td></tr>
+                <tr style="background:#f0fff4;"><td style="padding:3px 8px;color:#006622;font-weight:700;">↑ Headwind</td><td style="padding:3px 8px;font-weight:700;color:#006622;">${hw>=0?hw:0} kt</td></tr>
+                <tr><td style="padding:3px 8px;color:#cc4400;font-weight:700;">↓ Tailwind</td><td style="padding:3px 8px;font-weight:700;color:#cc4400;">${tw} kt</td></tr>
+                <tr style="background:#f5eaff;"><td style="padding:3px 8px;color:#7700bb;font-weight:700;">↔ Crosswind</td><td style="padding:3px 8px;font-weight:700;color:#7700bb;">${xw} kt</td></tr>
+              </table>`;
+            document.body.appendChild(pop);
+            document.getElementById('wcp-close').onclick=()=>pop.remove();
+            const close=ev=>{ if(!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',close);} };
+setTimeout(()=>document.addEventListener('click',close),0);
+          };
+const peakVal=Math.max(spd,gst);
+          let windFillStyle='';
+if      (peakVal>=CRIT_WIND) windFillStyle='background:#fde0e0;color:#aa0000;';
+          else if (peakVal>=WARN_WIND) windFillStyle='background:#fff8cc;color:#5a4000;';
+          let cls;
+          if      (peakVal>=CRIT_WIND) cls='wind-high';
+          else if (peakVal>=WARN_WIND) cls='wind-warn';
+          else                         cls='wind-ok';
+          return `<td class="hr-cell ${cls} ${isNow?'c-now':''} ${isPast?'c-past':''}" style="${outline}${windFillStyle}line-height:1.3;cursor:${rwyBest?'pointer':'default'};" title="${wx.wind||''}${outline?' — BECMG transition period':''}" onclick="_windPopup(event,${JSON.stringify(JSON.stringify({windDir:wx.windDir,windSpd:wx.windSpd,windGust:wx.windGust,wind:wx.wind}))},${rwyBest?JSON.stringify(JSON.stringify(rwyBest)):'null'})">${txt}</td>`;
+        }).join('')}
+      </tr>`;
+
+let wxRow = `<tr>
+        <td class="sticky-l2 row-label" style="color:#550077;text-align:right;padding-right:6px;">WX</td>
+        ${hours.map((_,idx)=>{
+          const isNow=idx===nowHourIdx, isPast=idx<nowHourIdx;
+          const wx=hourlyWxArr[idx];
+          const wxOutline=becmgOutline[idx].wx ? becmgStyle : '';
+          if (!wx) return `<td class="hr-cell ${isNow?'c-now':''} ${isPast?'c-past':''}" style="${wxOutline}" ${wxOutline?becmgTitle:''}></td>`;
+const uniq=[...new Set(wx.phenomena)];
+          const phen=uniq.join(' ');
+          // Determine wx cell background/foreground by priority
+          function wxCellStyle(phenomena) {
+            const p = phenomena;
+            // TS family (including -TS, +TS, TSRA, TSGR, etc.) or containing FC → purple/white
+            if (p.some(x => /^[+-]?TS/.test(x) || x==='FC')) return 'background:#ff0000;color:#ffe000;font-weight:bold;';
+            // Freezing: -FZRA, FZRA, +FZRA, -FZDZ, FZDZ, +FZDZ → red/white
+            if (p.some(x => /^[+-]?FZ(RA|DZ)/.test(x))) return 'background:#ff0000;color:#fff;font-weight:bold;';
+            // Heavy precip: +SN, +RA, +SHRA, +SHSN → red/white
+            if (p.some(x => /^\+/.test(x))) return 'background:#ff0000;color:#fff;font-weight:bold;';
+            // FZFG → red/white
+            if (p.some(x => x==='FZFG' || x==='BCFG')) return 'background:#ff0000;color:#fff;';
+            // Hail (all intensities) → red/white
+            if (p.some(x => /^[+-]?GR$/.test(x) || /^[+-]?GS$/.test(x))) return 'background:#ff0000;color:#fff;font-weight:bold;';
+// FG → orange/black
+            if (p.some(x => x==='FG')) return 'background:#ff0000;color:#fff;';
+            // BR (mist) → amber
+            if (p.some(x => x==='BR')) return 'background:#ffb300;color:#000;';
+            // Rain: -SHRA, SHRA, RA, -RA → green/white
+            if (p.some(x => x==='-SHRA'||x==='SHRA'||x==='-RA'||x==='RA'||x==='RADZ'||x==='-RADZ')) return 'background:#006622;color:#fff;';
+            // Snow: -SHSN, SHSN, SN, -SN → light blue/white
+            if (p.some(x => x==='-SHSN'||x==='SHSN'||x==='SN'||x==='-SN'||x==='BLSN')) return 'background:#4488cc;color:#fff;';
+// DZ → green/white
+            if (p.some(x => /DZ/.test(x))) return 'background:#d4f5e0;color:#1a4a2a;';
+            return '';
+          }
+          const wxStyle = wxCellStyle(uniq);
+          const disp=uniq.slice(0,2).join(' ')+(uniq.length>2?'&#8230;':'');
+          return `<td class="wx-cell ${isNow?'c-now':''} ${isPast?'c-past':''}" style="${wxOutline}${wxStyle}" title="${phen}${wxOutline?' — BECMG transition period':''}">${disp}</td>`;
+        }).join('')}
+      </tr>`;
+
+const id=sectionLabelRow._lastId;
+      const collapsed=sectionLabelRow._lastCollapsed;
+      const secCls=`section-rows${collapsed?' collapsed':''}`;
+      const secAttr=id?` class="${secCls}" data-sec="${id}"`:'';
+const wrap=(html)=>id ? html.replace(/<tr(\s*>)/g, `<tr${secAttr}$1`) : html;
+      return wrap(catRow + ceilRow + visRow + windRow + wxRow);
+
+    }  // ← closes renderDataRows
+
+    // ── Compute groups ──
+    const mainGroups = parsed ? parsed.groups.filter(g=>['BASE','FM'].includes(g.type)) : [];
+    const becmgGroups = parsed ? parsed.groups.filter(g=>g.type==='BECMG') : [];
+
+const totalRowspan = 29; // name(1) + taf-info(1) + rwy-badge(1) + combined(5+3) + main(1+5) + tempo(1+5) + prob(1+5)
+
+    // Build per-airport date cells
+    let apDateCells=''; let apRunDay=-1; let apFirstDay=true;
+    hours.forEach((h,idx)=>{
+      const day=h.getUTCDate();
+      const isNow=idx===nowHourIdx;
+      if(day!==apRunDay){
+        const span=hours.filter(x=>x.getUTCDate()===day).length;
+        const mo=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][h.getUTCMonth()];
+        const cls=apFirstDay?'date-hdr':'date-hdr date-hdr-new';
+        apDateCells+=`<th colspan="${span}" class="${cls} hr-cell" style="${isNow?'outline:2px solid var(--accent);outline-offset:-2px;':''}">${String(day).padStart(2,'0')} ${mo}</th>`;
+        apRunDay=day; apFirstDay=false;
+      }
+    });
+
+    const apTimeCells=hours.map((h,idx)=>{
+      const isNow=idx===nowHourIdx;
+      const hh=String(h.getUTCHours()).padStart(2,'0');
+      return `<td class="hr-cell time-hdr${isNow?' now-col':''}">${hh}</td>`;
+    }).join('');
+
+bodyHtml+=`<tr>
+<td class="sticky-l col-ap" rowspan="${totalRowspan}" style="border-right:2px solid var(--border2);vertical-align:top;padding:0;overflow:hidden;">
+<div style="height:100%;overflow-y:auto;overflow-x:hidden;padding:4px;">
+  <div id="rawtaf-${icao}" style="font-family:var(--mono);font-size:11px;color:var(--text2);white-space:pre-wrap;word-break:normal;overflow-wrap:normal;word-break:keep-all;line-height:1.6;text-align:left;"></div>
+</div>
+      </td>
+<td class="sticky-l2 ap-name-cell" style="line-height:1.6">
+
+<span onclick="fetchAndShowRawTaf('${icao}')" style="font-weight:600;font-size:16px;color:var(--accent);text-decoration:underline dotted var(--border2);text-underline-offset:3px;cursor:pointer;" title="Click to view live TAF+METAR for ${icao}">${apName||icao} &#9432;</span>        ${prefAlt?`<span style="color:#006622;font-size:12px;font-family:var(--cond);margin-left:6px">ALT:${prefAlt}</span>`:''}
+      </td>
+      ${apDateCells}
+    </tr>`;
+
+    bodyHtml+=`<tr class="taf-info-row">
+      <td class="sticky-l2" style="background:#f0f4fa">${tafInfoHtml}</td>
+      ${apTimeCells}
+    </tr>`;
+
+    // ── MAIN hourly ──
+const hourlyMain = hours.map(h=>{
+      if (!parsed) return null;
+      if (parsed.validFrom&&h<parsed.validFrom) return null;
+      if (parsed.validTo&&h>parsed.validTo) return null;
+      let base=null;
+      for (let i=mainGroups.length-1;i>=0;i--){
+        if (mainGroups[i].from<=h){base=mainGroups[i];break;}
+      }
+      if (!base) return null;
+      const wx={...base.wx};
+      for (const bg of becmgGroups){
+        const b=bg.wx;
+        if (h<bg.from) continue;
+        // If any FM group starts after this BECMG began and at/before this hour, FM wins — skip BECMG
+const superseded=mainGroups.some(fm=>fm.type==='FM'&&fm.from>bg.from&&fm.from<=h);
+        if (superseded) continue;
+        const afterEnd=bg.to&&h>=bg.to;
+        if (b.windSpd!==null){
+          const peakBase=Math.max(wx.windSpd??0,wx.windGust??0);
+          const peakBecmg=Math.max(b.windSpd,b.windGust??0);
+          if (peakBecmg>=peakBase||afterEnd){
+            wx.windSpd=b.windSpd;wx.windGust=b.windGust;wx.windDir=b.windDir;wx.wind=b.wind;
+          }
+        }
+        if (b.vis!==null){wx.vis=b.vis;wx.visTxt=b.visTxt;wx.visDisp=b.visDisp;wx.visMetric=b.visMetric;}
+        if (b.ceiling!==null) wx.ceiling=b.ceiling;
+        if (b.phenomena.length) wx.phenomena=[...new Set([...b.phenomena])];
+      }
+      return wx;
+    });
+
+    // ── COMBINED ──
+bodyHtml += `<tr>
+      <td class="sticky-l2" style="background:#e8f0e8;padding:2px 6px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:6px;height:var(--row-h);">
+        <a href="https://metar-taf.com/?hl=${icao}" target="_blank" rel="noopener" title="Open ${icao} on metar-taf.com" style="font-family:var(--cond);font-size:10px;font-weight:700;letter-spacing:1.5px;color:#003300;text-decoration:underline dotted #66aa66;text-underline-offset:2px;">RWY ↗</a>
+        ${rwyBadgesHtml}
+      </td>
+      ${Array(hours.length).fill(`<td style="background:#e8f0e8;border-bottom:1px solid var(--border2)"></td>`).join('')}
+    </tr>`;
+const hourlyCombined = hours.map((h,idx)=>{
+      const m=hourlyMain[idx];
+      let active=null;
+      for (const tg of (parsed?parsed.groups.filter(g=>g.type==='TEMPO'):[])){
+        if (h>=tg.from&&tg.to&&h<tg.to){active=tg;break;}
+      }
+      if (!m&&!active) return null;
+      if (!active) return m;
+      if (!m) return {...active.wx};
+      const t=active.wx;
+      const out={...m};
+      if (t.ceiling!==null&&(out.ceiling===null||t.ceiling<out.ceiling)) out.ceiling=t.ceiling;
+if (t.vis!==null&&(out.vis===null||t.vis<out.vis)){out.vis=t.vis;out.visDisp=t.visDisp;out.visMetric=t.visMetric;}      const peakM=Math.max(out.windSpd??0,out.windGust??0);
+      const peakT=Math.max(t.windSpd??0,t.windGust??0);
+      if (t.windSpd!==null&&peakT>peakM){out.windSpd=t.windSpd;out.windGust=t.windGust;out.windDir=t.windDir;out.wind=t.wind;}
+      if (t.phenomena.length) out.phenomena=[...new Set([...out.phenomena,...t.phenomena])];
+      return out;
+    });
+// ── Pref RWY / XW / HW rows (combined section only) ──
+    let rwyRow = `<tr>
+        <td class="sticky-l2 row-label" style="color:#004488;font-size:9px;padding:0 4px;">
+<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;height:var(--row-h);">
+            <span style="color:#004488;font-size:12px;">Pref RWY</span>
+            <span style="display:inline-flex;gap:3px;">
+              <span onclick="toggleSection('sec-${icao}-${sectionSeq}')" id="btn-main-${icao}" title="Toggle MAIN (FM)" style="cursor:pointer;font-size:16px;color:#003a88;line-height:1;user-select:none;">▶</span>
+              <span onclick="toggleSection('sec-${icao}-${sectionSeq+1}')" id="btn-tempo-${icao}" title="Toggle TEMPO" style="cursor:pointer;font-size:16px;color:#7a5000;line-height:1;user-select:none;">▶</span>
+              <span onclick="toggleSection('sec-${icao}-${sectionSeq+2}')" id="btn-prob-${icao}" title="Toggle PROB" style="cursor:pointer;font-size:16px;color:#5500aa;line-height:1;user-select:none;">▶</span>
+            </span>
+          </div>
+        </td>
+        ${hours.map((_,idx)=>{
+          const isNow=idx===nowHourIdx, isPast=idx<nowHourIdx;
+          const wx=hourlyCombined[idx];
+          if (!wx||wx.windSpd===null||wx.windDir===null)
+            return `<td class="hr-cell c-dim ${isNow?'c-now':''} ${isPast?'c-past':''}">&#8212;</td>`;
+let rwyWindDir = wx.windDir==='VRB' ? null : +wx.windDir;
+          let rwyWindSpd = wx.windSpd;
+          if (wx.windDir==='VRB' && parsed) {
+            const mainGrps = parsed.groups.filter(g=>['BASE','FM','BECMG'].includes(g.type));
+            let baseWx = null;
+            for (let mi=mainGrps.length-1;mi>=0;mi--){
+              if (mainGrps[mi].from<=hours[idx]){baseWx=mainGrps[mi].wx;break;}
+            }
+            if (baseWx && baseWx.windDir && baseWx.windDir!=='VRB') {
+              rwyWindDir = +baseWx.windDir;
+            }
+          }
+          const best=bestRunway(dbEntries, rwyWindDir, rwyWindSpd);
+          if (!best)
+            return `<td class="hr-cell c-dim ${isNow?'c-now':''} ${isPast?'c-past':''}">&#8212;</td>`;
+const arrow=hdgArrow(best.hdg);
+          const rwyShort=(best.rwy.match(/^(\d{2}[LRC]?)/)||['',''])[1];
+          return `<td class="hr-cell ${isNow?'c-now':''} ${isPast?'c-past':''}"
+            style="font-size:11px;font-family:var(--cond);color:#004488;"
+title="RY${rwyShort} · Headwind ${best.hw}kt · Crosswind ${best.xw}kt · Tailwind ${best.hw < 0 ? Math.abs(best.hw) : 0}kt">
+            RY${rwyShort}${arrow}
+          </td>`;
+        }).join('')}
+      </tr>`;
+
+let xwRow = '';
+    let hwRow = `<tr>
+        <td class="sticky-l2 row-label" style="text-align:right;padding-right:6px;line-height:1.3;">
+          <span style="color:#7700bb;display:block;">Crosswind</span>
+          <span style="color:#006622;display:block;">Headwind</span>
+        </td>
+        ${hours.map((_,idx)=>{
+          const isNow=idx===nowHourIdx, isPast=idx<nowHourIdx;
+          const wx=hourlyCombined[idx];
+          if (!wx||wx.windSpd===null||wx.windDir===null||wx.windDir==='VRB')
+            return `<td class="hr-cell c-dim ${isNow?'c-now':''} ${isPast?'c-past':''}" style="line-height:1.3;">&#8212;<br>&#8212;</td>`;
+          const best=bestRunway(dbEntries, +wx.windDir, wx.windSpd);
+          if (!best)
+            return `<td class="hr-cell c-dim ${isNow?'c-now':''} ${isPast?'c-past':''}" style="line-height:1.3;">&#8212;<br>&#8212;</td>`;
+          const xw = best.xw;
+          const hw = best.hw;
+          const isTailwind = hw < 0;
+          const xwCls = xw >= CRIT_WIND ? 'wind-high' : xw >= WARN_WIND ? 'wind-warn' : 'wind-ok';
+          const hwCls = isTailwind ? 'wind-high' : hw >= WARN_WIND ? 'wind-warn' : 'wind-ok';
+          const hwDisp = isTailwind ? `TW${Math.abs(hw)}` : `${hw}kt`;
+          return `<td class="hr-cell ${isNow?'c-now':''} ${isPast?'c-past':''}" style="line-height:1.3;padding:0 2px;"
+            title="Crosswind ${xw}kt / ${isTailwind?'Tailwind':'Headwind'} ${Math.abs(hw)}kt on RWY${best.rwy}">
+            <span class="${xwCls}" style="display:block;font-size:10px;">${xw}kt</span>
+            <span class="${hwCls}" style="display:block;font-size:10px;${isTailwind?'color:#cc0000;font-weight:bold;':''}">${hwDisp}</span>
+          </td>`;
+        }).join('')}
+      </tr>`;
+
+
+    bodyHtml += renderDataRows(hourlyCombined) + rwyRow + hwRow;
+
+
+    
+// ── MAIN ──
+    const mainSecId = `sec-${icao}-${sectionSeq}`;
+    bodyHtml += `<tr data-sec="${mainSecId}" class="section-rows collapsed"><td class="sticky-l2" style="background:#dce8f8;color:#003a88;font-family:var(--cond);font-size:10px;font-weight:700;letter-spacing:1.5px;padding:2px 6px;border-bottom:1px solid var(--border2);text-align:right;">MAIN (FM)</td>${Array(hours.length).fill(`<td style="background:#dce8f8;border-bottom:1px solid var(--border2)"></td>`).join('')}</tr>`;
+    sectionLabelRow._lastId = mainSecId;
+    sectionLabelRow._lastCollapsed = true;
+    sectionSeq++;
+    bodyHtml += renderDataRows(hourlyMain);
+
+
+
+    // ── TEMPO ──
+    const tempoSecId = `sec-${icao}-${sectionSeq}`;
+    bodyHtml += `<tr data-sec="${tempoSecId}" class="section-rows collapsed"><td class="sticky-l2" style="background:#fff8e8;color:#7a5000;font-family:var(--cond);font-size:10px;font-weight:700;letter-spacing:1.5px;padding:2px 6px;border-bottom:1px solid var(--border2);text-align:right;">TEMPO</td>${Array(hours.length).fill(`<td style="background:#fff8e8;border-bottom:1px solid var(--border2)"></td>`).join('')}</tr>`;
+    sectionLabelRow._lastId = tempoSecId;
+    sectionLabelRow._lastCollapsed = true;
+    sectionSeq++;
+    const tempoGroups = parsed ? parsed.groups.filter(g=>g.type==='TEMPO') : [];
+    const hourlyTempo = hours.map(h=>{
+      if (!parsed) return null;
+      if (parsed.validFrom&&h<parsed.validFrom) return null;
+      if (parsed.validTo&&h>parsed.validTo) return null;
+      let active=null;
+      for (const tg of tempoGroups){
+        if (h>=tg.from&&tg.to&&h<tg.to) active=tg;
+      }
+      if (!active) return null;
+      return {...active.wx};
+    });
+bodyHtml += renderDataRows(hourlyTempo);
+
+
+
+// ── PROB ──
+    const hasProbData = parsed && hours.some(h=>{
+      if (parsed.validFrom&&h<parsed.validFrom) return false;
+      if (parsed.validTo&&h>parsed.validTo) return false;
+      return probGroups.some(tg=>h>=tg.from&&tg.to&&h<tg.to);
+    });
+    const probSecId = `sec-${icao}-${sectionSeq}`;
+    const probCollapsed = !hasProbData;
+    bodyHtml += `<tr data-sec="${probSecId}" class="section-rows${probCollapsed?' collapsed':''}"><td class="sticky-l2" style="background:#f5eaff;color:#5500aa;font-family:var(--cond);font-size:10px;font-weight:700;letter-spacing:1.5px;padding:2px 6px;border-bottom:1px solid var(--border2);text-align:right;">PROB</td>${Array(hours.length).fill(`<td style="background:#f5eaff;border-bottom:1px solid var(--border2)"></td>`).join('')}</tr>`;
+    sectionLabelRow._lastId = probSecId;
+    sectionLabelRow._lastCollapsed = probCollapsed;
+    sectionSeq++;
+    const hourlyProb = hours.map(h=>{
+      if (!parsed) return null;
+      if (parsed.validFrom&&h<parsed.validFrom) return null;
+      if (parsed.validTo&&h>parsed.validTo) return null;
+      for (const tg of probGroups){
+        if (h>=tg.from&&tg.to&&h<tg.to) return {...tg.wx};
+      }
+      return null;
+    });
+bodyHtml += renderDataRows(hourlyProb, true);
+
+
+
+  });  // ← close icaos.forEach
+
+const fullHtml=`<table id="grid-table">
+    <thead style="display:none">
+      <tr>${dayHdrRow}</tr>
+      <tr>${hourHdrRow}</tr>
+    </thead>
+    <tbody>${bodyHtml}</tbody>
+  </table>`;
+  
+document.getElementById('grid-container').innerHTML=fullHtml;
+icaos.forEach(icao=>{
+    const el=document.getElementById(`rawtaf-${icao}`);
+    if (!el) return;
+    const raw=tafMap[icao];
+    const icaoSpan=`<a href="https://metar-taf.com/?hl=${icao}" target="_blank" style="font-size:13px;font-weight:bold;color:var(--accent);text-decoration:none;" title="Open ${icao} on metar-taf.com">${icao} ↗</a> `;
+    if (!raw){el.innerHTML=icaoSpan+'<span style="color:var(--noTAF-fg)">No TAF</span>';return;}
+    el.innerHTML=icaoSpan+highlightTaf(extractTafOnly(raw));
+  });
+
+  setTimeout(()=>{
+const nowCell=document.querySelector('.c-now');
+    if (nowCell){
+      const gs=document.getElementById('grid-scroll');
+      const cellLeft=nowCell.getBoundingClientRect().left;
+      const gsLeft=gs.getBoundingClientRect().left;
+      gs.scrollLeft+=cellLeft-gsLeft-(gs.clientWidth/2);
+    }
+  },100);
+}   // ← this now correctly closes buildGrid
+
+function fmtUTC(d){
+  if (!d) return '?';
+  return `${String(d.getUTCDate()).padStart(2,'0')}${String(d.getUTCHours()).padStart(2,'0')}${String(d.getUTCMinutes()).padStart(2,'0')}Z`;
+}
+
+// ═══════════════════════════════════════════
+// RAW TAF MODAL
+// ═══════════════════════════════════════════
+// Draggable modal setup — runs once
+(function initDrag(){
+  const hdr=document.getElementById('taf-modal-header');
+  const modal=document.getElementById('taf-modal');
+  let dragging=false,ox=0,oy=0;
+  hdr.style.cursor='grab';
+  hdr.addEventListener('mousedown',e=>{
+    if(e.target.id==='taf-modal-close') return;
+    dragging=true;
+    const r=modal.getBoundingClientRect();
+    // Switch from flex-centre to fixed absolute position on first drag
+    if(!modal.style.left){
+      modal.style.position='fixed';
+      modal.style.left=r.left+'px';
+      modal.style.top=r.top+'px';
+      modal.style.transform='none';
+      const ov=document.getElementById('taf-modal-overlay');
+      ov.style.alignItems='unset';
+      ov.style.justifyContent='unset';
+    }
+    ox=e.clientX-modal.getBoundingClientRect().left;
+    oy=e.clientY-modal.getBoundingClientRect().top;
+    hdr.style.cursor='grabbing';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging) return;
+    modal.style.left=(e.clientX-ox)+'px';
+    modal.style.top=(e.clientY-oy)+'px';
+  });
+  document.addEventListener('mouseup',()=>{ dragging=false; hdr.style.cursor='grab'; });
+})();
+
+function showRawTaf(icao){
+    
+  const raw = rawTafStore[icao];
+  const overlay = document.getElementById('taf-modal-overlay');
+  const title   = document.getElementById('taf-modal-title');
+  const meta    = document.getElementById('taf-modal-meta');
+  const pre     = document.getElementById('taf-modal-text');
+
+  title.textContent = `${icao} \u2014 RAW TAF`;
+
+  if (!raw){
+    meta.textContent = 'No TAF received for this airport';
+    pre.innerHTML = '<span style="color:var(--noTAF-fg)">No TAF available.</span>';
+  } else {
+    const tafOnly = extractTafOnly(raw);
+    const db = (airportDB[icao]||[])[0];
+    meta.textContent = db ? `${db.name||''}${db.province?' \u00b7 '+db.province:''} \u00b7 ${db.country||''}` : '';
+    pre.innerHTML = highlightTaf(tafOnly);
+  }
+
+  overlay.classList.add('open');
+  document.addEventListener('keydown', modalKeyHandler);
+}
+
+function closeTafModal(e){
+  if (e && e.target !== document.getElementById('taf-modal-overlay')) return;
+  const modal=document.getElementById('taf-modal');
+  const ov=document.getElementById('taf-modal-overlay');
+  modal.style.left=''; modal.style.top=''; modal.style.position='';
+  ov.style.alignItems=''; ov.style.justifyContent='';
+  ov.classList.remove('open');
+  document.removeEventListener('keydown', modalKeyHandler);
+}
+
+function modalKeyHandler(e){
+  if (e.key==='Escape') closeTafModal(null);
+}
+
+function extractTafOnly(raw){
+  // Raw is stored as a single joined line; truncate at first METAR or SPECI keyword.
+  const cut = raw.search(/\b(METAR|SPECI)\b/);
+  const tafOnly = cut > -1 ? raw.slice(0, cut).trim() : raw.trim();
+
+  // Pretty-print: insert newlines before major group keywords.
+  return tafOnly
+    .replace(/\s+(?=FM\d{6}\b)/g, '\n')
+    .replace(/\s+(?=TEMPO\s+\d{4}\/\d{4}\b)/g, '\n')
+    .replace(/\s+(?=BECMG\s+\d{4}\/\d{4}\b)/g, '\n')
+    .replace(/\s+(?=PROB\d{2}\b)/g, '\n')
+    .replace(/\s+(?=RMK\b)/g, '\n')
+    .trim();
+}
+
+function highlightTaf(text){
+  const esc = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Split into tokens, preserving whitespace/newlines, so we can match whole tokens
+  // We'll do line-by-line to handle ceiling and vis contextually
+  const lines = esc.split('\n');
+
+  const processed = lines.map(line => {
+    // ── TAF group keywords (existing) ──
+    line = line
+      .replace(/\b(FM\d{6})\b/g,      '<span class="taf-kw-fm">$1</span>')
+      .replace(/\b(TEMPO\s+\d{4}\/\d{4})\b/g, '<span class="taf-kw-tempo">$1</span>')
+      .replace(/\b(BECMG\s+\d{4}\/\d{4})\b/g, '<span class="taf-kw-becmg">$1</span>')
+      .replace(/\b(PROB\d{2}(?:\s+TEMPO)?(?:\s+\d{4}\/\d{4})?)\b/g, '<span class="taf-kw-prob">$1</span>');
+
+    // ── Ceiling ≤ 1000 ft: BKN/OVC/VV + 3-digit group where value ≤ 010 ──
+    line = line.replace(/\b((?:BKN|OVC|VV))(0(?:0[0-9]|10))\b/g, (_, pfx, num) =>
+      `<span class="taf-hi-ceil">${pfx}${num}</span>`
+    );
+
+// ── Visibility highlighting ──
+const isMetricTaf = !/(?:P6SM|\d+SM|\d+\/\d+SM)/.test(esc);
+    if (isMetricTaf) {
+      line = line.replace(/\b(9999|(?<![\/\d])(?:0[0-9]{3}|[1-4]\d{3}|5000)(?!\d|\/|Z|KT))\b/g, v => {
+        if (v==='9999') return v;
+        const metres = parseInt(v,10);
+        return metres <= 4800 ? `<span class="taf-hi-vis">${v}</span>` : v;
+      });
+    } else {
+      line = line.replace(/\b((?:\d+\s+)?\d+\/\d+SM|\d+SM)\b/g, v => {
+        const clean = v.replace('SM','').trim();
+        const num = clean.split(/\s+/).reduce((sum,p) => {
+          if (p.includes('/')) { const [n,d]=p.split('/'); return sum+parseFloat(n)/parseFloat(d); }
+          return sum+(parseFloat(p)||0);
+        },0);
+        return num <= 2 ? `<span class="taf-hi-vis">${v}</span>` : v;
+      });
+    }
+
+    // ── High-impact weather phenomena ──
+    // Order matters: longer/more-specific patterns first
+    const wxPatterns = [
+  // Thunderstorm family — no light (-) variants exist in TAF practice, but guard anyway
+  { re: /\b(\+?(?:TSRA|TSGR|TSGS|TSSN|TS))\b/g,        cls: 'taf-hi-wx' },
+  // Freezing family — light FZRA/FZDZ still highlighted, others only non-light
+  { re: /\b(-FZRA|-FZDZ|(?<!-)FZFG|(?<!-)FZ\w+)\b/g,   cls: 'taf-hi-wx' },
+  // Fog — no light modifier exists
+  { re: /\b(FG)\b/g,                                      cls: 'taf-hi-wx' },
+  // Snow — no light (-SN, -SHSN)
+  { re: /\b(\+SN|(?<![-+])SN|\+SHSN|(?<![-+])SHSN|BLSN)\b/g,  cls: 'taf-hi-wx' },
+  // Rain — no light (-RA, -SHRA)
+  { re: /\b(\+RA|(?<![-+])RA|\+SHRA|(?<![-+])SHRA)\b/g,        cls: 'taf-hi-wx' },
+  // Hail
+  { re: /\b(GR|GS)\b/g,                                  cls: 'taf-hi-wx' },
+];
+    wxPatterns.forEach(({re, cls}) => {
+      // Skip if already inside a span (crude guard: check for preceding '">')
+      line = line.replace(re, (m) => {
+        // Don't double-wrap — if the match is already inside a span we leave it
+        return `<span class="${cls}">${m}</span>`;
+      });
+    });
+
+    return line;
+  });
+
+  return processed.join('\n');
+}
+
+// ═══════════════════════════════════════════
+// BEST RUNWAY SELECTOR
+// ═══════════════════════════════════════════
+function bestRunway(dbEntries, windDir, windSpd){
+  if (!dbEntries||!dbEntries.length||windDir===null||windSpd===null) return null;
+  if (windDir==='VRB'||windSpd===0) return null;
+  const rwys=[];
+dbEntries.forEach(e=>{
+    if (!e.rwy||!e.rwy.trim()||e.rwy==='---') return;
+    e.rwy.split('/').forEach(r=>{
+      const m=r.trim().match(/^(\d{2})([LRC]?)/);
+      if (!m) return;
+      const hdg=+m[1]*10;
+      const rwyNum=m[1]+m[2];
+      rwys.push({rwy:rwyNum, hdg});
+    });
+  });
+  if (!rwys.length) return null;
+  const wdRad=windDir*Math.PI/180;
+  let best=null, bestScore=Infinity;
+  rwys.forEach(({rwy,hdg})=>{
+    const rRad=hdg*Math.PI/180;
+    const diff=Math.abs(Math.atan2(Math.sin(wdRad-rRad),Math.cos(wdRad-rRad))*180/Math.PI);
+    // headwind component (positive = headwind)
+    const hw=windSpd*Math.cos(diff*Math.PI/180);
+    // crosswind component
+    const xw=Math.abs(windSpd*Math.sin(diff*Math.PI/180));
+    // score: prefer headwind (negative hw = tailwind, penalise heavily), then min xw
+    const score = hw < 0 ? 9999 + xw - hw : xw - hw*0.1;
+    if (score < bestScore){ bestScore=score; best={rwy, hdg, hw:Math.round(hw), xw:Math.round(xw)}; }
+  });
+  return best;
+}
+
+function computeAltMinima(dbEntries) {
+  const isUS = dbEntries.some(e => (e.country || '').toUpperCase() === 'US');
+  const rwysWithData = dbEntries.filter(e => e.rwy && e.rwy.trim() && e.rwy !== '---' && e.dh_agl !== null && e.dh_agl !== undefined);
+  if (!rwysWithData.length) return null;
+
+  const _windDir = computeAltMinima._windDir ?? null;
+  const _windSpd = computeAltMinima._windSpd ?? 0;
+
+  // For US: count approaches where tailwind does not exceed 10kt
+  const usableCount = rwysWithData.filter(e => {
+    if (!isUS) return true;
+    if (_windSpd < 10 || _windDir === null || _windDir === 'VRB') return true;
+    const nums = e.rwy.split('/').map(r => r.trim());
+    return nums.some(r => {
+      const m = r.match(/^(\d{2})/);
+      if (!m) return true;
+      const hdg = +m[1] * 10;
+      const wdRad = _windDir * Math.PI / 180;
+      const rRad  = hdg * Math.PI / 180;
+      const hw = _windSpd * Math.cos(Math.atan2(Math.sin(wdRad - rRad), Math.cos(wdRad - rRad)));
+      return hw >= -10;
+    });
+  }).length;
+
+  // Canada: count usable ILS runways (wind-dependent, same tailwind rule)
+  const usableIls = isUS ? 0 : dbEntries.filter(e => {
+    if (!e.rwy || !e.rwy.trim() || e.rwy === '---') return false;
+    if ((e.num_ils || 0) < 1) return false;
+    if (_windSpd < 10 || _windDir === null || _windDir === 'VRB') return true;
+    const nums = e.rwy.split('/').map(r => r.trim());
+    return nums.some(r => {
+      const m = r.match(/^(\d{2})/);
+      if (!m) return true;
+      const hdg = +m[1] * 10;
+      const wdRad = _windDir * Math.PI / 180;
+      const rRad  = hdg * Math.PI / 180;
+      const hw = _windSpd * Math.cos(Math.atan2(Math.sin(wdRad - rRad), Math.cos(wdRad - rRad)));
+      return hw >= -10;
+    });
+  }).length;
+
+  function applyRule(entry) {
+    if (entry.dh_agl === null || entry.dh_agl === undefined) return null;
+    const dh = entry.dh_agl;
+    const v  = entry.vis;
+    if (isUS) {
+      if (usableCount >= 2) {
+        return { alt_ht: Math.max(dh + 200, 400), alt_vis: Math.max((v || 0) + 0.5, 1.0) };
+      } else {
+        return { alt_ht: Math.max(dh + 400, 600), alt_vis: Math.max((v || 0) + 1.0, 2.0) };
+      }
+    } else {
+      if (usableIls >= 2) {
+        return { alt_ht: Math.max(dh + 200, 400), alt_vis: Math.max((v || 0) + 0.5, 1.0) };
+      } else if (usableIls === 1) {
+        return { alt_ht: Math.max(dh + 300, 600), alt_vis: Math.max((v || 0) + 1.0, 2.0) };
+      } else {
+        return { alt_ht: Math.max(dh + 300, 800), alt_vis: Math.max((v || 0) + 1.0, 2.0) };
+      }
+    }
+  }
+
+  let bestMins = null;
+  for (const e of rwysWithData) {
+    const m = applyRule(e);
+    if (!m) continue;
+    if (!bestMins || m.alt_ht < bestMins.alt_ht) bestMins = m;
+  }
+  return bestMins;
+}
+
+// NEW:
+function computeLandingMinima(dbEntries, windDir, windSpd) {
+  const rwysWithData = dbEntries.filter(e => e.dh_agl !== null && e.dh_agl !== undefined && e.rwy && e.rwy.trim() && e.rwy !== '---');
+  if (!rwysWithData.length) return null;
+
+  // If wind known, filter out pure tailwind runways (headwind component < 0)
+  let candidates = rwysWithData;
+  if (windDir !== null && windDir !== 'VRB' && windSpd > 0) {
+    const wdRad = windDir * Math.PI / 180;
+    const noTail = rwysWithData.filter(e => {
+      // Each DB entry may have multiple runways (e.g. "13/31") — check all
+      const nums = e.rwy.split('/').map(r => r.trim());
+      return nums.some(r => {
+        const m = r.match(/^(\d{2})/);
+        if (!m) return true; // can't determine, keep it
+        const hdg = +m[1] * 10;
+        const rRad = hdg * Math.PI / 180;
+        const hw = windSpd * Math.cos(Math.atan2(
+          Math.sin(wdRad - rRad), Math.cos(wdRad - rRad)
+        )); // positive = headwind
+        return hw >= 0; // keep if not a tailwind
+      });
+    });
+    // Only filter if at least one non-tailwind runway has DH data
+    if (noTail.length) candidates = noTail;
+  }
+
+  let best = null;
+  for (const e of candidates) {
+    if (!best || e.dh_agl < best.dh_agl) best = e;
+  }
+  if (!best) return null;
+  return {
+    lnd_ht:  best.dh_agl,
+    lnd_vis: best.vis ?? null
+  };
+}
+
+function showMinsModal(icao, windDir, windSpd) {
+  const dbEntries = airportDB[icao] || [];
+  const db = dbEntries[0] || null;
+  const overlay = document.getElementById('mins-modal-overlay');
+  const title   = document.getElementById('mins-modal-title');
+  const meta    = document.getElementById('mins-modal-meta');
+  const content = document.getElementById('mins-modal-content');
+
+  title.textContent = `${icao} \u2014 ALT MINIMA`;
+  meta.textContent  = db ? `${db.name||''}${db.province?' \u00b7 '+db.province:''} \u00b7 ${db.country||''}` : '';
+
+  const totalIls = dbEntries.reduce((mx, e) => Math.max(mx, e.num_ils || 0), 0);
+const isUS = dbEntries.some(e => (e.country || '').toUpperCase() === 'US');
+  const _windDir = (windDir !== null && windDir !== 'VRB') ? +windDir : null;
+  const _windSpd = windSpd ?? 0;
+  computeAltMinima._windDir = _windDir;
+  computeAltMinima._windSpd = _windSpd;
+const rwysWithDataModal = dbEntries.filter(e => e.rwy && e.rwy.trim() && e.rwy !== '---' && e.dh_agl !== null && e.dh_agl !== undefined);
+  const usableIlsModal = !isUS ? dbEntries.filter(e => {
+    if (!e.rwy || !e.rwy.trim() || e.rwy === '---') return false;
+    if ((e.num_ils || 0) < 1) return false;
+    if (_windSpd < 10 || _windDir === null) return true;
+    const nums = e.rwy.split('/').map(r => r.trim());
+    return nums.some(r => {
+      const m = r.match(/^(\d{2})/);
+      if (!m) return true;
+      const hdg = +m[1] * 10;
+      const wdRad = _windDir * Math.PI / 180;
+      const rRad  = hdg * Math.PI / 180;
+      const hw = _windSpd * Math.cos(Math.atan2(Math.sin(wdRad - rRad), Math.cos(wdRad - rRad)));
+      return hw >= -10;
+    });
+  }).length : 0;
+  const usableCount = rwysWithDataModal.filter(e => {
+    if (!isUS) return true;
+    if (_windSpd < 10 || _windDir === null) return true;
+    const nums = e.rwy.split('/').map(r => r.trim());
+    return nums.some(r => {
+      const m = r.match(/^(\d{2})/);
+      if (!m) return true;
+      const hdg = +m[1] * 10;
+      const wdRad = _windDir * Math.PI / 180;
+      const rRad  = hdg * Math.PI / 180;
+      const hw = _windSpd * Math.cos(Math.atan2(Math.sin(wdRad - rRad), Math.cos(wdRad - rRad)));
+      return hw >= -10;
+    });
+  }).length;  let floorLabel, stdHt, stdVis, adderHt, adderVis;
+ if (isUS) {
+    if (usableCount >= 2) {
+      floorLabel = '2 usable approaches (different RWYs) \u2014 FAA Standard 400-1';
+      stdHt = 400; stdVis = 1.0; adderHt = 200; adderVis = 0.5;
+    } else {
+      floorLabel = '1 usable approach \u2014 FAA Standard 600-2';
+      stdHt = 600; stdVis = 2.0; adderHt = 400; adderVis = 1.0;
+    }
+  } else {
+    if (usableIlsModal >= 2) {
+      floorLabel = `${usableIlsModal} usable ILS \u2014 CAR Standard 400-1`;
+      stdHt = 400; stdVis = 1.0; adderHt = 200; adderVis = 0.5;
+    } else if (usableIlsModal === 1) {
+      floorLabel = `1 usable ILS \u2014 CAR Standard 600-2`;
+      stdHt = 600; stdVis = 2.0; adderHt = 300; adderVis = 1.0;
+    } else {
+      floorLabel = `No usable ILS \u2014 CAR Standard 800-2`;
+      stdHt = 800; stdVis = 2.0; adderHt = 300; adderVis = 1.0;
+    }
+  }
+  // Build runway rows
+  const rwys = dbEntries.filter(e => e.rwy && e.rwy.trim() && e.rwy !== '---');
+
+  // Determine preferred runway if wind known
+  let prefRwy = null;
+  if (windDir !== null && windSpd > 0 && windDir !== 'VRB') {
+    const best = bestRunway(dbEntries, +windDir, windSpd);
+    if (best) prefRwy = best.rwy.replace(/[LRC]$/, '');
+  }
+
+  function hdgToCompass(hdg) {
+    const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return dirs[Math.round(hdg / 22.5) % 16];
+  }
+
+  function eqpLabel(eqp) {
+    const u = (eqp||'').toUpperCase();
+    if (/CAT\s*III/.test(u)) return '<span class="rwy-badge rwy-cat3">CAT III</span>';
+    if (/CAT\s*II/.test(u))  return '<span class="rwy-badge rwy-cat2">CAT II</span>';
+    if (/ILS/.test(u))       return '<span class="rwy-badge rwy-ils">ILS</span>';
+    if (/RNAV|GNSS|LPV|RNP/.test(u)) return '<span class="rwy-badge rwy-rnav">RNAV</span>';
+    return `<span class="rwy-badge rwy-other">${eqp||'—'}</span>`;
+  }
+
+  let tableRows = '';
+  rwys.forEach(e => {
+    const rwyNums = e.rwy.split('/').map(r => r.trim());
+    const isPref  = prefRwy && rwyNums.some(r => r.replace(/[LRC]$/,'') === prefRwy);
+
+    const hasDh = e.dh_agl !== null && e.dh_agl !== undefined;
+    const hasVis = e.vis !== null && e.vis !== undefined;
+
+    // Computed alt minima
+    let compHt = null, compVis = null, rule = '';
+    if (hasDh) {
+      const raw_ht  = e.dh_agl + adderHt;
+      const raw_vis = (e.vis || 0) + adderVis;
+      compHt  = Math.max(raw_ht,  stdHt);
+      compVis = Math.max(raw_vis, stdVis);
+      const htSrc  = raw_ht  >= stdHt  ? `${e.dh_agl}+${adderHt}=${raw_ht}` : `floor`;
+      const visSrc = raw_vis >= stdVis ? `${e.vis||0}+${adderVis}=${raw_vis.toFixed(2)}` : `floor`;
+      rule = `DH ${e.dh_agl}ft + ${adderHt} = ${raw_ht}ft \u2192 max(${raw_ht}, ${stdHt}) = <b>${compHt}ft</b> &nbsp;|&nbsp; Vis ${e.vis||0} + ${adderVis} = ${raw_vis.toFixed(2)} \u2192 max(${raw_vis.toFixed(2)}, ${stdVis}) = <b>${compVis.toFixed(2)}SM</b>`;
+    } else {
+      rule = '<span style="color:var(--text3)">No DH/DA data \u2014 limit check unknown</span>';
+    }
+
+    // Heading from runway number
+    const hdg = +(rwyNums[0].match(/^(\d{2})/)||['','0'])[1] * 10;
+    const compass = hdgToCompass(hdg);
+    const arrow   = hdgArrow(hdg);
+
+    const prefMark = isPref ? ' <span style="color:#006622;font-weight:bold;font-family:var(--cond)">&#9654; WIND PREF</span>' : '';
+    const rowBg    = isPref ? 'background:#f0fff4;' : '';
+
+    tableRows += `<tr style="${rowBg}">
+      <td style="text-align:left;font-weight:bold;color:var(--accent)">${e.rwy}${prefMark}</td>
+      <td>${hdg}&deg; ${compass} ${arrow}</td>
+      <td>${eqpLabel(e.eqp)}</td>
+      <td>${hasDh ? e.dh_agl+'ft' : '<span style="color:var(--text3)">—</span>'}</td>
+      <td>${hasVis ? e.vis+'SM' : '<span style="color:var(--text3)">—</span>'}</td>
+      <td style="font-weight:bold;color:#005599">${compHt !== null ? compHt+'ft' : '<span style="color:var(--text3)">?</span>'}</td>
+      <td style="font-weight:bold;color:#006622">${compVis !== null ? compVis.toFixed(2)+'SM' : '<span style="color:var(--text3)">?</span>'}</td>
+      <td style="text-align:left;font-size:10px;color:var(--text2)">${rule}</td>
+    </tr>`;
+  });
+
+  if (!rwys.length) {
+    tableRows = `<tr><td colspan="8" style="color:var(--noTAF-fg);text-align:center">No runway data in DB</td></tr>`;
+  }
+
+  // Wind context note
+  let windNote = '';
+  if (windDir !== null && windSpd > 0 && windDir !== 'VRB') {
+    windNote = `<div style="font-family:var(--cond);font-size:10px;color:var(--text3);margin-bottom:8px">
+      Wind context: <b>${String(windDir).padStart(3,'0')}&deg; @ ${windSpd}kt</b> &mdash; preferred runway highlighted
+    </div>`;
+  } else {
+    windNote = `<div style="font-family:var(--cond);font-size:10px;color:var(--text3);margin-bottom:8px">
+      No wind data &mdash; showing all runways
+    </div>`;
+  }
+
+  content.innerHTML = `
+    ${windNote}
+    <div class="mins-section-hdr">RUNWAY APPROACH &amp; ALT MINIMA</div>
+    <table class="mins-table">
+      <thead><tr>
+        <th>RWY</th><th>HDG</th><th>Approach</th>
+        <th>DH/DA</th><th>Lnd Vis</th>
+        <th>Alt Ceil</th><th>Alt Vis</th><th>Calculation</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+    <div class="mins-rule">
+      <b>Rule applied: ${floorLabel}</b><br>
+      Alt Ceiling &nbsp;= MAX( DA/DH + ${adderHt}ft , ${stdHt}ft standard floor )<br>
+      Alt Visibility = MAX( Lnd Vis + ${adderVis}SM , ${stdVis}SM standard floor )<br>
+<span style="color:var(--text3)">${isUS ? `14 CFR 121.625 / FAA OpSpec C055 &mdash; ${usableCount} usable approach${usableCount!==1?'es':''} found (wind ${_windSpd<10?'&lt;10kt: all RWYs usable':String(_windDir??'?').padStart(3,'0')+'&deg;@'+_windSpd+'kt: tailwind&gt;10kt RWYs excluded'}) &mdash; 2 usable: DA(H)+200ft/+\u00bdSM (floor 400-1) &mdash; 1 usable: DA(H)+400ft/+1SM (floor 600-2)` : `CAR 602.123 &mdash; Canada Air Pilot (CAP GEN) &mdash; ${totalIls} total ILS at airport, ${usableIlsModal} usable (wind ${_windSpd<10?'&lt;10kt: all ILS usable':String(_windDir??'?').padStart(3,'0')+'&deg;@'+_windSpd+'kt: tailwind&gt;10kt ILS excluded'}) &mdash; 2+ ILS: DH+200/+0.5SM (floor 400-1) &bull; 1 ILS: DH+300/+1SM (floor 600-2) &bull; 0 ILS: DH+300/+1SM (floor 800-2)`}</span>
+    </div>
+  `;
+
+  overlay.classList.add('open');
+  document.addEventListener('keydown', minsModalKeyHandler);
+}
+
+function closeMinsModal(e) {
+  if (e && e.target !== document.getElementById('mins-modal-overlay')) return;
+  document.getElementById('mins-modal-overlay').classList.remove('open');
+  document.removeEventListener('keydown', minsModalKeyHandler);
+}
+
+function minsModalKeyHandler(e) {
+  if (e.key === 'Escape') closeMinsModal(null);
+}
+
+function hdgArrow(hdg){
+  const arrows=['↑','↗','→','↘','↓','↙','←','↖','↑'];
+  return arrows[Math.round(((hdg+180)%360)/45)%8];
+}
+
+function toggleSection(id){
+  const rows=document.querySelectorAll(`tr[data-sec="${id}"]`);
+  const labelTd=document.querySelector(`[onclick="toggleSection('${id}')"]`);
+  const isCollapsed=rows.length&&rows[0].classList.contains('collapsed');
+  rows.forEach(r=>r.classList.toggle('collapsed',!isCollapsed));
+  if (labelTd){
+    labelTd.textContent=labelTd.textContent.replace(/^[▶▼] /,(!isCollapsed?'▶ ':'▼ '));
+  }
+}
+
+// ═══════════════════════════════════════════
+// TEST TAF SANDBOX
+// ═══════════════════════════════════════════
+function buildTestExamples() {
+  const now = new Date();
+
+  // Helper: returns a Date offset by +h hours from now, floored to the hour
+  function hr(offsetH) {
+    const d = new Date(now);
+    d.setUTCMinutes(0, 0, 0);
+    d.setUTCHours(d.getUTCHours() + offsetH);
+    return d;
+  }
+
+  // Format DDhh for issue time Z suffix: e.g. "301722Z"
+  function issZ(d) {
+    return `${String(d.getUTCDate()).padStart(2,'0')}${String(d.getUTCHours()).padStart(2,'0')}00Z`;
+  }
+
+  // Format DDhh/DDhh validity window
+  function win(from, to) {
+    const f = hr(from), t = hr(to);
+    return `${String(f.getUTCDate()).padStart(2,'0')}${String(f.getUTCHours()).padStart(2,'0')}/${String(t.getUTCDate()).padStart(2,'0')}${String(t.getUTCHours()).padStart(2,'0')}`;
+  }
+
+  // Format FM DDhhhh
+  function fm(offsetH) {
+    const d = hr(offsetH);
+    return `FM${String(d.getUTCDate()).padStart(2,'0')}${String(d.getUTCHours()).padStart(2,'0')}00`;
+  }
+
+  const iss = hr(0);
+
+  return {
+    1:
+`TAF CYMM ${issZ(iss)} ${win(0,24)} 36008KT P6SM FEW030
+PROB30 ${win(4,10)} OVC004 1/4SM FZFG`,
+
+    2:
+`TAF CYMM ${issZ(iss)} ${win(0,24)} 18010KT P6SM SCT040
+TEMPO ${win(2,6)} VRB20G35KT 1SM -SN BKN008 OVC015
+${fm(8)} 21008KT P6SM FEW040`,
+
+    3:
+`TAF CYMM ${issZ(iss)} ${win(0,24)} 27012KT P6SM FEW040
+BECMG ${win(2,4)} 27005KT BKN020
+PROB30 ${win(6,12)} OVC006 1/2SM -SN`,
+
+    4:
+`TAF CYMM ${issZ(iss)} ${win(0,24)} 36015KT 1/4SM FZFG OVC002
+TEMPO ${win(2,5)} 36020G35KT 1/4SM FZFG VV001
+${fm(6)} 36008KT 3SM -SN BKN015`,
+  };
+}
+
+function openTestModal() {
+  const ov = document.getElementById('test-modal-overlay');
+  ov.style.display = 'flex';
+  // Pre-fill with example 1 if textarea is empty
+  const ta = document.getElementById('test-taf-input');
+  if (!ta.value.trim()) {
+    const examples = buildTestExamples();
+    ta.value = examples[1] || '';
+  }
+  setTimeout(()=>{ ta.focus(); }, 100);
+}
+
+function closeTestModal() {
+  document.getElementById('test-modal-overlay').style.display = 'none';
+}
+
+function loadExampleTaf(n) {
+  const examples = buildTestExamples();
+  document.getElementById('test-taf-input').value = examples[n] || '';
+}
+
+function submitTestTaf() {
+  const raw = document.getElementById('test-taf-input').value.trim();
+  if (!raw) return;
+
+  closeTestModal();
+
+  // Normalise: strip leading TAF keyword variants, force ICAO to TEST
+  const normalised = raw
+    .replace(/\s+/g, ' ')
+    .replace(/^TAF(?:\s+AMD|\s+COR)?\s+[A-Z]{3,4}\b/, 'TAF TEST');
+
+// Inject CYMM db entries under TEST key so minima work
+  airportDB['TEST'] = (airportDB['CYMM'] || []).map(e => ({...e, icao:'TEST'}));
+
+  const tafMap = { TEST: normalised };
+  rawTafStore['TEST'] = normalised;
+
+  const now = new Date();
+  // Find which input slot has TEST and build icao list
+  const icaos = [];
+  for (let i=1;i<=9;i++){
+    const v=(document.getElementById(`ap${i}`)?.value||'').trim().toUpperCase();
+    if (v.length>=3) icaos.push(v);
+  }
+// Merge with existing rawTafStore so other airports still show
+  Object.assign(rawTafStore, tafMap);
+  buildGrid(icaos, rawTafStore, now);
+  setStatus(`TEST TAF loaded — using CYMM DB &mdash; ${fmtUTC(now)}`);
+}
+
+// ═══════════════════════════════════════════
+// DB EDITOR
+// ═══════════════════════════════════════════
+let _dbEditorTab = 'table';
+const DB_STORAGE_KEY = 'tafmate_db_csv';
+
+const AP_HEADERS = ['icao','name','province','country','remarks','rwy','eqp','dh_agl','vis','num_ils','alt_ht','alt_vis','can_std_ld','can_std_vis'];
+const ALT_HEADERS = ['airline','dest','alt'];
+
+function currentCsvFromMemory() {
+  const apRows = Object.values(airportDB).flat().map(e => {
+    const q = v => `"${(v??'').toString().replace(/"/g,'""')}"`;
+    return [e.icao,e.name,e.province,e.country,e.remarks,e.rwy,e.eqp,
+      e.dh_agl??'',e.vis??'',e.num_ils??'',e.alt_ht??'',e.alt_vis??'',
+      e.can_std_ld??'',e.can_std_vis??''].map(q).join(',');
+  });
+  const altRows = Object.entries(preferAlt).map(([k,alt])=>{
+    const [airline,...rest]=k.split(' '); const dest=rest.join(' ');
+    return `"${airline}","${dest}","${alt}"`;
+  });
+  return `${AP_HEADERS.join(',')}\n${apRows.join('\n')}\n\n${ALT_HEADERS.join(',')}\n${altRows.join('\n')}`;
+}
+
+function openDbEditor() {
+  const csv = currentCsvFromMemory();
+  document.getElementById('db-editor-textarea').value = csv;
+  renderDbTable(csv);
+  document.getElementById('db-editor-search').value = '';
+  document.getElementById('db-editor-match').textContent = '';
+  switchDbTab('table');
+  document.getElementById('db-editor-overlay').style.display = 'flex';
+}
+
+function closeDbEditor() {
+  document.getElementById('db-editor-overlay').style.display = 'none';
+}
+
+function switchDbTab(tab) {
+  _dbEditorTab = tab;
+  const tableView = document.getElementById('db-editor-table-view');
+  const rawView   = document.getElementById('db-editor-raw-view');
+  const tabTable  = document.getElementById('dbtab-table');
+  const tabRaw    = document.getElementById('dbtab-raw');
+
+  if (tab === 'table') {
+    // Sync raw → table
+    renderDbTable(document.getElementById('db-editor-textarea').value);
+    tableView.style.display = 'block';
+    rawView.style.display   = 'none';
+    tabTable.style.borderBottomColor = 'var(--accent)';
+    tabTable.style.color = 'var(--accent)';
+    tabTable.style.background = 'var(--surface)';
+    tabRaw.style.borderBottomColor = 'transparent';
+    tabRaw.style.color = 'var(--text3)';
+    tabRaw.style.background = 'transparent';
+  } else {
+    // Sync table edits → raw textarea
+    document.getElementById('db-editor-textarea').value = buildCsvFromTable();
+    tableView.style.display = 'none';
+    rawView.style.display   = 'flex';
+    tabTable.style.borderBottomColor = 'transparent';
+    tabTable.style.color = 'var(--text3)';
+    tabTable.style.background = 'transparent';
+    tabRaw.style.borderBottomColor = 'var(--accent)';
+    tabRaw.style.color = 'var(--accent)';
+    tabRaw.style.background = 'var(--surface)';
+  }
+}
+
+function renderDbTable(csv) {
+  const sections = csv.split(/\n\s*\n/);
+  const apLines  = (sections[0]||'').trim().split('\n');
+  const altLines = (sections[1]||'').trim().split('\n');
+
+  // Airport table
+  const thead = document.getElementById('db-editor-thead');
+  const tbody = document.getElementById('db-editor-tbody');
+
+  thead.innerHTML = '<tr>' + AP_HEADERS.map(h =>
+    `<th style="padding:3px 6px;border:1px solid var(--border);font-family:var(--cond);font-size:10px;letter-spacing:1px;color:var(--text2);text-align:left;background:var(--surface2);">${h}</th>`
+  ).join('') + '<th style="padding:3px 6px;border:1px solid var(--border);background:var(--surface2);"></th></tr>';
+
+  const dataLines = apLines.slice(1); // skip header
+  tbody.innerHTML = dataLines.map((line, rowIdx) => {
+    const vals = splitCSVLine(line);
+    const cells = AP_HEADERS.map((h, ci) => {
+      const v = vals[ci] ?? '';
+      return `<td style="padding:0;border:1px solid var(--border);">
+        <input type="text" data-row="${rowIdx}" data-col="${ci}"
+          value="${v.replace(/"/g,'&quot;')}"
+          style="width:100%;min-width:${ci<4?80:50}px;max-width:${ci<2?160:120}px;border:none;padding:2px 4px;font-family:var(--mono);font-size:10px;background:transparent;color:var(--text);"
+          oninput="markDbDirty()"
+        >
+      </td>`;
+    }).join('');
+    return `<tr data-row="${rowIdx}">${cells}
+      <td style="border:1px solid var(--border);padding:0 2px;">
+        <button onclick="deleteDbRow(${rowIdx})" style="font-size:9px;color:#cc0000;background:none;border:none;cursor:pointer;padding:2px 4px;" title="Delete row">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+// Add new row button at bottom
+  tbody.innerHTML += `<tr><td colspan="${AP_HEADERS.length+1}" style="padding:4px 6px;border:1px solid var(--border);">
+    <button onclick="addDbRow()" style="font-family:var(--cond);font-size:10px;color:var(--accent);background:none;border:1px dashed var(--accent);border-radius:3px;padding:2px 10px;cursor:pointer;letter-spacing:1px;">+ ADD ROW</button>
+  </td></tr>`;
+
+  // Render prefer alt table
+  const altTbody = document.getElementById('db-editor-alt-tbody');
+  const altDataLines = altLines.slice(1); // skip header
+  altTbody.innerHTML = altDataLines.filter(l=>l.trim()).map((line, rowIdx) => {
+    const vals = splitCSVLine(line);
+    const [airline='', dest='', alt=''] = vals;
+    return `<tr data-alt-row="${rowIdx}">
+      <td style="padding:0;border:1px solid var(--border);">
+        <input type="text" data-alt-row="${rowIdx}" data-alt-col="0" value="${airline.replace(/"/g,'&quot;')}"
+          style="width:100%;min-width:70px;border:none;padding:2px 4px;font-family:var(--mono);font-size:10px;background:transparent;color:var(--accent);text-transform:uppercase;"
+          oninput="markDbDirty()">
+      </td>
+      <td style="padding:0;border:1px solid var(--border);">
+        <input type="text" data-alt-row="${rowIdx}" data-alt-col="1" value="${dest.replace(/"/g,'&quot;')}"
+          style="width:100%;min-width:70px;border:none;padding:2px 4px;font-family:var(--mono);font-size:10px;background:transparent;color:var(--text);text-transform:uppercase;"
+          oninput="markDbDirty()">
+      </td>
+      <td style="padding:0;border:1px solid var(--border);">
+        <input type="text" data-alt-row="${rowIdx}" data-alt-col="2" value="${alt.replace(/"/g,'&quot;')}"
+          style="width:100%;min-width:100px;border:none;padding:2px 4px;font-family:var(--mono);font-size:10px;background:transparent;color:#006622;text-transform:uppercase;"
+          oninput="markDbDirty()">
+      </td>
+      <td style="border:1px solid var(--border);padding:0 2px;">
+        <button onclick="deleteAltRow(${rowIdx})" style="font-size:9px;color:#cc0000;background:none;border:none;cursor:pointer;padding:2px 4px;" title="Delete row">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  altTbody.innerHTML += `<tr><td colspan="4" style="padding:4px 6px;border:1px solid var(--border);">
+    <button onclick="addAltRow()" style="font-family:var(--cond);font-size:10px;color:#006622;background:none;border:1px dashed #006622;border-radius:3px;padding:2px 10px;cursor:pointer;letter-spacing:1px;">+ ADD ALTERNATE</button>
+  </td></tr>`;
+}
+
+function buildCsvFromTable() {
+  // Airport rows
+  const rows = document.querySelectorAll('#db-editor-tbody tr[data-row]');
+  const apLines = [AP_HEADERS.join(',')];
+  rows.forEach(tr => {
+    const inputs = tr.querySelectorAll('input[data-col]');
+    const vals = Array.from(inputs).map(inp => `"${inp.value.replace(/"/g,'""')}"`);
+    if (vals.length) apLines.push(vals.join(','));
+  });
+
+  // Prefer alt rows
+  const altRows = document.querySelectorAll('#db-editor-alt-tbody tr[data-alt-row]');
+  const altLines = [ALT_HEADERS.join(',')];
+  altRows.forEach(tr => {
+    const inputs = tr.querySelectorAll('input[data-alt-col]');
+    const vals = Array.from(inputs).map(inp => `"${inp.value.replace(/"/g,'""')}"`);
+    if (vals.length && vals.some(v => v !== '""')) altLines.push(vals.join(','));
+  });
+
+  return apLines.join('\n') + '\n\n' + altLines.join('\n');
+}
+
+function addDbRow() {
+  const tbody = document.getElementById('db-editor-tbody');
+  const addBtn = tbody.querySelector('tr:last-child');
+  const rowIdx = tbody.querySelectorAll('tr[data-row]').length;
+  const cells = AP_HEADERS.map((h, ci) =>
+    `<td style="padding:0;border:1px solid var(--border);">
+      <input type="text" data-row="${rowIdx}" data-col="${ci}" value=""
+        style="width:100%;min-width:${ci<4?80:50}px;max-width:${ci<2?160:120}px;border:none;padding:2px 4px;font-family:var(--mono);font-size:10px;background:#fffff0;color:var(--text);"
+        oninput="markDbDirty()">
+    </td>`
+  ).join('');
+  const newRow = document.createElement('tr');
+  newRow.setAttribute('data-row', rowIdx);
+  newRow.innerHTML = cells + `<td style="border:1px solid var(--border);padding:0 2px;">
+    <button onclick="deleteDbRow(${rowIdx})" style="font-size:9px;color:#cc0000;background:none;border:none;cursor:pointer;padding:2px 4px;" title="Delete row">✕</button>
+  </td>`;
+  tbody.insertBefore(newRow, addBtn);
+  newRow.querySelector('input').focus();
+}
+
+function deleteDbRow(rowIdx) {
+  const row = document.querySelector(`#db-editor-tbody tr[data-row="${rowIdx}"]`);
+  if (row) row.remove();
+  markDbDirty();
+}
+
+let _dbDirty = false;
+function markDbDirty() { _dbDirty = true; }
+
+function filterDbEditor() {
+  const q = document.getElementById('db-editor-search').value.trim().toUpperCase();
+  const rows = document.querySelectorAll('#db-editor-tbody tr[data-row]');
+  let count = 0;
+  rows.forEach(tr => {
+    const text = Array.from(tr.querySelectorAll('input')).map(i=>i.value).join(' ').toUpperCase();
+    const show = !q || text.includes(q);
+    tr.style.display = show ? '' : 'none';
+    if (show) count++;
+  });
+  // Also filter alt rows
+  const altRows = document.querySelectorAll('#db-editor-alt-tbody tr[data-alt-row]');
+  altRows.forEach(tr => {
+    const text = Array.from(tr.querySelectorAll('input')).map(i=>i.value).join(' ').toUpperCase();
+    tr.style.display = (!q || text.includes(q)) ? '' : 'none';
+  });
+  document.getElementById('db-editor-match').textContent = q ? `${count} AP match${count!==1?'es':''}` : '';
+}
+function saveDbEditor() {
+  let csv;
+  if (_dbEditorTab === 'table') {
+    csv = buildCsvFromTable();
+    document.getElementById('db-editor-textarea').value = csv;
+  } else {
+    csv = document.getElementById('db-editor-textarea').value;
+  }
+  try {
+    const n = parseAndLoadCSV(csv);
+    localStorage.setItem(DB_STORAGE_KEY, csv);
+    const st = document.getElementById('db-status');
+    st.textContent = `✓ ${n} AP (edited)`;
+    st.className = 'db-pill ok';
+    const dlBtn = document.getElementById('db-dl-btn');
+    if (dlBtn) { dlBtn.disabled = false; dlBtn.classList.add('ok'); }
+    _dbDirty = false;
+    closeDbEditor();
+    setStatus(`DB saved — ${n} airports`);
+  } catch(err) {
+    alert('CSV parse error: ' + err.message);
+  }
+}
+
+function resetDbToDefault() {
+  if (!confirm('Reset to built-in default DB? All edits will be lost.')) return;
+  localStorage.removeItem(DB_STORAGE_KEY);
+  const n = parseAndLoadCSV(DEFAULT_CSV);
+  document.getElementById('db-editor-textarea').value = currentCsvFromMemory();
+  renderDbTable(currentCsvFromMemory());
+  const st = document.getElementById('db-status');
+  st.textContent = `✓ ${n} AP (default)`;
+  st.className = 'db-pill ok';
+}
+
+function addAltRow() {
+  const altTbody = document.getElementById('db-editor-alt-tbody');
+  const addBtn = altTbody.querySelector('tr:last-child');
+  const rowIdx = altTbody.querySelectorAll('tr[data-alt-row]').length;
+  const newRow = document.createElement('tr');
+  newRow.setAttribute('data-alt-row', rowIdx);
+  newRow.innerHTML = `
+    <td style="padding:0;border:1px solid var(--border);">
+      <input type="text" data-alt-row="${rowIdx}" data-alt-col="0" value=""
+        style="width:100%;min-width:70px;border:none;padding:2px 4px;font-family:var(--mono);font-size:10px;background:#fffff0;color:var(--accent);text-transform:uppercase;"
+        oninput="markDbDirty()" placeholder="ACB">
+    </td>
+    <td style="padding:0;border:1px solid var(--border);">
+      <input type="text" data-alt-row="${rowIdx}" data-alt-col="1" value=""
+        style="width:100%;min-width:70px;border:none;padding:2px 4px;font-family:var(--mono);font-size:10px;background:#fffff0;color:var(--text);text-transform:uppercase;"
+        oninput="markDbDirty()" placeholder="CYYC">
+    </td>
+    <td style="padding:0;border:1px solid var(--border);">
+      <input type="text" data-alt-row="${rowIdx}" data-alt-col="2" value=""
+        style="width:100%;min-width:100px;border:none;padding:2px 4px;font-family:var(--mono);font-size:10px;background:#fffff0;color:#006622;text-transform:uppercase;"
+        oninput="markDbDirty()" placeholder="CYEG">
+    </td>
+    <td style="border:1px solid var(--border);padding:0 2px;">
+      <button onclick="deleteAltRow(${rowIdx})" style="font-size:9px;color:#cc0000;background:none;border:none;cursor:pointer;padding:2px 4px;" title="Delete row">✕</button>
+    </td>`;
+  altTbody.insertBefore(newRow, addBtn);
+  newRow.querySelector('input').focus();
+}
+
+function deleteAltRow(rowIdx) {
+  const row = document.querySelector(`#db-editor-alt-tbody tr[data-alt-row="${rowIdx}"]`);
+  if (row) row.remove();
+  markDbDirty();
+}
+
+// On startup — restore saved DB from localStorage if present
+(function restoreDbFromStorage() {
+  const saved = localStorage.getItem(DB_STORAGE_KEY);
+  if (!saved) return;
+  try {
+    const n = parseAndLoadCSV(saved);
+    const st = document.getElementById('db-status');
+    if (st) { st.textContent = `✓ ${n} AP (saved)`; st.className = 'db-pill ok'; }
+  } catch(e) {
+    localStorage.removeItem(DB_STORAGE_KEY);
+  }
+})();
+
+async function fetchAndShowRawTaf(icao) {
+  window.open(`https://aviationweather.gov/api/data/metar?ids=${icao}&hours=12&taf=1`, '_blank');
+}
+async function fetchAndShowRawTaf_unused(icao) {
+  const overlay = document.getElementById('taf-modal-overlay');
+  const title   = document.getElementById('taf-modal-title');
+  const meta    = document.getElementById('taf-modal-meta');
+  const pre     = document.getElementById('taf-modal-text');
+  title.textContent = `${icao} — RAW TAF`;
+  meta.textContent  = 'Fetching live data…';
+  pre.innerHTML     = '<span class="spinner" style="display:inline-block"></span>';
+  overlay.classList.add('open');
+  document.addEventListener('keydown', modalKeyHandler);
+
+try {
+    const db = (airportDB[icao]||[])[0];
+    meta.textContent = db ? `${db.name||''}${db.province?' · '+db.province:''} · ${db.country||''} — live from aviationweather.gov` : `Live from aviationweather.gov`;
+
+    // Fetch METAR (last 3 hours) + TAF together
+    const [metarResp, tafResp] = await Promise.all([
+      fetch(`https://aviationweather.gov/api/data/metar?ids=${icao}&hours=3&format=raw`),
+      fetch(`https://aviationweather.gov/api/data/taf?ids=${icao}&hours=24&format=raw`)
+    ]);
+    const metarText = metarResp.ok ? await metarResp.text() : '';
+    const tafText   = tafResp.ok  ? await tafResp.text()   : '';
+
+    // Cache TAF
+    const tafMatch = tafText.match(/TAF[\s\S]+/);
+    const tafClean = tafMatch ? tafMatch[0].trim() : tafText.trim();
+    if (tafClean) rawTafStore[icao] = tafClean;
+
+    // Build combined display
+    let html = '';
+
+    // METAR section
+    const metarLines = metarText.trim().split('\n').filter(l => l.trim() && !l.startsWith('No'));
+    if (metarLines.length) {
+      html += `<div style="font-family:var(--cond);font-size:10px;letter-spacing:2px;color:var(--text3);margin-bottom:4px;border-bottom:1px solid var(--border);padding-bottom:3px;">METAR / SPECI</div>`;
+      html += `<pre style="font-family:var(--mono);font-size:12px;line-height:1.7;color:#003a00;background:#f0fff4;border-radius:3px;padding:6px 8px;margin-bottom:10px;white-space:pre-wrap;word-break:break-word;">${metarLines.map(l=>l.trim()).join('\n')}</pre>`;
+    } else {
+      html += `<div style="font-family:var(--cond);font-size:10px;color:var(--text3);margin-bottom:10px;">No recent METAR available.</div>`;
+    }
+
+    // TAF section
+    html += `<div style="font-family:var(--cond);font-size:10px;letter-spacing:2px;color:var(--text3);margin-bottom:4px;border-bottom:1px solid var(--border);padding-bottom:3px;">TAF</div>`;
+    html += tafClean
+      ? `<pre style="font-family:var(--mono);font-size:12px;line-height:1.75;color:var(--text);white-space:pre-wrap;word-break:break-word;">${highlightTaf(extractTafOnly(tafClean))}</pre>`
+      : `<span style="color:var(--noTAF-fg)">No TAF found in response.</span>`;
+
+    pre.innerHTML = html;
+  } catch(err) {
+    const cached = rawTafStore[icao];
+    meta.textContent = `Live fetch failed (${err.message}) — showing cached TAF`;
+    pre.innerHTML = cached ? highlightTaf(extractTafOnly(cached)) : '<span style="color:var(--noTAF-fg)">No data available.</span>';
+  }
+}
+
+document.addEventListener('keydown',e=>{ if(e.key==='Enter') fetchAll(); });window.addEventListener('load', ()=>{ setTimeout(fetchAll, 300); });
+// ═══════════════════════════════════════════
+// PERSIST INPUTS
+// ═══════════════════════════════════════════
+(function persistInputs(){
+  const KEYS = ['ap1','ap2','ap3','ap4','ap5','ap6','ap7','ap8','ap9','airline'];
+  // Restore saved values (overrides pre-fill defaults)
+  KEYS.forEach(id=>{
+    const saved = localStorage.getItem('tafmate_'+id);
+    const el = document.getElementById(id);
+    if (el && saved !== null) el.value = saved;
+  });
+  // Save on every change
+  KEYS.forEach(id=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', ()=>{
+      localStorage.setItem('tafmate_'+id, el.value);
+    });
+  });
+})();
+
+
+</script>
+
+<script>
+// CSV export helper — open browser console and run exportCSV()
+function exportCSV(){
+if (!Object.keys(airportDB).length){ alert('No DB loaded'); return; }
+  const apRows=[], paRows=[];
+  const apHdr='icao,name,province,country,remarks,rwy,eqp,dh_agl,vis,num_ils,alt_ht,alt_vis,can_std_ld,can_std_vis';
+  const paHdr='airline,dest,alt';
+  Object.values(airportDB).flat().forEach(e=>{
+    const q=v=>`"${(v??'').toString().replace(/"/g,'""')}"`;
+    apRows.push([e.icao,e.name,e.province,e.country,e.remarks,e.rwy,e.eqp,
+      e.dh_agl??'',e.vis??'',e.num_ils??'',e.alt_ht??'',e.alt_vis??'',
+      e.can_std_ld??'',e.can_std_vis??''].map(q).join(','));
+  });
+  Object.entries(preferAlt).forEach(([k,alt])=>{
+    const [airline,...rest]=k.split(' '); const dest=rest.join(' ');
+    paRows.push(`"${airline}","${dest}","${alt}"`);
+  });
+  const csv=`${apHdr}\n${apRows.join('\n')}\n\n${paHdr}\n${paRows.join('\n')}`;
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='TAFmate_db.csv'; a.click();
+}
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

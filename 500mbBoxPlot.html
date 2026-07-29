@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>500 hPa — Ensemble Forecast</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#f0efe9;font-family:'IBM Plex Mono',monospace;padding:12px 18px 36px;min-width:640px;}
+
+  /* ── Top controls bar ── */
+  .top-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;
+    padding:10px 14px;background:#fff;border:1.5px solid #bbb;border-radius:2px;}
+  .top-bar h1{font-size:0.85rem;font-weight:700;color:#111;flex:1;}
+  button.fetch-btn{font-family:inherit;font-size:0.72rem;font-weight:700;padding:7px 18px;
+    border-radius:2px;cursor:pointer;border:1.5px solid #111;background:#111;color:#fff;}
+  button.fetch-btn:hover{background:#333;}
+  button.dl-btn{font-family:inherit;font-size:0.72rem;font-weight:700;padding:7px 18px;
+    border-radius:2px;cursor:pointer;border:1.5px solid #111;background:transparent;color:#111;}
+  button.dl-btn:hover{background:#111;color:#fff;}
+  button:disabled{opacity:0.3;cursor:not-allowed;}
+  .global-status{font-size:0.63rem;color:#666;}
+
+  /* ── Run selector ── */
+  .run-selector-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    margin-bottom:10px;padding:8px 14px;background:#fff;border:1.5px solid #bbb;border-radius:2px;}
+  .run-selector-wrap label{font-size:0.68rem;font-weight:700;color:#333;white-space:nowrap;}
+  .run-selector-wrap select{
+    font-family:'IBM Plex Mono',monospace;font-size:0.68rem;font-weight:600;
+    padding:5px 30px 5px 10px;border:1.5px solid #bbb;border-radius:2px;
+    background:#f7f5f1;color:#111;cursor:pointer;
+    appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23555'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 9px center;
+    min-width:280px;
+  }
+  .run-selector-wrap select:disabled{opacity:0.4;cursor:not-allowed;}
+  .run-selector-wrap select:focus{outline:none;border-color:#111;}
+  #refresh-runs-btn{font-family:inherit;font-size:0.62rem;font-weight:700;padding:5px 12px;
+    border-radius:2px;cursor:pointer;border:1.5px solid #888;background:transparent;color:#555;}
+  #refresh-runs-btn:hover{border-color:#111;color:#111;}
+  #refresh-runs-btn:disabled{opacity:0.3;cursor:not-allowed;}
+  .run-note{font-size:0.58rem;color:#888;margin-left:auto;}
+  .run-badge-pill{font-size:0.6rem;font-weight:700;padding:3px 8px;border-radius:10px;
+    background:#111;color:#fff;white-space:nowrap;}
+  .run-badge-pill.latest{background:#005c1e;color:#fff;}
+
+  /* ── Source log (global) ── */
+  .src-log{display:flex;flex-wrap:wrap;gap:4px;font-size:0.58rem;margin-bottom:10px;}
+  .src-log span{padding:2px 6px;border-radius:2px;}
+  .src-log span.ok{background:#d4edda;color:#155724;}
+  .src-log span.fail{background:#f8d7da;color:#721c24;}
+  .src-log span.fallback{background:#cce5ff;color:#004085;}
+
+  /* ── Location grid ── */
+  .loc-grid{display:grid;grid-template-columns:1fr;gap:14px;}
+
+  /* ── Single location block ── */
+  .loc-block{background:#fff;border:1.5px solid #bbb;border-radius:2px;padding:0;}
+  .loc-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+    padding:8px 12px 6px;border-bottom:1px solid #e0ddd7;}
+  .loc-head h2{font-size:0.82rem;font-weight:700;color:#111;}
+  .run-badge{font-size:0.62rem;color:#666;margin-left:auto;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:6px 14px;padding:5px 12px;
+    background:#f7f5f1;border-bottom:1px solid #e0ddd7;font-size:0.6rem;color:#222;}
+  .li{display:flex;align-items:center;gap:5px;}
+  .lb{width:12px;height:10px;background:#FFD700;border:1.5px solid #b8870a;flex-shrink:0;}
+  .ll{width:18px;height:0;border-top-width:2px;border-top-style:solid;flex-shrink:0;}
+
+  /* ── Sub-tabs ── */
+  .sub-tabs{display:flex;gap:3px;padding:6px 12px 0;}
+  .sub-tab{font-family:inherit;font-size:0.62rem;font-weight:700;padding:4px 11px;
+    border-radius:2px 2px 0 0;cursor:pointer;border:1px solid #ccc;border-bottom:none;
+    background:#e8e7e1;color:#666;}
+  .sub-tab.active{background:#fff;color:#111;border-color:#bbb;}
+  .sub-panel{display:none;}
+  .sub-panel.active{display:block;}
+
+  .chart-scroll{overflow-x:auto;overflow-y:hidden;border-top:1px solid #bbb;
+    background:#fff;position:relative;}
+  canvas.plot{display:block;}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;background:rgba(255,255,255,0.92);font-size:0.72rem;
+    color:#666;gap:8px;text-align:center;}
+  .overlay.hidden{display:none;}
+  .spinner{width:26px;height:26px;border:3px solid #ddd;border-top-color:#111;
+    border-radius:50%;animation:spin 0.7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .prog-text{font-size:0.6rem;color:#00c20a;}
+
+  .tbl-wrap{overflow-x:auto;padding:4px;border-top:1px solid #bbb;}
+  table{width:100%;border-collapse:collapse;font-size:0.6rem;}
+  thead th{background:#111;color:#fff;padding:4px 7px;text-align:right;white-space:nowrap;position:sticky;top:0;}
+  thead th:first-child{text-align:left;}
+  tbody tr:nth-child(even) td{background:#f7f5f1;}
+  tbody tr:hover td{background:#eef0f8;}
+  tbody td{padding:3px 7px;border-bottom:1px solid #e0ddd7;text-align:right;white-space:nowrap;}
+  tbody td:first-child{text-align:left;font-weight:600;}
+
+  .err-box{display:none;margin:6px 12px;background:#fff5f5;border:1px solid #f5c6c6;
+    border-radius:2px;padding:8px 12px;font-size:0.65rem;color:#c0392b;white-space:pre-wrap;}
+
+  /* ── Custom tab ── */
+  .loc-tabs{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;}
+  .loc-tab{font-family:inherit;font-size:0.72rem;font-weight:700;padding:7px 16px;
+    border-radius:2px;cursor:pointer;border:1.5px solid #bbb;background:#fff;color:#555;
+    transition:all .15s;}
+  .loc-tab:hover{border-color:#111;color:#111;}
+  .loc-tab.active{background:#111;color:#fff;border-color:#111;}
+  .page-panel{display:none;}
+  .page-panel.active{display:block;}
+
+  #map-picker-wrap{padding:10px 12px;}
+  #map-picker-wrap p{font-size:0.68rem;color:#555;margin-bottom:8px;}
+  #leaflet-map{width:100%;height:320px;border:1px solid #bbb;border-radius:2px;}
+  #custom-coords{font-size:0.68rem;color:#333;margin-top:6px;font-weight:700;}
+  .custom-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    padding:8px 12px;border-top:1px solid #e0ddd7;}
+
+  /* ── Climate normals section ── */
+  .norm-section{margin-top:18px;}
+  .norm-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+  .norm-block{background:#fff;border:1.5px solid #bbb;border-radius:2px;padding:8px 12px 10px;}
+  .norm-head{font-size:0.63rem;font-weight:700;color:#111;margin-bottom:5px;
+    border-bottom:1px solid #eee;padding-bottom:3px;}
+  canvas.norm-chart{display:block;width:100%;height:90px;}
+
+  footer{margin-top:12px;font-size:0.56rem;color:#888;display:flex;gap:10px;flex-wrap:wrap;}
+  
+  
+#flush-cache-btn{font-family:inherit;font-size:0.62rem;font-weight:700;padding:5px 12px;
+    border-radius:2px;cursor:pointer;border:1.5px solid #888;background:transparent;color:#555;}
+  #flush-cache-btn:hover{border-color:#111;color:#111;}
+  #flush-cache-btn:disabled{opacity:0.3;cursor:not-allowed;}
+
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════ PAGE TABS ══════════════════════ -->
+<div class="loc-tabs">
+  <button class="loc-tab active" onclick="switchPage('main',this)">📊 All Stations</button>
+  <button class="loc-tab" onclick="switchPage('custom',this)">📍 Custom Location</button>
+</div>
+
+<!-- ══════════════════════ MAIN PAGE ══════════════════════ -->
+<div id="page-main" class="page-panel active">
+
+  <!-- Top controls -->
+  <div class="top-bar">
+    <h1>500 hPa Geopotential — Ensemble Forecast</h1>
+    <span class="global-status" id="global-status">Load available runs first</span>
+    <button class="fetch-btn" id="fetch-all-btn" onclick="fetchAll()" disabled>⟳ FETCH ALL</button>
+    <button class="dl-btn" id="dl-all-btn" onclick="downloadAllPNG()" disabled>⬇ SAVE 3 PNGs</button>
+  </div>
+
+  <!-- ── RUN SELECTOR ── -->
+<div class="run-selector-wrap">
+    <label for="run-select">🕐 MODEL RUN:</label>
+    <select id="run-select" disabled onchange="onRunChange()">
+      <option value="">— click Refresh to load runs —</option>
+    </select>
+    <button id="refresh-runs-btn" onclick="loadAvailableRuns()">↻ Refresh runs</button>
+    <button id="flush-cache-btn" onclick="flushProxyCache()">↺ Flush cache</button>
+    <span class="run-note" id="run-note">Fetches available GDPS reference times from GeoMet</span>
+    <span style="font-size:0.58rem;color:#888;margin-left:4px;" id="flush-status"></span>
+  </div>
+  
+  
+  
+
+  <div class="src-log" id="srclog-global"></div>
+
+  <!-- Three location blocks -->
+  <div class="loc-grid">
+
+    <!-- Edmonton -->
+    <div class="loc-block" id="block-edmonton">
+      <div class="loc-head">
+        <h2>YEG — Edmonton Intl &nbsp;·&nbsp; 53.31°N 113.58°W</h2>
+        <span class="run-badge" id="badge-edmonton">— no run loaded —</span>
+      </div>
+      <div class="legend" id="legend-edmonton"></div>
+      <div class="sub-tabs">
+        <button class="sub-tab active" onclick="switchSub('edmonton','chart',this)">Chart</button>
+        <button class="sub-tab" onclick="switchSub('edmonton','table',this)">Data Table</button>
+      </div>
+      <div id="sub-chart-edmonton" class="sub-panel active">
+        <div class="chart-scroll" id="scroll-edmonton">
+          <canvas class="plot" id="plot-edmonton"></canvas>
+          <div class="overlay" id="overlay-edmonton"><div>Select a run and click <strong>FETCH ALL</strong></div></div>
+        </div>
+      </div>
+      <div id="sub-table-edmonton" class="sub-panel">
+        <div class="tbl-wrap"><table><thead><tr id="th-edmonton"></tr></thead><tbody id="tbody-edmonton"></tbody></table></div>
+      </div>
+      <div class="err-box" id="err-edmonton"></div>
+    </div>
+
+    <!-- High Level -->
+    <div class="loc-block" id="block-highlevel">
+      <div class="loc-head">
+        <h2>YOJ — High Level &nbsp;·&nbsp; 58.62°N 117.17°W</h2>
+        <span class="run-badge" id="badge-highlevel">— no run loaded —</span>
+      </div>
+      <div class="legend" id="legend-highlevel"></div>
+      <div class="sub-tabs">
+        <button class="sub-tab active" onclick="switchSub('highlevel','chart',this)">Chart</button>
+        <button class="sub-tab" onclick="switchSub('highlevel','table',this)">Data Table</button>
+      </div>
+      <div id="sub-chart-highlevel" class="sub-panel active">
+        <div class="chart-scroll" id="scroll-highlevel">
+          <canvas class="plot" id="plot-highlevel"></canvas>
+          <div class="overlay" id="overlay-highlevel"><div>Select a run and click <strong>FETCH ALL</strong></div></div>
+        </div>
+      </div>
+      <div id="sub-table-highlevel" class="sub-panel">
+        <div class="tbl-wrap"><table><thead><tr id="th-highlevel"></tr></thead><tbody id="tbody-highlevel"></tbody></table></div>
+      </div>
+      <div class="err-box" id="err-highlevel"></div>
+    </div>
+
+    <!-- Calgary -->
+    <div class="loc-block" id="block-calgary">
+      <div class="loc-head">
+        <h2>YYC — Calgary Intl &nbsp;·&nbsp; 51.11°N 114.02°W</h2>
+        <span class="run-badge" id="badge-calgary">— no run loaded —</span>
+      </div>
+      <div class="legend" id="legend-calgary"></div>
+      <div class="sub-tabs">
+        <button class="sub-tab active" onclick="switchSub('calgary','chart',this)">Chart</button>
+        <button class="sub-tab" onclick="switchSub('calgary','table',this)">Data Table</button>
+      </div>
+      <div id="sub-chart-calgary" class="sub-panel active">
+        <div class="chart-scroll" id="scroll-calgary">
+          <canvas class="plot" id="plot-calgary"></canvas>
+          <div class="overlay" id="overlay-calgary"><div>Select a run and click <strong>FETCH ALL</strong></div></div>
+        </div>
+      </div>
+      <div id="sub-table-calgary" class="sub-panel">
+        <div class="tbl-wrap"><table><thead><tr id="th-calgary"></tr></thead><tbody id="tbody-calgary"></tbody></table></div>
+      </div>
+      <div class="err-box" id="err-calgary"></div>
+    </div>
+
+  </div><!-- /loc-grid -->
+
+  <!-- Climate normals — chart -->
+  <div class="norm-section">
+    <div class="norm-grid">
+      <div class="norm-block">
+        <div class="norm-head" id="norm-head-edmonton">Climate Normal — 500 hPa Geopotential Height (dam) · YEG Edmonton</div>
+        <canvas class="norm-chart" id="normChart-edmonton"></canvas>
+      </div>
+    </div>
+  </div>
+
+
+  <footer>
+    <span>GEPS: geo.weather.gc.ca GeoMet (21 members, 384h) via orangecore.net/naefs_proxy.php</span>
+    <span>GDPS: GDPS.PRES_GZ.500 · geo.weather.gc.ca</span>
+    <span>Deterministic models: api.open-meteo.com (ECMWF-IFS, ECMWF-AIFS, GFS, UKMO, GEM)</span>
+  </footer>
+
+</div><!-- /page-main -->
+
+<!-- ══════════════════════ CUSTOM PAGE ══════════════════════ -->
+<div id="page-custom" class="page-panel">
+  <div class="loc-block" id="block-custom">
+    <div class="loc-head">
+      <h2 id="head-custom">📍 Custom Location &nbsp;·&nbsp; 500 hPa Geopotential</h2>
+      <span class="run-badge" id="badge-custom">— no run loaded —</span>
+    </div>
+    <div id="map-picker-wrap">
+      <p>Click anywhere on the map to set the forecast location, then press FETCH.</p>
+      <div id="leaflet-map"></div>
+      <div id="custom-coords">No location selected</div>
+    </div>
+    <div class="custom-controls">
+      <button class="fetch-btn" id="fetch-custom-btn" onclick="startFetch('custom')" disabled>⟳ FETCH</button>
+      <button class="dl-btn" id="dl-custom-btn" onclick="downloadPNG('custom')" disabled>⬇ PNG</button>
+      <span class="global-status" id="status-custom">Pick a location on the map first</span>
+    </div>
+    <div class="legend" id="legend-custom"></div>
+    <div class="sub-tabs">
+      <button class="sub-tab active" onclick="switchSub('custom','chart',this)">Chart</button>
+      <button class="sub-tab" onclick="switchSub('custom','table',this)">Data Table</button>
+    </div>
+    <div id="sub-chart-custom" class="sub-panel active">
+      <div class="chart-scroll" id="scroll-custom">
+        <canvas class="plot" id="plot-custom"></canvas>
+        <div class="overlay" id="overlay-custom"><div>Pick a map location and click <strong>FETCH</strong></div></div>
+      </div>
+    </div>
+    <div id="sub-table-custom" class="sub-panel">
+      <div class="tbl-wrap"><table><thead><tr id="th-custom"></tr></thead><tbody id="tbody-custom"></tbody></table></div>
+    </div>
+    <div class="err-box" id="err-custom"></div>
+    <div class="src-log" id="srclog-custom"></div>
+  </div>
+
+  <footer style="margin-top:12px;">
+    <span>GEPS: geo.weather.gc.ca GeoMet (21 members, 384h) via orangecore.net/naefs_proxy.php</span>
+    <span>GDPS: GDPS.PRES_GZ.500 · geo.weather.gc.ca</span>
+    <span>Deterministic models: api.open-meteo.com (ECMWF-IFS, ECMWF-AIFS, GFS, UKMO, GEM)</span>
+  </footer>
+</div><!-- /page-custom -->
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+//  LOCATION CONFIGS
+// ═══════════════════════════════════════════════════════
+const LOCS={
+  edmonton:{ id:'edmonton', label:'YEG — Edmonton Intl',   lat:53.3094, lon:-113.5800 },
+  highlevel:{ id:'highlevel',label:'YOJ — High Level',      lat:58.6167, lon:-117.1667 },
+  calgary:{  id:'calgary',  label:'YYC — Calgary Intl',    lat:51.1139, lon:-114.0200 },
+  custom:{   id:'custom',   label:'Custom Location',         lat:null,    lon:null      },
+};
+let customLat=null, customLon=null;
+
+// ═══════════════════════════════════════════════════════
+//  RUN SELECTION STATE
+//  selectedRun = { refISO: "2025-05-10T00:00:00Z", label: "..." }
+//  null = use latest (default)
+// ═══════════════════════════════════════════════════════
+let selectedRun = null;   // null → latest
+let availableRuns = [];   // [{refISO, label, isLatest}]
+
+// ═══════════════════════════════════════════════════════
+//  LOAD AVAILABLE RUNS FROM GEOMET GETCAPABILITIES
+// ═══════════════════════════════════════════════════════
+async function loadAvailableRuns(){
+  const btn = document.getElementById('refresh-runs-btn');
+  const sel = document.getElementById('run-select');
+  const note = document.getElementById('run-note');
+  btn.disabled = true;
+  sel.disabled = true;
+  note.textContent = 'Fetching available runs from GeoMet…';
+  sel.innerHTML = '<option value="">Loading…</option>';
+
+  try {
+    const r = await fetch(
+      `${GEOMET}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities&LAYERS=${GEPS_LAYER}`,
+      { signal: AbortSignal.timeout(25000) }
+    );
+    const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
+
+    let refDim = null;
+    for (const l of xml.querySelectorAll('Layer')) {
+      if (l.querySelector('Name')?.textContent?.trim() === GEPS_LAYER) {
+        for (const d of l.querySelectorAll('Dimension')) {
+          if (d.getAttribute('name') === 'reference_time') { refDim = d; break; }
+        }
+        break;
+      }
+    }
+
+    if (!refDim) throw new Error('No reference_time dimension found in GetCapabilities');
+
+    const defaultRef = refDim.getAttribute('default') || '';
+    const raw = refDim.textContent.trim();
+
+    // Parse all available reference times
+    // Format can be: "T1/T2/PTxH" (list) or comma-separated, or single value
+    let refs = [];
+    if (raw.includes('/') && raw.split('/').length === 3) {
+      // interval: start/end/step
+      const [start, end, step] = raw.split('/');
+      const stepH = parseISODuration(step);
+      let cur = new Date(start);
+      const endDt = new Date(end);
+      while (cur <= endDt) {
+        refs.push(cur.toISOString().replace(/\.\d+Z$/, 'Z'));
+        cur = new Date(+cur + stepH * 3600000);
+      }
+    } else {
+      // Comma-separated list or single
+      refs = raw.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    if (!refs.length) throw new Error('No reference times parsed');
+
+    // Sort descending (newest first)
+    refs.sort((a, b) => new Date(b) - new Date(a));
+
+const preferredISO = refs.find(iso => {
+      const h = new Date(iso).getUTCHours();
+      return h === 0 || h === 12;
+    }) || refs[0];
+
+    availableRuns = refs.map((iso, i) => {
+      const dt = new Date(iso);
+      const h = dt.getUTCHours();
+      const isMain = h === 0 || h === 12;
+      const isLatest = iso.slice(0,16) === preferredISO.slice(0,16);
+      const utcStr = dt.toISOString().slice(0,16).replace('T',' ') + 'Z';
+      const mdtHr = ((h + MDT_OFF) + 24) % 24;
+      const tag = isLatest ? '  ← Latest Main Run' : (!isMain ? '  (192h only)' : '');
+      const label = `${utcStr}  (${String(mdtHr).padStart(2,'0')}:00 MDT)${tag}`;
+      return { refISO: iso, label, isLatest, isMain };
+    });
+
+    // Populate dropdown
+    sel.innerHTML = '';
+    for (const run of availableRuns) {
+      const opt = document.createElement('option');
+      opt.value = run.refISO;
+      opt.textContent = run.label;
+      if (run.isLatest) opt.selected = true;
+      sel.appendChild(opt);
+    }
+
+    sel.disabled = false;
+    onRunChange();
+
+    note.textContent = `${availableRuns.length} runs available · GeoMet GDPS`;
+    document.getElementById('fetch-all-btn').disabled = false;
+    document.getElementById('global-status').textContent = 'Run selected — click Fetch All';
+
+  } catch(e) {
+    note.textContent = `Error: ${e.message}`;
+    sel.innerHTML = '<option value="">Failed to load — try Refresh</option>';
+    console.error('loadAvailableRuns:', e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function parseISODuration(dur) {
+  // Returns hours. Supports PT6H, PT12H, P1D etc.
+  if (!dur) return 6;
+  const h = dur.match(/(\d+)H/);
+  const d = dur.match(/(\d+)D/);
+  return (d ? parseInt(d[1]) * 24 : 0) + (h ? parseInt(h[1]) : 0) || 6;
+}
+
+function onRunChange() {
+  const sel = document.getElementById('run-select');
+  const iso = sel.value;
+  selectedRun = availableRuns.find(r => r.refISO === iso) || null;
+  const note = document.getElementById('run-note');
+  if (selectedRun) {
+    const latest = selectedRun.isLatest ? ' (latest available)' : '';
+    note.textContent = `Selected: ${selectedRun.refISO.slice(0,16).replace('T',' ')}Z${latest}`;
+  }
+}
+
+/*
+// Disable the dropdown list for RUN
+function onRunChange() {
+  // Run selection disabled — always use latest
+  const sel = document.getElementById('run-select');
+  const latest = availableRuns.find(r => r.isLatest);
+  if (latest) {
+    sel.value = latest.refISO;
+    selectedRun = latest;
+  }
+  const note = document.getElementById('run-note');
+  if (selectedRun) {
+    note.textContent = `Selected: ${selectedRun.refISO.slice(0,16).replace('T',' ')}Z (latest available)`;
+  }
+}
+*/
+
+
+// ═══════════════════════════════════════════════════════
+//  CLIMATE NORMAL
+// ═══════════════════════════════════════════════════════
+const NORM_RAW=[[1,1,540],[4,3,546],[4,19,552],[5,11,558],[5,30,564],
+  [6,27,570],[7,26,576],[8,7,570],[8,31,564],[10,1,558],
+  [10,17,552],[10,29,546],[11,17,540],[12,31,540]];
+const NORM_TABLE=(()=>{
+const doy=(m,d)=>Math.floor((new Date(2000,m-1,d)-new Date(2000,0,1))/86400000)+1;
+  const s=NORM_RAW.map(([m,d,v])=>({d:doy(m,d),v})).sort((a,b)=>a.d-b.d);
+  const t={};let last=s[0].v,si=0;
+  for(let d=1;d<=366;d++){while(si<s.length&&s[si].d<=d){last=s[si].v;si++;}t[d]=last;}
+  return t;
+})();
+function climNorm(dt){
+  const d=Math.round((dt-new Date(Date.UTC(dt.getUTCFullYear(),0,0)))/86400000);
+  return NORM_TABLE[Math.min(d,366)]??540;
+}
+const NORM_OFFSET={edmonton:0,highlevel:-6,calgary:+5};
+function climNormLoc(dt,locId,runStart){
+  if(locId==='custom') return null;
+  const offset=NORM_OFFSET[locId]??0;
+  return climNorm(runStart||dt)+offset;
+}
+
+// ═══════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════
+const MDT_OFF=-6;
+const GEOMET='https://geo.weather.gc.ca/geomet';
+const GDPS_LAYER='GDPS_15km_GeopotentialHeight_500mb';
+const GEPS_LAYER='REPS.MEM.PRES_GZ.500.01'; // used only for run-selector GetCapabilities
+const PROXY_URL='naefs_proxy.php';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function fetchJ(url,retries=2){
+  for(let a=0;a<=retries;a++){
+    try{const r=await fetch(url,{signal:AbortSignal.timeout(25000)});if(!r.ok)throw new Error(`HTTP ${r.status}`);return await r.json();}
+    catch(e){if(a===retries)throw e;await sleep(800*(a+1));}
+  }
+}
+async function fetchXML(url,retries=2){
+  for(let a=0;a<=retries;a++){
+    try{const r=await fetch(url,{signal:AbortSignal.timeout(90000)});if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      return new DOMParser().parseFromString(await r.text(),'text/xml');}
+    catch(e){if(a===retries)throw e;await sleep(1200*(a+1));}
+  }
+}
+function gfiUrl(layer,t,ref,lat,lon){
+  const d=0.06;
+  let u=`${GEOMET}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo`
+    +`&BBOX=${lat-d},${lon-d},${lat+d},${lon+d}`
+    +`&CRS=EPSG:4326&WIDTH=3&HEIGHT=3&LAYERS=${layer}&QUERY_LAYERS=${layer}`
+    +`&INFO_FORMAT=application/json&I=1&J=1&TIME=${t}`;
+  if(ref)u+=`&DIM_REFERENCE_TIME=${ref}`;
+  return u;
+}
+function gval(json){
+  try{
+    const p=json?.features?.[0]?.properties;if(!p)return null;
+    let raw=p?.value??p?.Value??null;
+    if(raw===null||raw===''){const k=Object.keys(p).find(k=>p[k]!==null&&p[k]!==''&&!isNaN(parseFloat(p[k])));raw=k?p[k]:null;}
+    if(raw===null||raw==='')return null;
+    const v=parseFloat(raw);if(!isFinite(v)||v===0)return null;
+    return v>2000?v/10:v;
+  }catch{return null;}
+}
+
+// ── getCapTimes: now accepts an optional forceRef to use a specific run ──
+async function getCapTimes(layer, forceRef){
+  if(forceRef){
+    const refHour = new Date(forceRef).getUTCHours();
+    if(refHour === 6 || refHour === 18) return { times: null, ref: null };  // comment out these 2 for fetching for 06Z/18Z for GDPS
+    // We already know the reference time; just get the time dimension      // comment out these 2 for fetching for 06Z/18Z for GDPS
+    const r=await fetch(`${GEOMET}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities&LAYERS=${layer}`,{signal:AbortSignal.timeout(25000)});
+    const xml=new DOMParser().parseFromString(await r.text(),'text/xml');
+    for(const l of xml.querySelectorAll('Layer')){
+      if(l.querySelector('Name')?.textContent?.trim()===layer){
+        let td=null;
+        for(const d of l.querySelectorAll('Dimension')){
+          if(d.getAttribute('name')==='time')td=d;
+        }
+        return{times:td?.textContent?.trim()||null, ref:forceRef};
+      }
+    }
+    return{times:null, ref:forceRef};
+  }
+  // default: use whatever reference_time the server declares as default
+  const r=await fetch(`${GEOMET}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities&LAYERS=${layer}`,{signal:AbortSignal.timeout(25000)});
+  const xml=new DOMParser().parseFromString(await r.text(),'text/xml');
+  for(const l of xml.querySelectorAll('Layer')){
+    if(l.querySelector('Name')?.textContent?.trim()===layer){
+      let td=null,rd=null;
+      for(const d of l.querySelectorAll('Dimension')){
+        if(d.getAttribute('name')==='time')td=d;
+        if(d.getAttribute('name')==='reference_time')rd=d;
+      }
+      return{times:td?.textContent?.trim()||null,ref:rd?.getAttribute('default')||null};
+    }
+  }
+  return{};
+}
+
+function parseTimes(dim, stepH=12, maxDays=14){
+  if(!dim) return [];
+  // Handle comma-separated list
+  if(!dim.includes('/')) return dim.split(',').map(s=>s.trim()).filter(Boolean);
+  const p = dim.split('/');
+  if(p.length < 3) return [p[0]];
+  // interval format: start/end/step
+  const start=new Date(p[0]), end=new Date(p[1]);
+  const cap=new Date(Math.min(+end, +start+maxDays*86400000));
+  const out=[]; let cur=new Date(start);
+  while(cur<=cap){out.push(cur.toISOString().replace(/\.\d+Z$/,'Z')); cur=new Date(+cur+stepH*3600000);}
+  return out;
+}
+function matchKey(map,iso){
+  const pre=iso.slice(0,16);return Object.keys(map).find(k=>k.slice(0,16)===pre)||null;
+}
+function boxStats(arr){
+  const v=arr.filter(x=>x!==null&&!isNaN(x)).sort((a,b)=>a-b);if(!v.length)return null;
+  const q=p=>{const pos=p*(v.length-1),lo=Math.floor(pos),hi=Math.ceil(pos);return v[lo]+(v[hi]-v[lo])*(pos-lo);};
+  return{min:v[0],q1:q(.25),med:q(.5),q3:q(.75),max:v[v.length-1]};
+}
+
+// ═══════════════════════════════════════════════════════
+//  NAEFS PARSER
+// ═══════════════════════════════════════════════════════
+function parseNAEFS(xml){
+  const modelMap={};
+  xml.querySelectorAll('model_description model').forEach(m=>{
+    modelMap[m.getAttribute('id')]={member:m.getAttribute('member'),center:m.getAttribute('center'),memberType:m.getAttribute('member_type')};
+  });
+  let cmcCtrlId=null,ncepCtrlId=null;const perturbedIds=[];
+  for(const[id,info]of Object.entries(modelMap)){
+    if(info.center==='CMC'&&info.memberType==='control')cmcCtrlId=id;
+    else if(info.center==='NCEP'&&info.memberType==='control')ncepCtrlId=id;
+    else if(info.center==='CMC'&&info.memberType==='member')perturbedIds.push(id);
+  }
+  if(!cmcCtrlId)cmcCtrlId='1';if(!ncepCtrlId)ncepCtrlId='22';
+  if(!perturbedIds.length)for(let i=2;i<=21;i++)perturbedIds.push(String(i));
+  const memberData={},times=[];
+  xml.querySelectorAll('forecast').forEach(fc=>{
+    const fh=parseInt(fc.getAttribute('forecast_hour'));if(fh>384||fh%6!==0)return;
+    const vt=fc.getAttribute('valid_time');
+    const dt=new Date(Date.UTC(parseInt(vt.slice(0,4)),parseInt(vt.slice(4,6))-1,parseInt(vt.slice(6,8)),parseInt(vt.slice(8,10))));
+    const iso=dt.toISOString().replace(/\.\d+Z$/,'Z');times.push(iso);
+    fc.querySelectorAll('model').forEach(m=>{
+      const id=m.getAttribute('id');if(!memberData[id])memberData[id]={};
+      const raw=parseFloat(m.textContent.trim());memberData[id][iso]=isNaN(raw)?null:raw/10;
+    });
+  });
+  const refStr=xml.querySelector('valid-begin-time')?.textContent?.trim()||'';
+  let refDate=null;
+  if(refStr.length>=10)refDate=new Date(Date.UTC(parseInt(refStr.slice(0,4)),parseInt(refStr.slice(4,6))-1,parseInt(refStr.slice(6,8)),parseInt(refStr.slice(8,10))));
+  return{refDate,times:[...new Set(times)].sort(),memberData,cmcCtrlId,ncepCtrlId,perturbedIds,modelMap};
+}
+
+// ═══════════════════════════════════════════════════════
+//  OPEN-METEO
+// ═══════════════════════════════════════════════════════
+function omMap(times,vals){
+  const m={};
+  for(let i=0;i<times.length;i++){
+    if(vals[i]!=null){const k=times[i].replace(' ','T')+(times[i].endsWith('Z')?'':'Z');m[k]=vals[i]/10;}
+  }
+  return m;
+}
+async function fetchOM(lat,lon,model,days){
+  const j=await fetchJ(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=geopotential_height_500hPa&models=${model}&forecast_days=${days}&temporal_resolution=hourly_6&timezone=UTC`);
+  return omMap(j.hourly.time,j.hourly.geopotential_height_500hPa);
+}
+
+// ═══════════════════════════════════════════════════════
+//  CHART DATA STORE
+// ═══════════════════════════════════════════════════════
+const chartData={};
+
+// ═══════════════════════════════════════════════════════
+//  FETCH ALL (3 stations in parallel)
+// ═══════════════════════════════════════════════════════
+async function fetchAll(){
+  document.getElementById('fetch-all-btn').disabled=true;
+  document.getElementById('dl-all-btn').disabled=true;
+  document.getElementById('global-status').textContent='Fetching all stations…';
+  document.getElementById('srclog-global').innerHTML='';
+
+  const results=await Promise.allSettled([
+    startFetch('edmonton'),
+    startFetch('highlevel'),
+    startFetch('calgary'),
+  ]);
+
+  const ok=results.filter(r=>r.status==='fulfilled').length;
+  document.getElementById('global-status').textContent=`Done — ${ok}/3 stations loaded`;
+  document.getElementById('fetch-all-btn').disabled=false;
+  const anyOk=Object.keys(chartData).some(k=>['edmonton','highlevel','calgary'].includes(k));
+  document.getElementById('dl-all-btn').disabled=!anyOk;
+}
+
+// ═══════════════════════════════════════════════════════
+//  SINGLE STATION FETCH
+// ═══════════════════════════════════════════════════════
+async function startFetch(locId){
+  const cfg=LOCS[locId];
+  const lat=locId==='custom'?customLat:cfg.lat;
+  const lon=locId==='custom'?customLon:cfg.lon;
+  if(lat===null||lon===null){alert('Please pick a location on the map first.');return;}
+
+  // Which run are we using?
+  // For the custom page, use the same selectedRun as main (shared state).
+  const forcedRef = selectedRun ? selectedRun.refISO : null;
+
+  const $=id=>document.getElementById(id);
+  if(locId==='custom'){$('fetch-custom-btn').disabled=true;$('dl-custom-btn').disabled=true;}
+  $(`err-${locId}`).style.display='none';
+  if(locId==='custom')$(`srclog-${locId}`).innerHTML='';
+
+  const ov=$(`overlay-${locId}`);
+  ov.classList.remove('hidden');
+
+  const runLabel = selectedRun
+    ? selectedRun.refISO.slice(0,16).replace('T',' ')+'Z'+(selectedRun.isLatest?' (latest)':'')
+    : 'latest run';
+
+  ov.innerHTML=`<div class="spinner"></div><div style="font-size:0.7rem">Loading ${cfg.label||'location'}…</div><div style="font-size:0.6rem;color:#888">Run: ${runLabel}</div><div class="prog-text" id="prog-${locId}">Starting…</div>`;
+
+  const prog=t=>{
+    const el=$(`prog-${locId}`);if(el)el.textContent=t;
+    if(locId==='custom')$(`status-${locId}`).textContent=t;
+    else document.getElementById('global-status').textContent=`${locId}: ${t}`;
+  };
+  const badge=(l,ok,target)=>{
+    const s=document.createElement('span');s.className=ok?'ok':'fail';s.textContent=l+(ok?' ✓':' ✗');
+    const tgt=target||`srclog-${locId==='custom'?'custom':'global'}`;
+    $(tgt)?.appendChild(s);
+  };
+
+  let naefs=null,gdpsGeoData={},gdpsRef=null;
+  let ecmwfMap=null,gfsMap=null,ukmoMap=null;
+  let refDate=null;
+
+  try{
+    // A. GEPS — pass run date if selected so proxy can filter
+    try{
+      prog('GEPS…');
+      let proxyUrl = `${PROXY_URL}?lat=${lat}&lon=${lon}`;
+      if(forcedRef) proxyUrl += `&run=${encodeURIComponent(forcedRef)}`;
+      const xml=await fetchXML(proxyUrl);
+      const errNode=xml.querySelector('error,e');if(errNode)throw new Error('Proxy: '+errNode.textContent.trim());
+      if(xml.documentElement.tagName==='parsererror')throw new Error('Proxy returned invalid XML');
+naefs=parseNAEFS(xml);if(!naefs.times.length)throw new Error('No forecast steps');
+      const _runHour=naefs.refDate?naefs.refDate.getUTCHours():0;
+      const _maxFh=(_runHour===6||_runHour===18)?192:384;
+      naefs.times=naefs.times.filter(t=>(new Date(t)-naefs.refDate)/3600000<=_maxFh);
+      refDate=naefs.refDate||new Date(naefs.times[0]);
+      const rl=(forcedRef||refDate.toISOString()).slice(0,16).replace('T',' ')+'Z';
+$(`badge-${locId}`).textContent=`Run: ${rl} (GEPS)`;
+      badge(`${locId.toUpperCase()} GEPS(${naefs.perturbedIds.length}mbr)`,true);
+    }catch(e){console.warn(locId,'GEPS:',e.message);badge(`${locId.toUpperCase()} GEPS`,false);}
+
+// B. GDPS — use forcedRef to pin the run
+let gdpsFromFallback = false;
+try {
+  prog('GDPS…');
+  const meta = await getCapTimes(GDPS_LAYER, forcedRef);
+  gdpsRef = meta.ref;
+  if (gdpsRef) {
+    const times = parseTimes(meta.times, 3, 15);
+    const times12 = times.filter(t => { const fh = (new Date(t) - new Date(gdpsRef)) / 3600000; return fh >= 0 && fh % 6 === 0; });
+    let done = 0;
+    for (let i = 0; i < times12.length; i += 8) {
+      await Promise.all(times12.slice(i, i + 8).map(async t => {
+        const normT = new Date(t).toISOString().replace(/\.\d+Z$/, 'Z');
+        try { gdpsGeoData[normT] = gval(await fetchJ(gfiUrl(GDPS_LAYER, t, gdpsRef, lat, lon))); }
+        catch { gdpsGeoData[normT] = null; }
+        prog(`${locId} GDPS ${++done}/${times12.length}`);
+      }));
+    }
+    const gc = Object.values(gdpsGeoData).filter(v => v !== null).length;
+    badge(`${locId.toUpperCase()} GDPS(${gc}pts)`, gc > 0);
+    if (!refDate && gdpsRef) refDate = new Date(gdpsRef);
+    if (gdpsRef) {
+      const gdpsRunLabel = new Date(gdpsRef).toISOString().slice(0, 16).replace('T', ' ') + 'Z';
+      const existing = $(`badge-${locId}`).textContent;
+      if (!existing.includes('GEPS'))
+        $(`badge-${locId}`).textContent = `Run: ${gdpsRunLabel} (GDPS)`;
+    }
+  } else throw new Error('No reference_time');
+} catch(e) {
+  console.warn(locId, 'GDPS:', e.message);
+  badge(`${locId.toUpperCase()} GDPS`, false);
+}
+
+// B2. GDPS fallback — GEM Global via Open-Meteo if GDPS returned nothing
+const gdpsHasData = Object.values(gdpsGeoData).some(v => v !== null);
+if (!gdpsHasData) {
+  try {
+    prog('GDPS empty — trying GEM Global (Open-Meteo)…');
+    const gemFallback = await fetchOM(lat, lon, 'gem_global', 10);
+    Object.assign(gdpsGeoData, gemFallback);
+    const fc = Object.values(gdpsGeoData).filter(v => v !== null).length;
+    gdpsFromFallback = true;
+    const s = document.createElement('span');
+    s.className = 'fallback';
+    s.textContent = `${locId.toUpperCase()} GDPS→GEM/OM(${fc}pts) ✓`;
+    const tgt = locId === 'custom' ? 'srclog-custom' : 'srclog-global';
+    document.getElementById(tgt)?.appendChild(s);
+  } catch(e) {
+    console.warn(locId, 'GEM fallback:', e.message);
+    badge(`${locId.toUpperCase()} GEM/OM-fallback`, false);
+  }
+}
+
+if (gdpsFromFallback) {
+  const existing = $(`badge-${locId}`).textContent;
+  if (!existing.includes('GEM/OM'))
+    $(`badge-${locId}`).textContent += ' [GDPS - OM Data]';
+}
+
+    // C-F. Open-Meteo (always uses latest; no run control available)
+    try{prog('ECMWF-IFS…');ecmwfMap=await fetchOM(lat,lon,'ecmwf_ifs025',16);badge(`${locId.toUpperCase()} IFS`,true);}
+    catch(e){badge(`${locId.toUpperCase()} IFS`,false);}
+    try{prog('GFS…');gfsMap=await fetchOM(lat,lon,'gfs_global',16);badge(`${locId.toUpperCase()} GFS`,true);}
+    catch(e){badge(`${locId.toUpperCase()} GFS`,false);}
+    try{prog('UKMO…');ukmoMap=await fetchOM(lat,lon,'ukmo_global_deterministic_10km',7);badge(`${locId.toUpperCase()} UKMO`,true);}
+    catch(e){badge(`${locId.toUpperCase()} UKMO`,false);}
+
+    if(!refDate)refDate=new Date();
+
+    // Build timeline
+    const allTimesSet=new Set();
+    if(naefs)naefs.times.forEach(t=>allTimesSet.add(t));
+    let cur=new Date(refDate);const endDate=new Date(+refDate+14*86400000);
+    while(cur<=endDate){allTimesSet.add(cur.toISOString().replace(/\.\d+Z$/,'Z'));cur=new Date(+cur+6*3600000);}
+    const allTimes=[...allTimesSet].sort().filter(t=>new Date(t)<=endDate);
+
+    const labels=[],dtList=[],fhArr=[];
+    const bMin=[],bQ1=[],bMed=[],bQ3=[],bMax=[];
+    const gdpsS=[],ecmwfS=[],ncepS=[],normS=[],ukmoS=[];
+
+    for(const t of allTimes){
+      const dt=new Date(t);const fh=Math.round((dt-refDate)/3600000);
+      const mo=dt.getUTCMonth()+1,dy=dt.getUTCDate(),hr=dt.getUTCHours();
+      labels.push(`${mo}/${String(dy).padStart(2,'0')} ${String(hr).padStart(2,'0')}Z`);
+      dtList.push(dt);fhArr.push(fh);
+      let st=null;
+      if(naefs){const vals=naefs.perturbedIds.map(id=>naefs.memberData[id]?.[t]??null);if(vals.some(v=>v!==null))st=boxStats(vals);}
+      bMin.push(st?.min??null);bQ1.push(st?.q1??null);bMed.push(st?.med??null);bQ3.push(st?.q3??null);bMax.push(st?.max??null);
+      const gGK=matchKey(gdpsGeoData,t);
+      gdpsS.push(gGK&&gdpsGeoData[gGK]!=null?gdpsGeoData[gGK]:null);
+      const ek=ecmwfMap?matchKey(ecmwfMap,t):null;ecmwfS.push(ek?ecmwfMap[ek]:null);
+      const gk=gfsMap?matchKey(gfsMap,t):null;ncepS.push(gk?gfsMap[gk]:null);
+      const uk=ukmoMap?matchKey(ukmoMap,t):null;ukmoS.push(uk?ukmoMap[uk]:null);
+      normS.push(climNormLoc(dt,locId,refDate));
+    }
+
+    if(!bMed.some(v=>v!==null)&&!gdpsS.some(v=>v!==null)&&!ecmwfS.some(v=>v!==null))
+      throw new Error('All data sources returned no data.');
+
+    ov.classList.add('hidden');
+    const locLabel=locId==='custom'?`${lat.toFixed(2)}°N ${Math.abs(lon).toFixed(2)}°W`:(LOCS[locId].label);
+    const cd={locId,locLabel,refDate,labels,dtList,fhArr,bMin,bQ1,bMed,bQ3,bMax,gdpsS,ecmwfS,ncepS,normS,ukmoS};
+    chartData[locId]=cd;
+    await document.fonts.ready;
+    buildLegend(locId);
+    drawCanvas(cd);
+    buildTable(cd);
+    if(locId==='custom'){$('dl-custom-btn').disabled=false;}
+    prog('Done ✓');
+    return cd;
+
+  }catch(e){
+    ov.innerHTML=`<div style="color:#c0392b;font-weight:700;font-size:0.7rem">Error: ${e.message}</div>`;
+    $(`err-${locId}`).textContent=e.message+'\n'+(e.stack||'');
+    $(`err-${locId}`).style.display='block';
+    console.error(locId,e);
+    throw e;
+  }finally{
+    if(locId==='custom'){$('fetch-custom-btn').disabled=(customLat===null);}
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  LEGEND
+// ═══════════════════════════════════════════════════════
+function buildLegend(locId){
+  document.getElementById(`legend-${locId}`).innerHTML=`
+    <div class="li"><div class="lb"></div>GEPS ENS 20-member box</div>
+    <div class="li"><div class="ll" style="border-color:#ee0000"></div>GDPS</div>
+    <div class="li"><div class="ll" style="border-color:#0022ff"></div>ECMWF-IFS</div>
+    <div class="li"><div class="ll" style="border-color:#00b050"></div>GFS</div>
+    <div class="li"><div class="ll" style="border-color:#8e44ad"></div>UKMO</div>
+    <div class="li"><div class="ll" style="border-color:#c2007a;border-top-width:5px"></div>Normal</div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  CANVAS CHART
+// ═══════════════════════════════════════════════════════
+function drawCanvas(d){
+  const{locId,locLabel,labels,dtList,fhArr,bMin,bQ1,bMed,bQ3,bMax,gdpsS,ecmwfS,ncepS,normS,ukmoS}=d;
+  const n=dtList.length;
+  const PX=20,ML=58,MR=16,MT=80,MB=105,PH=350;
+  const PW=n*PX,W=ML+PW+MR,H=MT+PH+MB;
+  const canvas=document.getElementById(`plot-${locId}`);
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  document.getElementById(`scroll-${locId}`).style.height=(H+2)+'px';
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+  const allV=[];[bMin,bMax,gdpsS,ecmwfS,ncepS,normS,ukmoS].forEach(a=>a&&a.forEach(v=>{if(v!=null&&!isNaN(v))allV.push(v);}));
+  if(!allV.length)return;
+  const yLo=Math.floor(Math.min(...allV)/10)*10,yHi=Math.ceil(Math.max(...allV)/10)*10;
+  const xAt=i=>ML+(i+0.5)*PX,yAt=v=>MT+PH-(v-yLo)/(yHi-yLo)*PH;
+  const FONT="'IBM Plex Mono',ui-monospace,monospace";
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#111';ctx.font=`bold 22px ${FONT}`;ctx.textAlign='center';ctx.fillText(locLabel,ML+PW/2,26);
+  ctx.font=`bold 14px ${FONT}`;ctx.fillStyle='#444';ctx.fillText('500 hPa Geopotential Height',ML+PW/2,46);
+  ctx.font=`bold 13px ${FONT}`;ctx.fillStyle='#555';ctx.textAlign='left';
+  ctx.fillText(document.getElementById(`badge-${locId}`).textContent,ML,62);
+  ctx.setLineDash([2,3]);
+  for(let v=yLo;v<=yHi;v+=5){ctx.strokeStyle=v%10===0?'#ccc':'#e8e8e8';ctx.lineWidth=0.7;ctx.beginPath();ctx.moveTo(ML,yAt(v));ctx.lineTo(ML+PW,yAt(v));ctx.stroke();}
+  ctx.setLineDash([]);
+  for(let i=0;i<n;i++){if(dtList[i].getUTCHours()===0){ctx.strokeStyle='#aaa';ctx.lineWidth=0.9;ctx.beginPath();ctx.moveTo(xAt(i),MT);ctx.lineTo(xAt(i),MT+PH);ctx.stroke();}}
+  const nowMs=Date.now();
+  if(nowMs>=dtList[0].getTime()&&nowMs<=dtList[n-1].getTime()){
+    let ni=0;for(let i=0;i<n-1;i++){if(dtList[i].getTime()<=nowMs)ni=i;}
+    const t0=dtList[ni].getTime(),t1=dtList[ni+1]?.getTime()??t0+6*3600000;
+    const nowX=xAt(ni)+(nowMs-t0)/(t1-t0)*PX;
+    ctx.strokeStyle='#ff4600';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(nowX,MT);ctx.lineTo(nowX,MT+PH);ctx.stroke();
+    ctx.font=`10px ${FONT}`;ctx.fillStyle='#ff4600';ctx.textAlign='center';ctx.fillText('now',nowX,MT-3);
+  }
+  for(let i=0;i<n;i++){const hr=dtList[i].getUTCHours(),isMain=hr%12===0;ctx.strokeStyle='#888';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(xAt(i),MT+PH);ctx.lineTo(xAt(i),MT+PH+(isMain?5:3));ctx.stroke();}
+  const dows=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  for(let i=0;i<n;i++){
+    const dt=dtList[i],utcHr=dt.getUTCHours();if(utcHr%12!==0)continue;
+    const x=xAt(i);ctx.textAlign='center';ctx.font=`bold 11px ${FONT}`;ctx.fillStyle='#333';ctx.fillText(`${String(utcHr).padStart(2,'0')}Z`,x,MT+PH+14);
+    if(utcHr===12){const localMs=dt.getTime()+MDT_OFF*3600000;const localDt=new Date(localMs);
+      ctx.font=`bold 18px ${FONT}`;ctx.fillStyle='#111';ctx.fillText(`${localDt.getUTCMonth()+1}/${String(localDt.getUTCDate()).padStart(2,'0')}`,x,MT+PH+44);
+      ctx.font=`14px ${FONT}`;ctx.fillStyle='#111';ctx.fillText(dows[localDt.getUTCDay()],x,MT+PH+72);}
+  }
+  ctx.textAlign='right';
+  for(let v=yLo;v<=yHi;v+=5){const y=yAt(v),isLabel=v%10===0;ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ML-(isLabel?4:2),y);ctx.lineTo(ML,y);ctx.stroke();if(isLabel){ctx.font=`bold 12px ${FONT}`;ctx.fillStyle='#111';ctx.fillText(v,ML-6,y+4);}}
+  ctx.save();ctx.translate(14,MT+PH/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.font=`bold 13px ${FONT}`;ctx.fillStyle='#111';ctx.fillText('dam',0,0);ctx.restore();
+  ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(ML,MT);ctx.lineTo(ML,MT+PH);ctx.lineTo(ML+PW,MT+PH);ctx.stroke();
+  ctx.strokeStyle='#bbb';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(ML+PW,MT);ctx.lineTo(ML+PW,MT+PH);ctx.moveTo(ML,MT);ctx.lineTo(ML+PW,MT);ctx.stroke();
+  const bw=Math.max(4,PX*0.55);
+  for(let i=0;i<n;i++){
+    if(bMed[i]===null)continue;
+    const x=xAt(i),hw=bw/2,wc=hw*0.55;
+    const yMn=yAt(bMin[i]),yQ1=yAt(bQ1[i]),yMd=yAt(bMed[i]),yQ3=yAt(bQ3[i]),yMx=yAt(bMax[i]);
+    ctx.strokeStyle='#888';ctx.lineWidth=1.2;ctx.setLineDash([]);
+    ctx.beginPath();ctx.moveTo(x,yQ1);ctx.lineTo(x,yMn);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x,yQ3);ctx.lineTo(x,yMx);ctx.stroke();
+    ctx.strokeStyle='#666';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(x-wc,yMn);ctx.lineTo(x+wc,yMn);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x-wc,yMx);ctx.lineTo(x+wc,yMx);ctx.stroke();
+    ctx.fillStyle='#FFD700';ctx.fillRect(x-hw,yQ3,bw,yQ1-yQ3);
+    ctx.strokeStyle='#b8870a';ctx.lineWidth=1.5;ctx.strokeRect(x-hw,yQ3,bw,yQ1-yQ3);
+    ctx.strokeStyle='#5a3e00';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(x-hw,yMd);ctx.lineTo(x+hw,yMd);ctx.stroke();
+  }
+  function drawLine(vals,color,lw){ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.setLineDash([]);ctx.beginPath();let on=false;for(let i=0;i<n;i++){if(vals[i]===null||isNaN(vals[i])){on=false;continue;}const x=xAt(i),y=yAt(vals[i]);if(!on){ctx.moveTo(x,y);on=true;}else ctx.lineTo(x,y);}ctx.stroke();}
+  drawLine(gdpsS,'#ee0000',2.2);
+  drawLine(ecmwfS,'#0022ff',1.8);
+  drawLine(ncepS,'#00b050',2.0);
+  if(normS.some(v=>v!==null))drawLine(normS,'#c2007a',4.5);
+  drawLine(ukmoS,'#8e44ad',2.0);
+
+  const ly=MT+PH-10,lx=ML+6;
+  const items=[
+    {type:'box',label:'GEPS ENS (20-member)'},
+    {type:'line',color:'#ee0000',label:'GDPS'},
+    {type:'line',color:'#0022ff',label:'ECMWF-IFS'},
+    {type:'line',color:'#00b050',label:'GFS'},
+    {type:'line',color:'#8e44ad',label:'UKMO'},
+    ...(normS.some(v=>v!==null)?[{type:'line',color:'#c2007a',label:'Normal',lw:4}]:[]),
+  ];
+  ctx.font=`15px ${FONT}`;
+  let totalW=0;
+  for(const it of items){totalW+=(it.type==='box'?22:26);totalW+=ctx.measureText(it.label).width+14;}
+  ctx.save();ctx.globalAlpha=0.85;ctx.fillStyle='#ffffff';ctx.fillRect(lx-4,ly-18,totalW+12,24);ctx.restore();
+  let lxi=lx;ctx.font=`15px ${FONT}`;
+  for(const it of items){
+    if(it.type==='box'){
+      ctx.fillStyle='#FFD700';ctx.fillRect(lxi,ly-10,18,13);
+      ctx.strokeStyle='#b8870a';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.strokeRect(lxi,ly-10,18,13);
+      lxi+=22;
+    } else {
+      ctx.strokeStyle=it.color;ctx.lineWidth=it.lw||2;ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(lxi,ly-3);ctx.lineTo(lxi+22,ly-3);ctx.stroke();
+      lxi+=26;
+    }
+    ctx.fillStyle='#222';ctx.textAlign='left';ctx.fillText(it.label,lxi,ly+1);
+    lxi+=ctx.measureText(it.label).width+14;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  TABLE
+// ═══════════════════════════════════════════════════════
+function buildTable(d){
+  const{locId,labels,dtList,fhArr,bMin,bQ1,bMed,bQ3,bMax,gdpsS,ecmwfS,ncepS,normS}=d;
+  const fmt=(v,dp=1)=>v!=null&&!isNaN(v)?v.toFixed(dp):'—';
+  document.getElementById(`th-${locId}`).innerHTML=`<th>Valid (UTC)</th><th>MDT</th><th>+Fh</th><th style="color:#FFD700">Max</th><th style="color:#FFD700">75%</th><th style="color:#FFD700">Med</th><th style="color:#FFD700">25%</th><th style="color:#FFD700">Min</th><th style="color:#ee0000">GDPS</th><th style="color:#0022ff">ECMWF</th><th style="color:#00b050">GFS</th><th>Normal</th>`;
+  const tbody=document.getElementById(`tbody-${locId}`);tbody.innerHTML='';
+  for(let i=0;i<labels.length;i++){
+    const dt=dtList[i],hr=dt.getUTCHours(),localHr=((hr+MDT_OFF)+24)%24;
+    const mo=dt.getUTCMonth()+1,dy=dt.getUTCDate();
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${mo}/${String(dy).padStart(2,'0')} ${String(hr).padStart(2,'0')}Z</td><td style="color:#555">${String(localHr).padStart(2,'0')}:00</td><td style="color:#888">+${fhArr[i]}h</td><td style="color:#b8870a">${fmt(bMax[i])}</td><td style="color:#b8870a">${fmt(bQ3[i])}</td><td style="color:#5a3e00;font-weight:700">${fmt(bMed[i])}</td><td style="color:#b8870a">${fmt(bQ1[i])}</td><td style="color:#b8870a">${fmt(bMin[i])}</td><td style="color:#ee0000">${fmt(gdpsS[i])}</td><td style="color:#0022ff">${fmt(ecmwfS[i])}</td><td style="color:#00b050">${fmt(ncepS[i])}</td><td style="font-weight:600">${fmt(normS[i],0)}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  SAVE PNGs
+// ═══════════════════════════════════════════════════════
+function downloadPNG(locId){
+  const c=document.getElementById(`plot-${locId}`);
+  const a=document.createElement('a');
+  a.download=`500hPa_${locId}_${(document.getElementById(`badge-${locId}`).textContent.match(/(\d{4}-\d{2}-\d{2}) (\d{2}):/)||['','',''])[1]+'T'+(document.getElementById(`badge-${locId}`).textContent.match(/(\d{4}-\d{2}-\d{2}) (\d{2}):/)||['','',''])[2]}Z.png`;
+  a.href=c.toDataURL('image/png');a.click();
+}
+function downloadAllPNG(){
+  ['edmonton','highlevel','calgary'].forEach((id,i)=>{
+    if(!chartData[id])return;
+    setTimeout(()=>downloadPNG(id),i*300);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  TAB / SUB-TAB SWITCHING
+// ═══════════════════════════════════════════════════════
+function switchPage(page,btn){
+  document.querySelectorAll('.page-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.loc-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  btn.classList.add('active');
+  if(page==='custom'&&!window._mapInited)initMap();
+}
+function switchSub(locId,sub,btn){
+  document.querySelectorAll(`#block-${locId} .sub-tab`).forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll(`#block-${locId} .sub-panel`).forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`sub-${sub}-${locId}`).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════
+//  LEAFLET MAP PICKER
+// ═══════════════════════════════════════════════════════
+let _map=null,_marker=null;
+function initMap(){
+  window._mapInited=true;
+  _map=L.map('leaflet-map').setView([54,-115],5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:18}).addTo(_map);
+  _map.on('click',function(e){
+    customLat=+e.latlng.lat.toFixed(4);customLon=+e.latlng.lng.toFixed(4);
+    if(_marker)_marker.setLatLng(e.latlng);else _marker=L.marker(e.latlng).addTo(_map);
+    document.getElementById('custom-coords').textContent=`Selected: ${customLat}°N, ${customLon>0?customLon+'°E':Math.abs(customLon)+'°W'}`;
+    document.getElementById('fetch-custom-btn').disabled=false;
+    document.getElementById('status-custom').textContent='Location selected — click FETCH';
+    document.getElementById('head-custom').textContent=`📍 ${customLat}°N ${Math.abs(customLon).toFixed(2)}°W · 500 hPa Geopotential`;
+    LOCS.custom.lat=customLat;LOCS.custom.lon=customLon;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  CLIMATE NORMAL MINI-CHARTS
+// ═══════════════════════════════════════════════════════
+function buildNormDaily(){
+  const NR=[[1,1,540],[4,3,546],[4,19,552],[5,11,558],[5,30,564],[6,27,570],[7,26,576],[8,7,570],[8,31,564],[10,1,558],[10,17,552],[10,29,546],[11,17,540],[12,31,540]];
+const doy=(m,d)=>Math.floor((new Date(2000,m-1,d)-new Date(2000,0,1))/86400000)+1;
+  const pts=NR.map(([m,d,v])=>({d:doy(m,d),v})).sort((a,b)=>a.d-b.d);
+  const daily=[];let si=0;
+  for(let d=1;d<=366;d++){while(si<pts.length-1&&pts[si+1].d<=d)si++;daily.push(pts[si].v);}
+  return daily;
+}
+function drawNormChart(canvasId,daily){
+  const FONT="'IBM Plex Mono',ui-monospace,monospace";
+  const canvas=document.getElementById(canvasId);if(!canvas)return;
+  const dpr=window.devicePixelRatio||1;
+  const W=Math.max(canvas.offsetWidth,400)||800,H=90;
+  canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+  const ML=36,MR=8,MT=8,MB=24,PW=W-ML-MR,PH=H-MT-MB;
+  const yLo=530,yHi=585;
+  const xAt=d=>ML+(d-1)/365*PW,yAt=v=>MT+PH-(v-yLo)/(yHi-yLo)*PH;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.setLineDash([2,3]);
+  [540,550,560,570,576].forEach(v=>{ctx.strokeStyle='#ddd';ctx.lineWidth=0.7;ctx.beginPath();ctx.moveTo(ML,yAt(v));ctx.lineTo(ML+PW,yAt(v));ctx.stroke();ctx.setLineDash([]);ctx.font=`8px ${FONT}`;ctx.fillStyle='#999';ctx.textAlign='right';ctx.fillText(v,ML-3,yAt(v)+3);});
+  ctx.setLineDash([]);
+  const months=['J','F','M','A','M','J','J','A','S','O','N','D'];
+  const mStart=[1,32,61,92,122,153,183,214,245,275,306,336];
+  mStart.forEach((d,i)=>{ctx.strokeStyle='#eee';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(xAt(d),MT);ctx.lineTo(xAt(d),MT+PH);ctx.stroke();const mx=xAt(d+(i<11?mStart[i+1]-d:366-d)/2);ctx.font=`8px ${FONT}`;ctx.fillStyle='#888';ctx.textAlign='center';ctx.fillText(months[i],mx,MT+PH+10);});
+  const now=new Date();
+  const todayDoy = Math.floor((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1;
+  const tx=xAt(todayDoy);
+  ctx.strokeStyle='#ff4600';ctx.lineWidth=1.2;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(tx,MT);ctx.lineTo(tx,MT+PH);ctx.stroke();ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(xAt(1),yAt(daily[0]??540));
+  for(let d=2;d<=366;d++)ctx.lineTo(xAt(d),yAt(daily[d-1]??540));
+  ctx.lineTo(xAt(366),MT+PH);ctx.lineTo(xAt(1),MT+PH);ctx.closePath();ctx.fillStyle='rgba(0,0,0,0.06)';ctx.fill();
+  ctx.beginPath();let started=false;
+  for(let d=1;d<=366;d++){const v=daily[d-1];if(v===null){started=false;continue;}if(!started){ctx.moveTo(xAt(d),yAt(v));started=true;}else ctx.lineTo(xAt(d),yAt(v));}
+  ctx.strokeStyle='#c2007a';ctx.lineWidth=2;ctx.stroke();
+  ctx.strokeStyle='#bbb';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ML,MT);ctx.lineTo(ML,MT+PH);ctx.lineTo(ML+PW,MT+PH);ctx.stroke();
+const todayLabel = `${now.getMonth()+1}/${String(now.getDate()).padStart(2,'0')}`;
+const todayVal = daily[todayDoy-1];
+ctx.font=`7px ${FONT}`;ctx.fillStyle='#ff4600';ctx.textAlign='center';
+ctx.fillText(todayLabel, tx, MT+PH+10);
+if(todayVal != null) ctx.fillText(todayVal+'dam', tx, MT+PH+18);
+}
+
+window.addEventListener('load',()=>{
+  drawNormChart('normChart-edmonton', buildNormDaily());
+  // Auto-load available runs on page start
+  loadAvailableRuns();
+});
+window.addEventListener('resize',()=>{
+  drawNormChart('normChart-edmonton', buildNormDaily());
+  ['edmonton','highlevel','calgary','custom'].forEach(locId=>{
+    if(chartData[locId])drawCanvas(chartData[locId]);
+  });
+});
+
+async function flushProxyCache() {
+  const btn = document.getElementById('flush-cache-btn');
+  const status = document.getElementById('flush-status');
+  btn.disabled = true;
+  status.textContent = 'Flushing…';
+  status.style.color = '#888';
+  try {
+    const locs = [
+      { lat: LOCS.edmonton.lat,  lon: LOCS.edmonton.lon  },
+      { lat: LOCS.highlevel.lat, lon: LOCS.highlevel.lon },
+      { lat: LOCS.calgary.lat,   lon: LOCS.calgary.lon   },
+    ];
+    if (customLat !== null) locs.push({ lat: customLat, lon: customLon });
+    const runParam = selectedRun ? `&run=${encodeURIComponent(selectedRun.refISO)}` : '';
+    await Promise.all(locs.map(l =>
+      fetch(`${PROXY_URL}?lat=${l.lat}&lon=${l.lon}&flush=1${runParam}`,
+        { signal: AbortSignal.timeout(5000) })
+    ));
+    status.textContent = `Cache flushed ✓ — ${new Date().toISOString().slice(11,16)}Z · click Fetch All for fresh data`;
+    status.style.color = '#155724';
+  } catch(e) {
+    status.textContent = `Flush failed: ${e.message}`;
+    status.style.color = '#c0392b';
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
