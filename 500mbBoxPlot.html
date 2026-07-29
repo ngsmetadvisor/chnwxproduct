@@ -499,7 +499,7 @@ const MDT_OFF=-6;
 const GEOMET='https://geo.weather.gc.ca/geomet';
 const GDPS_LAYER='GDPS_15km_GeopotentialHeight_500mb';
 const GEPS_LAYER='REPS.MEM.PRES_GZ.500.01'; // used only for run-selector GetCapabilities
-const PROXY_URL='naefs_proxy.php';
+const PROXY_URL='http://orangecore.net/met/wxchart/naefs_proxy.php';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
 async function fetchJ(url,retries=2){
