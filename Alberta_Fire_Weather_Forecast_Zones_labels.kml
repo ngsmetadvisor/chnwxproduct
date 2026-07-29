@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?><kml><xmlns>http://www.opengis.net/kml/2.2</xmlns><Document><Snippet /><Style id="defaultStyle"><BalloonStyle><text><![CDATA[<html>
+  <head>
+    <META http-equiv="Content-Type" content="text/html; charset=utf-16">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  </head>
+  <body>
+    <table cellpadding="2" cellspacing="0" style="font-family:Arial,Verdana,Times;font-size:12px;text-align:left;width:100%;border-collapse:collapse;padding:3px 3px 3px 3px">
+      <thead style="text-align:center; font-weight:bold;background:#9CBCE2;">
+        <tr>
+          <th colspan="2">$[name]</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/OBJECTID/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/OBJECTID]</td>
+        </tr>
+        <tr bgcolor="#D4E4F3">
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/ID/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/ID]</td>
+        </tr>
+        <tr>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/NAME/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/NAME]</td>
+        </tr>
+        <tr bgcolor="#D4E4F3">
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/WFZ_ID/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/WFZ_ID]</td>
+        </tr>
+        <tr>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/Shape.STArea()/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/Shape.STArea()]</td>
+        </tr>
+        <tr bgcolor="#D4E4F3">
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/Shape.STLength()/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/Shape.STLength()]</td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>]]></text><displayMode>default</displayMode></BalloonStyle></Style><Style id="style0"><LineStyle><color>ffa80084</color><colorMode>normal</colorMode><width>3</width></LineStyle><PolyStyle><color>00c7cfd4</color><colorMode>normal</colorMode><fill>1</fill><outline>1</outline></PolyStyle><BalloonStyle><text><![CDATA[<html>
+  <head>
+    <META http-equiv="Content-Type" content="text/html; charset=utf-16">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  </head>
+  <body>
+    <table cellpadding="2" cellspacing="0" style="font-family:Arial,Verdana,Times;font-size:12px;text-align:left;width:100%;border-collapse:collapse;padding:3px 3px 3px 3px">
+      <thead style="text-align:center; font-weight:bold;background:#9CBCE2;">
+        <tr>
+          <th colspan="2">$[name]</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/OBJECTID/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/OBJECTID]</td>
+        </tr>
+        <tr bgcolor="#D4E4F3">
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/ID/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/ID]</td>
+        </tr>
+        <tr>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/NAME/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/NAME]</td>
+        </tr>
+        <tr bgcolor="#D4E4F3">
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/WFZ_ID/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/WFZ_ID]</td>
+        </tr>
+        <tr>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/Shape.STArea()/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/Shape.STArea()]</td>
+        </tr>
+        <tr bgcolor="#D4E4F3">
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/Shape.STLength()/displayName]</td>
+          <td>$[WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE/Shape.STLength()]</td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>]]></text><displayMode>default</displayMode></BalloonStyle></Style><Folder><name>Weather Forecast Zone Boundary</name><Snippet /><Placemark><name>OJ</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">18</SimpleData><SimpleData name="ID">1</SimpleData><SimpleData name="NAME">High Level</SimpleData><SimpleData name="WFZ_ID">OJ</SimpleData><SimpleData name="Shape.STArea()">48776077598.209351</SimpleData><SimpleData name="Shape.STLength()">956131.74084960017</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-117.998727,59.090231,0.000000</coordinates></Point></Placemark><Placemark><name>PY</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">19</SimpleData><SimpleData name="ID">2</SimpleData><SimpleData name="NAME">Fort Chipewyan</SimpleData><SimpleData name="WFZ_ID">PY</SimpleData><SimpleData name="Shape.STArea()">17973364949.31543</SimpleData><SimpleData name="Shape.STLength()">820193.474391197</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-110.756038,59.082727,0.000000</coordinates></Point></Placemark><Placemark><name>FV</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">20</SimpleData><SimpleData name="ID">3</SimpleData><SimpleData name="NAME">Fort Vermilion</SimpleData><SimpleData name="WFZ_ID">FV</SimpleData><SimpleData name="Shape.STArea()">33923838236.571777</SimpleData><SimpleData name="Shape.STLength()">892970.33680040273</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-115.303542,58.300972,0.000000</coordinates></Point></Placemark><Placemark><name>MA</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">21</SimpleData><SimpleData name="ID">4</SimpleData><SimpleData name="NAME">MacKenzie</SimpleData><SimpleData name="WFZ_ID">MA</SimpleData><SimpleData name="Shape.STArea()">38427646526.033936</SimpleData><SimpleData name="Shape.STLength()">935791.51241638034</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-118.551340,57.079078,0.000000</coordinates></Point></Placemark><Placemark><name>MM</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">22</SimpleData><SimpleData name="ID">5</SimpleData><SimpleData name="NAME">Fort McMurray</SimpleData><SimpleData name="WFZ_ID">MM</SimpleData><SimpleData name="Shape.STArea()">42851147758.038086</SimpleData><SimpleData name="Shape.STLength()">982804.05831270409</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-111.745896,57.188560,0.000000</coordinates></Point></Placemark><Placemark><name>RE</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">23</SimpleData><SimpleData name="ID">6</SimpleData><SimpleData name="NAME">Red Earth</SimpleData><SimpleData name="WFZ_ID">RE</SimpleData><SimpleData name="Shape.STArea()">53791204379.395386</SimpleData><SimpleData name="Shape.STLength()">1050310.5962772642</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-115.172395,56.445893,0.000000</coordinates></Point></Placemark><Placemark><name>LB</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">24</SimpleData><SimpleData name="ID">7</SimpleData><SimpleData name="NAME">Lac La Biche</SimpleData><SimpleData name="WFZ_ID">LB</SimpleData><SimpleData name="Shape.STArea()">63175176662.35498</SimpleData><SimpleData name="Shape.STLength()">1505205.1243258687</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-111.889649,54.926355,0.000000</coordinates></Point></Placemark><Placemark><name>GP</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">25</SimpleData><SimpleData name="ID">8</SimpleData><SimpleData name="NAME">Grande Prairie</SimpleData><SimpleData name="WFZ_ID">GP</SimpleData><SimpleData name="Shape.STArea()">37287298836.271729</SimpleData><SimpleData name="Shape.STLength()">1117675.8020630621</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-118.718029,55.090107,0.000000</coordinates></Point></Placemark><Placemark><name>SH</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">26</SimpleData><SimpleData name="ID">9</SimpleData><SimpleData name="NAME">Swan Hills</SimpleData><SimpleData name="WFZ_ID">SH</SimpleData><SimpleData name="Shape.STArea()">34071440243.411743</SimpleData><SimpleData name="Shape.STLength()">1206674.116136929</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-115.791256,54.786381,0.000000</coordinates></Point></Placemark><Placemark><name>ED</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">27</SimpleData><SimpleData name="ID">10</SimpleData><SimpleData name="NAME">Edson</SimpleData><SimpleData name="WFZ_ID">ED</SimpleData><SimpleData name="Shape.STArea()">39818643028.024292</SimpleData><SimpleData name="Shape.STLength()">1694205.350256332</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-116.600369,53.647579,0.000000</coordinates></Point></Placemark><Placemark><name>RM</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">28</SimpleData><SimpleData name="ID">11</SimpleData><SimpleData name="NAME">Rocky Mtn</SimpleData><SimpleData name="WFZ_ID">RM</SimpleData><SimpleData name="Shape.STArea()">34071509604.458374</SimpleData><SimpleData name="Shape.STLength()">1010824.0325232876</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-115.164465,52.470729,0.000000</coordinates></Point></Placemark><Placemark><name>BO</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">29</SimpleData><SimpleData name="ID">13</SimpleData><SimpleData name="NAME">Bow</SimpleData><SimpleData name="WFZ_ID">BO</SimpleData><SimpleData name="Shape.STArea()">14543331276.856445</SimpleData><SimpleData name="Shape.STLength()">650099.84399606334</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-114.613223,50.953859,0.000000</coordinates></Point></Placemark><Placemark><name>CR</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">30</SimpleData><SimpleData name="ID">14</SimpleData><SimpleData name="NAME">Crow</SimpleData><SimpleData name="WFZ_ID">CR</SimpleData><SimpleData name="Shape.STArea()">10458983078.856201</SimpleData><SimpleData name="Shape.STLength()">510356.41117587138</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-114.000708,49.656385,0.000000</coordinates></Point></Placemark><Placemark><name>CH</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">31</SimpleData><SimpleData name="ID">18</SimpleData><SimpleData name="NAME">Cypress Hills</SimpleData><SimpleData name="WFZ_ID">CH</SimpleData><SimpleData name="Shape.STArea()">209641108.44238281</SimpleData><SimpleData name="Shape.STLength()">89715.915720278543</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-110.203534,49.647740,0.000000</coordinates></Point></Placemark><Placemark><name>AG</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">32</SimpleData><SimpleData name="ID">20</SimpleData><SimpleData name="NAME">Agricultural</SimpleData><SimpleData name="WFZ_ID">AG</SimpleData><SimpleData name="Shape.STArea()">138292332153.88721</SimpleData><SimpleData name="Shape.STLength()">1756396.5183417029</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-111.872501,51.408171,0.000000</coordinates></Point></Placemark><Placemark><name>JP</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">33</SimpleData><SimpleData name="ID">15</SimpleData><SimpleData name="NAME">Jasper</SimpleData><SimpleData name="WFZ_ID">JP</SimpleData><SimpleData name="Shape.STArea()">11232703415.699341</SimpleData><SimpleData name="Shape.STLength()">838628.76915565552</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-117.976373,52.850104,0.000000</coordinates></Point></Placemark><Placemark><name>WP</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">34</SimpleData><SimpleData name="ID">16</SimpleData><SimpleData name="NAME">Waterton</SimpleData><SimpleData name="WFZ_ID">WP</SimpleData><SimpleData name="Shape.STArea()">571665746.185791</SimpleData><SimpleData name="Shape.STLength()">133932.8637422265</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-113.895066,49.075862,0.000000</coordinates></Point></Placemark><Placemark><name>BP</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">35</SimpleData><SimpleData name="ID">17</SimpleData><SimpleData name="NAME">Banff</SimpleData><SimpleData name="WFZ_ID">BP</SimpleData><SimpleData name="Shape.STArea()">6850200293.3006592</SimpleData><SimpleData name="Shape.STLength()">754746.59858916432</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-116.117243,51.541805,0.000000</coordinates></Point></Placemark><Placemark><name>WB</name><Snippet></Snippet><styleUrl>#style0</styleUrl><ExtendedData><SchemaData schemaUrl="#WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleData name="OBJECTID">36</SimpleData><SimpleData name="ID">19</SimpleData><SimpleData name="NAME">Wood Buffalo</SimpleData><SimpleData name="WFZ_ID">WB</SimpleData><SimpleData name="Shape.STArea()">36251284128.690186</SimpleData><SimpleData name="Shape.STLength()">1028236.0287859538</SimpleData></SchemaData></ExtendedData><Point><extrude>false</extrude><coordinates>-113.007837,59.107278,0.000000</coordinates></Point></Placemark></Folder><Schema id="WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE" name="WildfirePrimary.GDB.WF_WEATHER_FCST_ZONE"><SimpleField type="string" name="OBJECTID"><displayName>OBJECTID</displayName></SimpleField><SimpleField type="int" name="ID"><displayName>ID</displayName></SimpleField><SimpleField type="string" name="NAME"><displayName>Name</displayName></SimpleField><SimpleField type="string" name="WFZ_ID"><displayName>WX Forecast Zone ID</displayName></SimpleField><SimpleField type="double" name="Shape.STArea()"><displayName>Shape.STArea()</displayName></SimpleField><SimpleField type="double" name="Shape.STLength()"><displayName>Shape.STLength()</displayName></SimpleField></Schema></Document></kml>

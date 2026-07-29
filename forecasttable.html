@@ -1,0 +1,2447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forecast table</title>
+<style>
+  :root {
+    --bg: #f0f2f7;
+    --surface: #ffffff;
+    --surface2: #e8ecf4;
+    --border: #c8d0e0;
+    --accent: #c0380a;
+    --accent2: #d4650a;
+    --text: #1a2240;
+    --text-dim: #5a6a8a;
+    --mono: Consolas, 'Courier New', monospace;
+    --header-bg: #edf0f8;
+    --row-hover: #dde3f0;
+    --trend-UP: #c0380a;
+    --trend-LC: #b07500;
+    --trend-DN: #1a5fd4;
+    --fcst2-border: #9b8de0;
+    --fcst2-header: #ede8ff;
+    --fcst2-text: #5530c0;
+    --am-border: #7ab87a;
+    --am-header: #eafaea;
+    --am-text: #226622;
+    --group-border: #b0bcd8;
+    --obs-border: #7ab8a0;
+    --obs-header: #eafaf4;
+    --obs-text: #1a7050;
+    --caution-color: #c03000;
+    --caution-adj-color: #b07500;
+    --fcst-bg: #1e2535;
+    --fcst-border: #3a4560;
+    --fcst-text: #a0b4d0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: Calibri, Arial, sans-serif; min-height: 100vh; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  .app-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+  .table-pane { flex: 0 0 auto; width: 58%; overflow: hidden; border-right: 2px solid var(--border); display: flex; flex-direction: column; }
+  .pane-divider { flex: 0 0 6px; background: var(--border); cursor: col-resize; transition: background 0.15s; position: relative; z-index: 10; }
+  .pane-divider:hover, .pane-divider.dragging { background: var(--accent); }
+  .pane-divider::after { content: ''; position: absolute; inset: 0 -4px; }
+  .map-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--surface); }
+  .map-pane-header { font-family: Arial, Calibri, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); padding: 7px 14px 5px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .map-pane-header select { font-family: Arial, Calibri, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; cursor: pointer; }
+  #map { flex: 1; min-height: 0; }
+  .map-legend { font-family: var(--mono); font-size: 10px; color: var(--text-dim); padding: 5px 14px; border-top: 1px solid var(--border); display: flex; gap: 14px; flex-wrap: wrap; align-items: center; background: var(--surface); }
+  .map-legend span { display: flex; align-items: center; gap: 4px; }
+  .map-legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+header { background: var(--surface); border-bottom: 2px solid var(--accent); padding: 10px 18px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .title h1 { font-family: Arial, Calibri, sans-serif; font-size: 19px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); }
+.title p { font-family: var(--mono); font-size: 10px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; }
+
+.controls { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .divider { width: 1px; height: 26px; background: var(--border); margin: 0 2px; }
+
+  button { font-family: Arial, Calibri, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; border: none; border-radius: 3px; padding: 6px 13px; cursor: pointer; transition: all 0.15s; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .btn-import { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-import:hover { background: var(--border); }
+  .btn-import.loaded-docx { background: #ffe8e2; color: var(--accent); border: 1px solid var(--accent); }
+  .btn-import.loaded-docx:hover { background: #ffd5cc; }
+  .btn-import.loaded-rdps { background: var(--fcst2-header); color: var(--fcst2-text); border: 1px solid var(--fcst2-border); }
+  .btn-import.loaded-rdps:hover { background: #ddd5ff; }
+  .btn-import.loaded-obs { background: var(--obs-header); color: var(--obs-text); border: 1px solid var(--obs-border); }
+  .btn-import.loaded-obs:hover { background: #d0f0e4; }
+  .btn-export { background: var(--accent); color: #fff; }
+  .btn-export:hover { background: var(--accent2); }
+  #file-input, #rdps-input, #obs-input { display: none; }
+
+  .statusbar { font-family: var(--mono); font-size: 11px; padding: 4px 20px; background: var(--surface2); border-bottom: 1px solid var(--border); min-height: 22px; color: var(--text-dim); }
+  .statusbar.ok { color: #1a7050; }
+  .statusbar.err { color: #c03000; }
+
+  .wrap { padding: 12px 14px; overflow: auto; flex: 1; background: var(--bg); }
+
+  table { border-collapse: collapse; font-size: 12px; table-layout: auto; }
+
+  thead tr.group-row th { font-family: Arial, Calibri, sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 4px 6px 2px; border-bottom: 1px solid var(--group-border); border-right: 1px solid var(--border); text-align: center; background: var(--header-bg); color: var(--text-dim); }
+  thead tr.group-row th.zone-group { border-right: 2px solid var(--group-border); }
+  thead tr.group-row th.fcst-group { background: var(--fcst-bg); color: var(--fcst-text); border-right: 1px solid var(--fcst-border); }
+  thead tr.group-row th.am-group { background: var(--am-header); color: var(--am-text); border-right: 2px solid var(--am-border); }
+
+  thead tr.col-row th { font-family: Arial, Calibri, sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); padding: 4px 5px 6px; border-bottom: 2px solid var(--accent); border-right: 1px solid var(--border); text-align: left; white-space: nowrap; background: var(--header-bg); }
+  thead tr.col-row th.fcst-col { background: var(--fcst-bg); color: var(--fcst-text); border-right: 1px solid var(--fcst-border); }
+  thead tr.col-row th.am-col { background: var(--am-header); color: var(--am-text); border-right: 1px solid var(--am-border); }
+  thead tr.col-row th.am-group-end { border-right: 2px solid var(--am-border); }
+
+  tbody tr { transition: background 0.1s; }
+  tbody tr.zone-pm { border-top: 2px solid var(--group-border); }
+  tbody tr:hover td { background: var(--row-hover) !important; }
+
+  td { padding: 1px 3px; border-right: 1px solid var(--border); vertical-align: middle; }
+
+  td.row-label { font-family: Arial, Calibri, sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; padding: 2px 5px; text-align: right; color: var(--text-dim); border-right: 1px solid var(--border); min-width: 34px; }
+  td.row-label.lbl-pm { background: var(--fcst-bg); color: var(--fcst-text); }
+  td.row-label.lbl-rdps { background: var(--fcst-bg); color: #8899cc; }
+  td.row-label.lbl-obs { background: var(--fcst-bg); color: #6699aa; }
+
+  td.zone { font-family: Arial, Calibri, sans-serif; font-weight: 700; font-size: 15px; color: var(--accent); letter-spacing: 1px; padding: 4px 7px; white-space: nowrap; border-right: 2px solid var(--group-border); vertical-align: middle; cursor: pointer; }
+  td.zone:hover { background: var(--row-hover); }
+
+  td.narrow-cell { width: 48px; min-width: 48px; max-width: 48px; }
+  td.narrow-cell input { min-width: 0; width: 100%; max-width: 100%; }
+  td.narrow-cell input[readonly] { min-width: 0; width: 100%; max-width: 100%; }
+  td.narrow-cell.am-cell input { min-width: 0; width: 100%; max-width: 100%; }
+
+td.wind-cell { white-space: nowrap; min-width: 96px; width: 96px; }
+  td.wind-cell input { min-width: 0; width: 100%; white-space: nowrap; }
+  td.am-cell.wind-cell { min-width: 192px; width: 192px; }
+
+  td input[readonly] {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--fcst-text);
+    font-family: var(--mono);
+    font-size: 12px;
+    width: 100%;
+    min-width: 44px;
+    padding: 2px 4px;
+    border-radius: 2px;
+    cursor: default;
+    opacity: 0.9;
+  }
+  td input[readonly]:focus { outline: none; border-color: transparent !important; background: transparent !important; }
+
+td.am-cell input {
+    background: #fff;
+    border: 1px solid var(--am-border);
+    color: var(--am-text);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 900;
+    width: 100%;
+    min-width: 44px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  td.am-cell input:invalid,
+  td.am-cell input:-webkit-autofill,
+  td.am-cell input:user-invalid {
+    background: #fff !important;
+    border-color: var(--am-border) !important;
+    box-shadow: none !important;
+    color: var(--am-text) !important;
+  }
+  td.am-cell input:focus {
+    outline: none;
+    border-color: var(--am-text);
+    background: rgba(26,112,80,0.04);
+    box-shadow: 0 0 0 2px rgba(122,184,122,0.25);
+  }
+  td.narrow-cell input { min-width: 0; }
+  td.pcpn-type-cell input { min-width: 62px; }
+
+  td.pm-cell { background: var(--fcst-bg); border-right: 1px solid var(--fcst-border); }
+  td.pm-cell input[readonly] { color: #b0c4e0; }
+td.rdps-cell { background: #1a2030; border-right: 1px solid var(--fcst-border); }
+  td.rdps-cell.rdps-source { outline: 3px solid #00cc44; outline-offset: -2px; }
+td.pm-cell.pm-source { outline: 3px solid #00cc44; outline-offset: -2px; }
+  td.rdps-cell input[readonly] { color: #8899cc; }
+  td.obs-cell { background: #18201e; border-right: 1px solid #2a4040; }
+  td.obs-cell input[readonly] { color: #6aaa99; }
+
+  td input.UP { color: var(--trend-UP); font-weight: bold; }
+  td input.LC { color: var(--trend-LC); }
+  td input.DN { color: var(--trend-DN); }
+
+  td.pm-cell input.UP { color: #ff8866; font-weight: bold; }
+  td.pm-cell input.LC { color: #ccaa44; }
+  td.pm-cell input.DN { color: #6699ee; }
+  td.rdps-cell input.UP { color: #ff8866; font-weight: bold; }
+  td.rdps-cell input.LC { color: #ccaa44; }
+  td.rdps-cell input.DN { color: #6699ee; }
+  td.obs-cell input.UP { color: #ff8866; font-weight: bold; }
+  td.obs-cell input.LC { color: #ccaa44; }
+  td.obs-cell input.DN { color: #6699ee; }
+
+  td.diff-hi { outline: 1px solid rgba(192,56,10,0.3); outline-offset: -1px; }
+  td.diff-hi input { background: rgba(192,56,10,0.06) !important; }
+
+  td.am-cell { background: rgba(26,112,80,0.05); border-right: 1px solid var(--am-border); vertical-align: middle; }
+  td.am-cell.am-group-end { border-right: 2px solid var(--am-border); }
+
+  .suggested {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--accent2);
+    opacity: 0.75;
+    padding: 1px 4px 2px;
+    white-space: nowrap;
+    min-height: 13px;
+    letter-spacing: 0.5px;
+    border-top: 1px dashed rgba(192,56,10,0.2);
+    cursor: help;
+  }
+  .suggested:empty, .suggested.blank { border-top: none; }
+  .suggested.sug-match { color: #226622; background: rgba(34,102,34,0.10); border-radius: 2px; border-top: 1px solid rgba(34,102,34,0.25); opacity: 1; }
+  .suggested.sug-caution { color: #b07500; background: rgba(176,117,0,0.10); border-radius: 2px; border-top: 1px dashed rgba(176,117,0,0.40); opacity: 1; }
+  .suggested.sug-mismatch { color: #c03000; background: rgba(192,48,0,0.09); border-radius: 2px; border-top: 1px solid rgba(192,48,0,0.30); opacity: 1; font-weight: bold; }
+
+  /* adjacency short message label inside AM cell */
+  .adj-msg {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: #b07500;
+    background: rgba(176,117,0,0.10);
+    border-top: 1px dashed rgba(176,117,0,0.40);
+    padding: 1px 4px 2px;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+    border-radius: 2px;
+    cursor: help;
+  }
+
+  .caution { display: none; }
+  .caution-adj { display: none; }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+  .empty h2 { font-family: Arial, Calibri, sans-serif; font-size: 17px; font-weight: 600; letter-spacing: 1px; color: var(--text); margin-bottom: 6px; }
+  .empty p { font-size: 13px; }
+
+  .legend { padding: 6px 18px 12px; font-family: var(--mono); font-size: 10px; color: var(--text-dim); border-top: 1px solid var(--border); background: var(--surface2); }
+  body.dragging { outline: 3px dashed var(--accent); outline-offset: -4px; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.25); z-index: 100; align-items: flex-start; justify-content: flex-start; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 6px; padding: 16px 20px; width: 360px; max-height: calc(100vh - 72px); overflow-y: auto; position: relative; margin: 52px 0 0 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+  .modal h2 { font-family: Arial, Calibri, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .modal .close-btn { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer; padding: 2px 6px; font-family: var(--mono); }
+  .modal .close-btn:hover { color: var(--text); }
+  .rule-item { border-left: 3px solid var(--border); padding: 8px 12px; margin-bottom: 10px; background: var(--surface2); border-radius: 0 4px 4px 0; }
+  .rule-item:last-child { margin-bottom: 0; }
+  .rule-label { font-family: Arial, Calibri, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent2); margin-bottom: 4px; }
+  .rule-desc { font-family: var(--mono); font-size: 11px; color: var(--text); line-height: 1.6; }
+  .rule-desc .cond { color: var(--fcst2-text); }
+  .rule-desc .result { color: var(--am-text); }
+  .rule-desc .field { color: var(--text-dim); font-size: 10px; }
+  .rule-item.r1 { border-left-color: var(--fcst2-border); }
+  .rule-item.r2 { border-left-color: var(--accent); }
+  .rule-item.r3 { border-left-color: var(--obs-border); }
+
+  #custom-tip {
+    position: fixed;
+    background: #1a2240;
+    color: #f0f2f7;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 11px;
+    padding: 5px 9px;
+    border-radius: 3px;
+    z-index: 9999;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+    max-width: 260px;
+    word-break: break-word;
+    white-space: pre-line;
+    text-align: left;
+    display: none;
+    line-height: 1.5;
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">
+    <h1>Fire Weather Forecast</h1>
+<p id="filename" style="font-family: var(--mono);font-size:10px;color:var(--accent2);margin-bottom:1px;opacity:0.9;display:inline"></p><span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)"> - </span><span id="meta" style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">No document loaded</span> &nbsp;<a href="http://orangecore.net/met/RAWS/" target="_blank" style="font-family:var(--mono);font-size:10px;color:var(--accent);text-decoration:none;opacity:0.8" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.8">&#128194; /met/RAWS/</a>
+    <p id="export-scope" style="font-family: Arial, Calibri, sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;color:#b07500;margin-top:2px;text-transform:uppercase"></p>
+  </div>
+  <div class="controls">
+    <button class="btn-import" id="btn-docx" onclick="document.getElementById('file-input').click()">Import .docx</button>
+    <input type="file" id="file-input" accept=".docx" onchange="handleDocx(event)">
+
+    <div class="divider"></div>
+    <button class="btn-import" id="btn-rdps" onclick="document.getElementById('rdps-input').click()">Add RDPS</button>
+    <input type="file" id="rdps-input" accept=".csv" onchange="handleRdps(event)">
+    <select id="rdps-date-select" style="display:none;font-family:Arial,Calibri,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;background:#ede8ff;color:#5530c0;border:1px solid #9b8de0;border-radius:3px;padding:3px 6px;cursor:pointer"></select>
+    <button class="btn-import" id="btn-obs" onclick="document.getElementById('obs-input').click()">Add OBS</button>
+    <input type="file" id="obs-input" accept=".csv" onchange="handleObs(event)">
+    <select id="obs-date-select" style="display:none;font-family:Arial,Calibri,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;background:#eafaf4;color:#1a7050;border:1px solid #7ab8a0;border-radius:3px;padding:3px 6px;cursor:pointer"></select>
+    <div class="divider"></div>
+<button class="btn-export" id="btn-export" onclick="exportCSV()" style="background:var(--surface2);color:var(--text-dim);border:1px solid var(--border)">Save CSV</button>
+    <div class="divider"></div>
+    <button class="btn-import" id="btn-autosave-trigger" onclick="triggerAutoSave()" style="background:#1a2240;color:#fff;border-color:#1a2240;">Refresh FCST/OBS</button>
+<button class="btn-import" id="btn-reload-csv" onclick="fetchAllData()" style="border-color:var(--accent);color:var(--accent);font-weight:700">Load Latest</button>
+<div class="divider"></div>
+<button class="btn-import" id="btn-source-toggle" onclick="toggleFinalSource()" style="background:#ffe8e2;color:#c0380a;border-color:#c0380a">Initial value: GOA</button>
+    <div class="divider"></div>
+    <button class="btn-import" onclick="document.getElementById('help-modal').classList.add('open')" style="border-color:var(--group-border);color:var(--text-dim)">? Rules</button>
+  </div>
+</header>
+
+<div id="custom-tip"></div>
+
+<div class="modal-overlay" id="help-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <button class="close-btn" onclick="document.getElementById('help-modal').classList.remove('open')">x</button>
+    <h2>Suggestion Rules</h2>
+    <div class="rule-item r1">
+      <div class="rule-label">Rule 1 - Pcpn Type</div>
+      <div class="rule-desc">
+        <span class="field">IF</span> <span class="cond">Ltg</span> contains <span class="cond">M</span> or <span class="cond">H</span><br>
+        <span class="field">THEN</span> suggest <span class="result">... TRW</span><br>
+        Rate <span class="cond">L or L-M</span>: suggest <span class="result">RW TRW</span> (&gt;=5C) or <span class="result">SW TRW</span> (&lt;5C)<br>
+        Rate <span class="cond">M, M-H or H</span>: suggest <span class="result">R TRW</span> (&gt;=5C) or <span class="result">S TRW</span> (&lt;5C)
+      </div>
+    </div>
+    <div class="rule-item r2">
+      <div class="rule-label">Rule 2 - Fire Danger Trend</div>
+      <div class="rule-desc">
+<span class="field">IF</span> <span class="cond">Low RH</span> &lt;= 30 AND Pcpn nil/trace (&lt;=30% covg) &rarr; <span class="result">UP</span><br>
+        <span class="field">IF</span> Pcpn &gt;= 50% covg AND measurable (&gt;=0.5mm) &rarr; <span class="result">DN</span>
+      </div>
+    </div>
+    <div class="rule-item r3">
+      <div class="rule-label">Rule 3 - Low RH</div>
+      <div class="rule-desc">
+        Pcpn &gt;= 70% rate H &rarr; suggest <span class="result">55%</span><br>
+        Pcpn &gt;= 60% rate M+ &rarr; suggest <span class="result">40%</span>
+      </div>
+    </div>
+    <div class="rule-item" style="border-left-color:#b07500">
+      <div class="rule-label" style="color:#b07500">Rule 4 - Pcpn Covg</div>
+      <div class="rule-desc">
+        If Pcpn Type set and Covg empty &rarr; suggest <span class="result">>10L</span><br>
+        Always shown. No entry = red warning. Differs = amber. Matches = green.
+      </div>
+    </div>
+    <div class="rule-item r1">
+      <div class="rule-label">Rule 5 - Lightning from TRW</div>
+      <div class="rule-desc">
+        <span class="field">IF</span> Pcpn Type Final contains <span class="cond">TRW</span><br>
+        <span class="field">THEN</span> suggest Ltg = <span class="result">M/I</span><br>
+        Ltg starts <span class="cond">M or H</span> &rarr; <span style="color:#b07500">amber caution</span><br>
+        Ltg starts <span class="cond">L</span> or empty &rarr; <span style="color:#c03000">red warning</span>
+      </div>
+    </div>
+    <div class="rule-item" style="border-left-color:#c03000">
+      <div class="rule-label" style="color:#c03000">Rule 6 - TRW Must Be Paired</div>
+      <div class="rule-desc">
+        TRW cannot stand alone in Pcpn Type Final.<br>
+        Must be paired with <span class="result">R, RW, S,</span> or <span class="result">SW</span><br>
+        e.g. <span class="result">RW TRW</span> or <span class="result">R TRW</span><br>
+        Standalone TRW &rarr; <span style="color:#c03000">red warning</span>
+      </div>
+    </div>
+    <h2 style="margin-top:18px">Caution Flags</h2>
+    <div class="rule-item" style="border-left-color:#c03000">
+      <div class="rule-label" style="color:#c03000">Significant Change</div>
+      <div class="rule-desc">
+        Max Temp: &gt;= 5C diff vs GOA or OBS &rarr; tooltip warning<br>
+        Other numeric: &gt;= 10 diff &rarr; tooltip warning
+      </div>
+    </div>
+    <div class="rule-item" style="border-left-color:#b07500">
+      <div class="rule-label" style="color:#b07500">Zone Adjacency Caution</div>
+      <div class="rule-desc">
+        Max Temp differs from adjacent zone by &gt;= 10C<br>
+        Low RH differs from adjacent zone by &gt;= 20%<br>
+        &rarr; shown as inline label + tooltip on Final cell
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar" id="status">Import a .docx forecast file or use Load CSVs to get started.</div>
+
+<div class="app-body">
+  <div class="table-pane">
+    <div class="wrap" id="wrap">
+<div class="empty" id="empty-state">
+        <h2>No document loaded</h2>
+        <p>Use Import .docx or drag and drop a .docx file. Use Load CSVs to load RDPS and OBS data.</p>
+        <button onclick="fetchAllData();document.getElementById('empty-state').style.display='none'" style="margin-top:18px;font-family:Arial,Calibri,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;background:var(--accent);color:#fff;border:none;border-radius:3px;padding:9px 22px;cursor:pointer">Load Latest</button>
+      </div>
+    </div>
+    <div class="legend" id="legend" style="display:none">
+      Ltg: L=Low M=Moderate H=High &nbsp;|&nbsp; I=Isolated S=Scattered W=Widespread &nbsp;|&nbsp;
+      <span style="color:var(--trend-UP)">UP</span> Trend Up &nbsp;
+      <span style="color:var(--trend-LC)">LC</span> Level &nbsp;
+      <span style="color:var(--trend-DN)">DN</span> Trend Down &nbsp;|&nbsp;
+      <span style="color:var(--fcst-text);background:var(--fcst-bg);padding:0 4px;border-radius:2px">FCSTs</span> = PM/RDPS/OBS &nbsp;|&nbsp;
+      <span style="color:var(--am-text)">Final</span> = AM Forecast (editable) &nbsp;|&nbsp;
+      <span style="color:#226622;background:rgba(34,102,34,0.10);padding:0 3px;border-radius:2px">sug match</span> &nbsp;
+      <span style="color:#b07500;background:rgba(176,117,0,0.10);padding:0 3px;border-radius:2px">sug partial</span> &nbsp;
+      <span style="color:#c03000;background:rgba(192,48,0,0.09);padding:0 3px;border-radius:2px">sug mismatch</span>
+    </div>
+  </div>
+
+  <div class="pane-divider" id="pane-divider"></div>
+
+  <div class="map-pane">
+  <div class="map-pane-header">
+      <span>Map field:</span>
+      <select id="map-field-select" onchange="updateMapMarkers()">
+        <option value="0">Max Temp (C)</option>
+        <option value="1">Low RH (%)</option>
+        <option value="5">Fire Danger Trend</option>
+        <option value="4">Ltg</option>
+        <option value="2">Pcpn Covg/Amnt</option>
+        <option value="3">Pcpn Type</option>
+        <option value="6">Wind</option>
+        <option value="7">Dew Point (C)</option>
+      </select>
+<span style="margin-left:auto;font-size:10px;color:var(--text-dim)" id="map-meta">Click zone row to highlight</span>
+<span id="wms-time-label" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--fcst2-text);background:var(--fcst2-header);border:1px solid var(--fcst2-border);border-radius:3px;padding:2px 8px;display:none"></span>
+      <input type="date" id="wms-date-input" style="display:none;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--fcst2-text);background:var(--fcst2-header);border:1px solid var(--fcst2-border);border-radius:3px;padding:2px 6px;cursor:pointer" title="WMS tile date" onchange="onWmsDateChange(this.value)">
+      <span id="wms-layer-toggles" style="display:none;font-family:var(--mono);font-size:11px;gap:6px;align-items:center;flex-wrap:wrap"></span>
+    </div>
+    <div id="map"></div>
+    <div class="map-legend" id="map-legend"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script>
+(function(){
+  const tip = document.getElementById('custom-tip');
+  let cur = null;
+  function show(text, el, mouseX, mouseY) {
+    tip.textContent = text;
+    tip.style.display = 'block';
+    const w = tip.offsetWidth || 180;
+    const h = tip.offsetHeight || 24;
+    const gap = 10;
+    let left, top;
+    const rect = el.getBoundingClientRect();
+    left = rect.left;
+    top = rect.top - h - 12;
+    if (left + w > window.innerWidth - 4) left = window.innerWidth - w - 4;
+    if (left < 4) left = 4;
+    if (top < 4) top = rect.bottom + 12;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  function hide() { tip.style.display = 'none'; cur = null; }
+  document.addEventListener('mousemove', e => {
+    const el = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (el) { cur = el; show(el.getAttribute('data-tip'), el, e.clientX, e.clientY); }
+    else if (cur) hide();
+  });
+  document.addEventListener('mouseleave', hide);
+  document.addEventListener('scroll', hide, true);
+})();
+
+(function(){
+  const divider = document.getElementById('pane-divider');
+  const tablePane = document.querySelector('.table-pane');
+  const appBody = document.querySelector('.app-body');
+  let dragging = false, startX = 0, startW = 0;
+  divider.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = tablePane.offsetWidth;
+    divider.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const total = appBody.offsetWidth;
+    const newW = Math.max(240, Math.min(startW + dx, total - 240));
+    tablePane.style.width = newW + 'px';
+    if (typeof leafMap !== 'undefined' && leafMap) leafMap.invalidateSize();
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    divider.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    if (typeof leafMap !== 'undefined' && leafMap) leafMap.invalidateSize();
+  });
+})();
+
+const FCST_COLS = ["Max Temp","Low RH","Pcpn Covg/Amnt","Pcpn Type","Ltg","Fire Danger Trend","Wind"];
+const ZONES = new Set(["OJ","FV","MA","RE","GP","SH","PY","MM","LB","ED","RM","BO","CR","CH","AG","JP","BP","WP"]);
+
+let windLabel = 'Afternoon Wind';
+let isAMFile = false;
+let finalSource = 'GOA'; // 'GOA' or 'RDPS'
+
+function updateSourceBanner() {
+  const el = document.getElementById('map-source-banner');
+  if (!el) return;
+  if (finalSource === 'RDPS') {
+    el.textContent = 'Initial: RDPS';
+    el.style.background = '#ede8ff';
+    el.style.color = '#5530c0';
+    el.style.border = '2px solid #9b8de0';
+  } else {
+el.textContent = 'Initial: GOA';
+    el.style.background = '#ffe8e2';
+    el.style.color = '#c0380a';
+    el.style.border = '2px solid #c0380a';
+    el.style.boxShadow = 'none';
+  }
+}
+
+function toggleFinalSource() {
+  finalSource = finalSource === 'GOA' ? 'RDPS' : 'GOA';
+  syncSourceButton();
+  reseedAmData();
+  updateSourceBanner();
+  if (fcstData.length) renderTable();
+}
+
+function syncSourceButton() {
+  const btn = document.getElementById('btn-source-toggle');
+  if (!btn) return;
+  btn.textContent = 'Initial value: ' + finalSource;
+  if (finalSource === 'RDPS') {
+    btn.style.background = '#ede8ff';
+    btn.style.color = '#5530c0';
+    btn.style.borderColor = '#9b8de0';
+  } else {
+    btn.style.background = '#ffe8e2';
+    btn.style.color = '#c0380a';
+    btn.style.borderColor = '#c0380a';
+  }
+}
+
+function reseedAmData() {
+  fcstData.forEach(row => {
+    const zone = row[0];
+    if (finalSource === 'RDPS' && rdpsData[zone]) amData[zone] = rdpsData[zone].map(v => v);
+    else amData[zone] = row.slice(1).map(v => v);
+  });
+}
+
+function setWindLabel(label) {
+  windLabel = label;
+  document.querySelectorAll('th.wind-col-header').forEach(th => { th.textContent = label; });
+}
+
+const SUG_MATCH_COLS = new Set([2, 3, 4, 5]);
+const SUG_ALWAYS_SHOW = new Set([2]);
+let kmlAdjacency = {};
+
+const ZONE_ADJ_STATIC = {
+  OJ:["MA","FV"], FV:["OJ","MA","RE","MM"], MA:["OJ","FV","RE","GP"],
+  RE:["MA","FV","MM","LB","SH","GP"], GP:["MA","RE","SH","ED"],
+  SH:["GP","RE","LB","ED"], PY:["MM"], MM:["PY","LB","RE","FV"],
+  LB:["MM","AG","ED","SH","RE"], ED:["GP","SH","LB","RM","JP"],
+  RM:["ED","AG","BO","JP","BP"], BO:["RM","AG","CR","BP"],
+  CR:["BO","AG","WP"], CH:["AG"], AG:["LB","CH","CR","BO","RM"],
+  JP:["ED","RM","BP"], BP:["JP","RM","BO"], WP:["CR"],
+};
+
+function getZoneAdj(zone) {
+  if (kmlAdjacency[zone] && kmlAdjacency[zone].length > 0) return kmlAdjacency[zone];
+  return ZONE_ADJ_STATIC[zone] || [];
+}
+
+let fcstData = [], rdpsData = {}, wxObsData = {}, amData = {};
+let hasRdps = false, hasWxObs = false;
+
+function setButtonLoaded(btnId, loadedClass, filename) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.classList.remove('loaded-docx','loaded-rdps','loaded-obs');
+  if (loadedClass) {
+    btn.classList.add(loadedClass);
+    const maxLen = 40;
+    const label = filename.replace(/^.*[/\\]/, '');
+    const display = label.length > maxLen ? label.slice(0, maxLen - 1) + '...' : label;
+    btn.textContent = display;
+    btn.title = label;
+  } else {
+    const defaults = { 'btn-docx': 'Import .docx', 'btn-rdps': 'Add RDPS', 'btn-obs': 'Add OBS' };
+    btn.textContent = defaults[btnId] || btn.textContent;
+    btn.title = '';
+  }
+}
+
+function normDash(v) {
+  return String(v == null ? '' : v).replace(/[\u2010-\u2015\u2212\u2E3A\u2E3B\uFE58\uFE63\uFF0D\u2013\u2014]/g, '-');
+}
+
+function pickBestWindSegment(raw) {
+  if (!raw || raw.trim() === '') return raw;
+  const segments = raw.split('/').map(s => s.trim()).filter(Boolean);
+  if (segments.length === 1) return segments[0];
+  function maxSpeedOf(seg) {
+    const noDir = seg.replace(/^(N|NE|E|SE|S|SW|W|NW)/i, '');
+    const nums = noDir.match(/\d+/g);
+    if (!nums || !nums.length) return 0;
+    return Math.max(...nums.map(Number));
+  }
+  let best = segments[0], bestSpd = maxSpeedOf(segments[0]);
+  for (let i = 1; i < segments.length; i++) {
+    const spd = maxSpeedOf(segments[i]);
+    if (spd > bestSpd) { bestSpd = spd; best = segments[i]; }
+  }
+  return best;
+}
+
+function pickLastWindSegment(raw) {
+  if (!raw || raw.trim() === '') return raw;
+  const segments = raw.split('/').map(s => s.trim()).filter(Boolean);
+  return segments.length ? segments[segments.length - 1] : raw;
+}
+
+// was working one
+//const DOCX_BASE_URL = 'http://orangecore.net/met/wxchart/fcsttable/';
+const DOCX_BASE_URL = 'http://orangecore.net/met/RAWS/';
+const MONTHS_LONG = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function getLatestDocxFilename() {
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  let target, ampm;
+  if (mins < 630) {           // before 10:30
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    target = yesterday;
+    ampm = 'PM';
+  } else if (mins < 930) {    // 10:30–15:29
+    target = now;
+    ampm = 'AM';
+  } else {                    // 15:30+
+    target = now;
+    ampm = 'PM';
+  }
+  const mon = MONTHS_LONG[target.getMonth()];
+  const day = target.getDate();        // no leading zero, matches PS %d
+  const yr = target.getFullYear();
+  return mon + '_' + day + '_' + yr + '_' + ampm + '.docx';
+}
+
+function handleDocx(e) {
+const file = e.target.files[0]; if (file) loadDocx(file); e.target.value = ''; }
+
+function loadDocx(file) {
+  setStatus('Reading file...', '');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    mammoth.convertToHtml({ arrayBuffer: ev.target.result })
+      .then(result => {
+        const rows = parseHtmlTable(result.value);
+        if (!rows.length) { setStatus('Could not find forecast table. Check file.', 'err'); return; }
+        fcstData = rows;
+        amData = {};
+        const { issued, valid, ampm } = parseDatesFromFilename(file.name);
+isAMFile = ampm === 'AM';
+        setWindLabel(isAMFile ? 'Tomorrow PM Wind' : 'Afternoon Wind');
+        finalSource = isAMFile ? 'RDPS' : 'GOA';
+const srcBtn = document.getElementById('btn-source-toggle');
+        if (srcBtn) {
+          srcBtn.textContent = 'Initial value: ' + finalSource;
+          if (finalSource === 'RDPS') {
+            srcBtn.style.background = 'var(--fcst2-header)';
+            srcBtn.style.color = 'var(--fcst2-text)';
+            srcBtn.style.borderColor = 'var(--fcst2-border)';
+} else {
+            srcBtn.style.background = '#ffe8e2';
+            srcBtn.style.color = '#c0380a';
+            srcBtn.style.borderColor = '#c0380a';
+          }
+        }
+        updateSourceBanner();
+        const metaParts = [];
+        if (issued) metaParts.push('Issued: ' + issued);
+        if (valid) metaParts.push('Valid: ' + valid);
+        metaParts.push(rows.length + ' zones');
+        document.getElementById('meta').textContent = metaParts.join(' - ');
+        document.getElementById('filename').textContent = file.name.replace(/^.*[/\\]/, '');
+_wmsDateOverride = null; // reset WMS date to match new forecast
+        _precipDateOverride = null;
+        rows.forEach(row => {
+          const zone = row[0];
+          amData[zone] = row.slice(1).map(v => v);
+        });
+const validIso = getValidDateISO();
+        if (allRdpsDates.length) {
+          const rdpsIso = validIso ? (isAMFile ? validIso : prevDay(validIso)) : null;
+          const s = (rdpsIso && rdpsRaw[rdpsIso]) ? rdpsIso : allRdpsDates[0];
+          applyRdpsDate(s); hasRdps = true;
+        }
+        else { rdpsData = {}; hasRdps = false; }
+        if (allObsDates.length) {
+          const obsIso = validIso ? prevDay(validIso) : null;
+          const s = (obsIso && obsRaw[obsIso]) ? obsIso
+            : allRdpsDates.length ? (obsRaw[prevDay(allRdpsDates[0])] ? prevDay(allRdpsDates[0]) : allObsDates[allObsDates.length - 1])
+            : allObsDates[allObsDates.length - 1];
+          applyObsDate(s); hasWxObs = true;
+        } else { wxObsData = {}; hasWxObs = false; }
+      renderTable();
+  previewExportName();
+  setStatus('Loaded ' + rows.length + ' forecast zones from "' + file.name + '"', 'ok');
+  setButtonLoaded('btn-docx', 'loaded-docx', file.name);
+  const exportBtn = document.getElementById('btn-export');
+  if (exportBtn) { exportBtn.style.background = 'var(--accent)'; exportBtn.style.color = '#fff'; exportBtn.style.border = ''; }
+      })
+      .catch(err => setStatus('Parse error: ' + err.message, 'err'));
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseDatesFromFilename(filename) {
+  const MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  const m = filename.match(/([A-Za-z]+)[_\-](\d{1,2})[_\-](\d{4})(?:[_\-](AM|PM))?/i);
+  if (!m) return { issued: null, valid: null };
+  const monKey = m[1].slice(0,3).toLowerCase();
+  const monIdx = MONTHS[monKey];
+  if (monIdx === undefined) return { issued: null, valid: null };
+  const day = parseInt(m[2], 10), year = parseInt(m[3], 10);
+  const ampm = m[4] ? m[4].toUpperCase() : null;
+  const issuedDate = new Date(year, monIdx, day);
+  const validDate = new Date(year, monIdx, day + 1);
+  const fmt = d => d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+  return { issued: fmt(issuedDate) + (ampm ? ' ' + ampm : ''), valid: fmt(validDate), ampm };
+}
+
+function parseHtmlTable(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  let targetTable = null;
+  for (const t of doc.querySelectorAll('table')) {
+    if ([...t.querySelectorAll('td')].some(td => ZONES.has(td.textContent.trim()))) { targetTable = t; break; }
+  }
+  if (!targetTable) return [];
+  const rawRows = [...targetTable.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('td,th')].map(td => td.textContent.trim()));
+  let headerIdx = rawRows.findIndex(r => r.some(c => /max(imum)?\s*temp/i.test(c) || /fcst\s*zone/i.test(c) || /forecast\s*zone/i.test(c)));
+  if (headerIdx === -1) headerIdx = 0;
+  const headerRow = rawRows[headerIdx];
+  const matchers = [
+    c => /max(imum)?\s*temp/i.test(c),
+    c => /low\s*rh|min(imum)?\s*rh/i.test(c),
+    c => /pcpn[\s\/]*covg|covg[\s\/]*amnt|coverage|precip/i.test(c),
+    c => /pcpn\s*type|pcp\s*type|precip\s*type/i.test(c),
+    c => /ltg|lightning/i.test(c) && !/today|tod\b/i.test(c),
+    c => /fire\s*(danger)?\s*trend|trend/i.test(c),
+    c => /wind/i.test(c),
+  ];
+  const seenCols = [];
+  for (let i = 0; i < headerRow.length; i++) { if (i === 0 || headerRow[i] !== headerRow[i-1]) seenCols.push(i); }
+  const colMap = matchers.map(fn => { const found = seenCols.find(ci => fn(headerRow[ci])); return found !== undefined ? found : -1; });
+  const dataRows = [];
+  for (let i = headerIdx + 1; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    if (!ZONES.has(row[0])) continue;
+    const out = [row[0]];
+    colMap.forEach(ci => { let v = ci >= 0 && row[ci] !== undefined ? row[ci] : ''; if (ci === colMap[6]) v = pickBestWindSegment(v); out.push(normDash(v)); });
+    dataRows.push(out);
+  }
+  return dataRows;
+}
+
+function handleRdps(e) { const file = e.target.files[0]; if (file) loadRdps(file); e.target.value = ''; }
+
+function loadRdps(file) {
+  setStatus('Reading RDPS CSV...', '');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const raw = ev.target.result.replace(/^\uFEFF/, '');
+      const parsed = parseCSV(raw);
+      if (!parsed.length) { setStatus('RDPS CSV is empty.', 'err'); return; }
+      const headers = parsed[0].map(h => h.trim().toLowerCase());
+      if (headers.includes('date') && headers.includes('zone')) {
+        const validIso = getValidDateISO();
+        const ci = {
+          date: headers.indexOf('date'), zone: headers.indexOf('zone'),
+          tempmax: headers.findIndex(h => h.includes('tempmax')),
+          minrh: headers.findIndex(h => h.includes('minrh')),
+          covg: headers.findIndex(h => h.includes('coverage')),
+          type: headers.findIndex(h => h === 'type'),
+          ltg: headers.findIndex(h => h === 'lightning'),
+          trend: headers.findIndex(h => h === 'fire trend'),
+          wind: headers.findIndex(h => h === 'wind'),
+        };
+        rdpsRaw = {};
+        for (let i = 1; i < parsed.length; i++) {
+          const row = parsed[i];
+          if (row.length < 3) continue;
+          const rowDate = (row[ci.date] || '').trim();
+          const zone = (row[ci.zone] || '').trim().toUpperCase();
+          if (!rowDate || !ZONES.has(zone)) continue;
+          if (!rdpsRaw[rowDate]) rdpsRaw[rowDate] = {};
+          rdpsRaw[rowDate][zone] = [
+            ci.tempmax >= 0 ? row[ci.tempmax] : '', ci.minrh >= 0 ? row[ci.minrh] : '',
+            ci.covg >= 0 ? row[ci.covg] : '', ci.type >= 0 ? row[ci.type] : '',
+            ci.ltg >= 0 ? row[ci.ltg] : '', ci.trend >= 0 ? row[ci.trend] : '',
+            ci.wind >= 0 ? pickBestWindSegment(row[ci.wind]) : '',
+          ].map(v => normDash((v || '').trim()));
+        }
+allRdpsDates = Object.keys(rdpsRaw).sort();
+        const rdpsIso = validIso ? (isAMFile ? validIso : prevDay(validIso)) : null;
+        const useDate = (rdpsIso && rdpsRaw[rdpsIso]) ? rdpsIso : allRdpsDates[0];
+        hasRdps = true;
+        applyRdpsDate(useDate);
+        setStatus('RDPS loaded - ' + allRdpsDates.length + ' days - showing ' + isoToLabel(useDate) + ' - ' + Object.keys(rdpsRaw[useDate] || {}).length + ' zones', 'ok');
+        setButtonLoaded('btn-rdps', 'loaded-rdps', file.name);
+      } else { setStatus('RDPS CSV format not recognised.', 'err'); }
+    } catch(err) { setStatus('RDPS parse error: ' + err.message, 'err'); }
+  };
+  reader.readAsText(file);
+}
+
+function handleObs(e) { const file = e.target.files[0]; if (file) loadObs(file); e.target.value = ''; }
+
+function loadObs(file) {
+  setStatus('Reading OBS CSV...', '');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const raw = ev.target.result.replace(/^\uFEFF/, '');
+      if (/===\s*\d{4}-\d{2}-\d{2}/.test(raw)) { loadWxSummary(raw, file.name); setButtonLoaded('btn-obs', 'loaded-obs', file.name); }
+      else { setStatus('OBS CSV format not recognised.', 'err'); }
+    } catch(err) { setStatus('OBS parse error: ' + err.message, 'err'); }
+  };
+  reader.readAsText(file);
+}
+
+function loadWxSummary(raw, filename) {
+  const validIso = getValidDateISO();
+  let obsIso = null;
+  if (validIso) { const d = new Date(validIso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); obsIso = d.toISOString().slice(0, 10); }
+  const byDate = {};
+  const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  let curDate = null, inHeader = false;
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const secMatch = line.match(/===\s*(\d{4}-\d{2}-\d{2})/);
+    if (secMatch) { curDate = secMatch[1]; inHeader = true; if (!byDate[curDate]) byDate[curDate] = {}; continue; }
+    if (!curDate) continue;
+    const cells = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+    if (inHeader) { inHeader = false; continue; }
+    const zone = cells[0].toUpperCase();
+    if (!ZONES.has(zone)) continue;
+    const windDir = cells[8] || '', windSpd = cells[9] || '', windGust = cells[10] || '';
+    let windStr = '';
+    if (windDir || windSpd) {
+      const dirNum = parseFloat(windDir);
+      let dirLabel = windDir;
+      if (!isNaN(dirNum)) { const compass = ['N','NE','E','SE','S','SW','W','NW']; dirLabel = compass[Math.round(dirNum / 45) % 8]; }
+      windStr = dirLabel + (windSpd ? windSpd : '');
+      if (windGust) windStr += 'G' + windGust;
+    }
+    byDate[curDate][zone] = [cells[2]||'', cells[3]||'', (cells[5]||'').replace('/',''), cells[6]||'', '', cells[7]||'', windStr].map(normDash);
+  }
+  obsRaw = byDate;
+  allObsDates = Object.keys(obsRaw).sort();
+  if (!allObsDates.length) { setStatus('WxSummary: no data found.', 'err'); return; }
+  let useDate = null;
+  if (obsIso && obsRaw[obsIso]) useDate = obsIso;
+  else if (allRdpsDates.length) { const d = prevDay(allRdpsDates[0]); useDate = obsRaw[d] ? d : allObsDates[allObsDates.length - 1]; }
+  else useDate = allObsDates[allObsDates.length - 1];
+  hasWxObs = true;
+  applyObsDate(useDate);
+  setStatus('OBS loaded - ' + allObsDates.length + ' days - showing ' + isoToLabel(useDate) + ' - ' + Object.keys(obsRaw[useDate] || {}).length + ' zones', 'ok');
+}
+
+function getValidDateISO() {
+  const meta = document.getElementById('meta').textContent;
+  const m = meta.match(/Valid:\s+([A-Za-z]+\.?\s+\d+,?\s+\d{4})/i);
+  if (!m) return null;
+  try { const d = new Date(m[1].replace(',', '')); if (isNaN(d)) return null; return d.toISOString().slice(0, 10); } catch(e) { return null; }
+}
+
+let selectedRdpsDate = null, selectedObsDate = null;
+let allRdpsDates = [], allObsDates = [];
+let rdpsRaw = {}, obsRaw = {};
+
+function isoToLabel(iso) { const d = new Date(iso + 'T12:00:00Z'); return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'UTC' }); }
+function prevDay(iso) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); }
+function nextDay(iso) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); }
+function buildDateDropdown(selectId, dates, selectedDate, onchange) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.innerHTML = '';
+  dates.forEach(iso => { const opt = document.createElement('option'); opt.value = iso; opt.textContent = isoToLabel(iso); if (iso === selectedDate) opt.selected = true; sel.appendChild(opt); });
+  sel.onchange = () => onchange(sel.value);
+  sel.style.display = dates.length ? 'inline-block' : 'none';
+}
+
+function applyRdpsDate(iso) {
+  selectedRdpsDate = iso;
+  rdpsData = rdpsRaw[iso] || {};
+  buildDateDropdown('rdps-date-select', allRdpsDates, iso, applyRdpsDate);
+  if (fcstData.length) { reseedAmData(); renderTable(); }
+  // Non-precip tiles (Temp/RH/Ltg/Trend/Wind/Dp) now track the RDPS row's own date directly
+  _wmsDateOverride = iso;
+  const inp = document.getElementById('wms-date-input');
+  if (inp) inp.value = iso;
+  applyWmsOverlay();
+  setStatus('RDPS showing ' + isoToLabel(iso), 'ok');
+}
+
+function applyObsDate(iso) {
+  selectedObsDate = iso;
+  wxObsData = obsRaw[iso] || {};
+  buildDateDropdown('obs-date-select', allObsDates, iso, applyObsDate);
+  if (fcstData.length) renderTable();
+  setStatus('OBS showing ' + isoToLabel(iso), 'ok');
+}
+
+function parseCSV(text) {
+  const rows = [];
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const row = []; let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+      else if (ch === ',' && !inQ) { row.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    row.push(cur); rows.push(row);
+  }
+  return rows;
+}
+
+function calcDewpoint(tempC, rhPct) {
+  const T = parseFloat(tempC), RH = parseFloat(rhPct);
+  if (isNaN(T) || isNaN(RH) || RH <= 0 || RH > 100) return null;
+  const a = 17.625, b = 243.04;
+  const alpha = Math.log(RH / 100) + (a * T) / (b + T);
+  return (b * alpha) / (a - alpha);
+}
+
+function getAdjacencyWarnings(zone) {
+  const warnings = [];
+  const myAm = amData[zone] || [];
+  const myTemp = parseFloat(myAm[0]);
+  const myRH = parseFloat(myAm[1]);
+  const adj = getZoneAdj(zone);
+  const adjTempIssues = [], adjRHIssues = [];
+  for (const azone of adj) {
+    const theirAm = amData[azone] || [];
+    const theirTemp = parseFloat(theirAm[0]);
+    const theirRH = parseFloat(theirAm[1]);
+    if (!isNaN(myTemp) && !isNaN(theirTemp) && Math.abs(myTemp - theirTemp) >= 10) adjTempIssues.push(azone + ' ' + (myTemp > theirTemp ? '+' : '') + Math.round(myTemp - theirTemp) + 'C');
+    if (!isNaN(myRH) && !isNaN(theirRH) && Math.abs(myRH - theirRH) >= 20) adjRHIssues.push(azone + ' ' + (myRH > theirRH ? '+' : '') + Math.round(myRH - theirRH) + '%');
+  }
+  if (adjTempIssues.length) warnings.push({ ci: 0, msg: 'Adj: ' + adjTempIssues.join(', ') });
+  if (adjRHIssues.length) warnings.push({ ci: 1, msg: 'Adj: ' + adjRHIssues.join(', ') });
+  return warnings;
+}
+
+function hasAdjacencyIssue(zone) { return getAdjacencyWarnings(zone).length > 0; }
+
+function assignTabOrder() {
+  document.querySelectorAll('td input[readonly]').forEach(inp => { inp.tabIndex = -1; });
+  const raw = [...document.querySelectorAll('td.am-cell input[type="text"]')];
+
+  // Extract zone and col index from oninput attr, e.g. onAmEdit(this,'OJ',2)
+  const parsed = raw.map(inp => {
+    const m = (inp.getAttribute('oninput') || '').match(/onAmEdit\(this,'(\w+)',(\d+)\)/);
+    return { inp, zone: m ? m[1] : '', ci: m ? parseInt(m[2]) : 0 };
+  });
+
+  // Sort: left-to-right across columns, then top-to-bottom by zone order
+  const zoneOrder = fcstData.map(r => r[0]);
+  parsed.sort((a, b) => a.ci !== b.ci ? a.ci - b.ci : zoneOrder.indexOf(a.zone) - zoneOrder.indexOf(b.zone));
+
+  const editable = parsed.map(p => p.inp);
+
+editable.forEach((inp, i) => {
+    inp.tabIndex = -1;
+    inp.addEventListener('keydown', function(e) {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      const step = e.shiftKey ? -1 : 1;
+      const next = editable[i + step];
+      if (next) { next.focus(); next.select(); }
+    });
+    inp.addEventListener('focus', function() {
+      const m = (inp.getAttribute('oninput') || '').match(/onAmEdit\(this,'(\w+)',(\d+)\)/);
+      if (!m) return;
+      const ci = parseInt(m[2]);
+      const sel = document.getElementById('map-field-select');
+      if (sel && sel.value !== String(ci)) {
+        sel.value = String(ci);
+        updateMapMarkers();
+      }
+    });
+  });
+}
+
+function buildCautionTip(zone, ci) {
+  const am = amData[zone] || [];
+  const pm = (fcstData.find(r => r[0] === zone) || []).slice(1);
+  const obs = wxObsData[zone] || [];
+  const finalVal = parseFloat(am[ci]);
+  if (isNaN(finalVal)) return '';
+  const threshold = (ci === 0) ? 5 : 10;
+  const OBS_SKIP = new Set([2, 3]);
+  const goaVal = parseFloat(pm[ci]);
+  const obsVal = OBS_SKIP.has(ci) ? NaN : parseFloat(obs[ci]);
+  const flags = [];
+  if (!isNaN(goaVal) && Math.abs(finalVal - goaVal) >= threshold) flags.push('vs GOA (' + (finalVal > goaVal ? '+' : '') + Math.round(finalVal - goaVal) + ')');
+  if (!isNaN(obsVal) && Math.abs(finalVal - obsVal) >= threshold) flags.push('vs OBS (' + (finalVal > obsVal ? '+' : '') + Math.round(finalVal - obsVal) + ')');
+  const adjWarnings = getAdjacencyWarnings(zone);
+  const adjWarn = adjWarnings.find(w => w.ci === ci);
+  if (adjWarn) flags.push(adjWarn.msg);
+  return flags.length ? 'Caution:\n' + flags.join('\n') : '';
+}
+
+function renderTable() {
+  if (!fcstData.length && !hasRdps && !hasWxObs) return;
+  if (!fcstData.length) {
+    const zoneSet = new Set([...Object.keys(rdpsData), ...Object.keys(wxObsData)]);
+    fcstData = [...ZONES].filter(z => zoneSet.has(z)).map(z => [z, '', '', '', '', '', '', '']);
+    fcstData.forEach(row => { if (!amData[row[0]]) amData[row[0]] = row.slice(1).map(() => ''); });
+  }
+  const wrap = document.getElementById('wrap');
+  const nFcst = FCST_COLS.length;
+  const TREND_CI = 5;
+  const ADJ_MSG_COLS = new Set([0, 1]);
+
+  function colExtraClass(ci) {
+    if (ci === 0 || ci === 1) return ' narrow-cell';
+    if (ci === 6) return ' wind-cell';
+    if (ci === 3) return ' pcpn-type-cell';
+    return '';
+  }
+
+  let html = '<table><thead>';
+  html += '<tr class="group-row">';
+  html += '<th class="zone-group" rowspan="2">Zone</th>';
+  html += '<th rowspan="2" style="background:var(--fcst-bg);border-right:1px solid var(--fcst-border);min-width:34px;color:var(--fcst-text);font-size:8px;">Row</th>';
+  for (let ci = 0; ci < nFcst; ci++) {
+    const colLabel = (ci === 6) ? windLabel : FCST_COLS[ci];
+    const last = ci === nFcst - 1;
+    html += '<th colspan="2" class="' + (last ? 'am-group' : 'fcst-group') + '">' + esc(colLabel) + '</th>';
+  }
+html += '<tr class="col-row">';
+  for (let ci = 0; ci < nFcst; ci++) {
+    const last = ci === nFcst - 1;
+    const isWind = ci === 6;
+    html += '<th class="fcst-col' + (isWind ? ' wind-col-header' : '') + '" tabindex="-1">FCSTs</th>';
+if (ci === 5) {
+      html += '<th class="am-col' + (last ? ' am-group-end' : '') + '" style="white-space:nowrap">Final <button onclick="applyAllTrends()" style="font-family:Arial,Calibri,sans-serif;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:var(--accent);color:#fff;border:none;border-radius:2px;padding:2px 6px;cursor:pointer;vertical-align:middle;margin-left:4px" title="Apply suggested trend to all zones">All</button></th>';
+    } else if (ci === 3) {
+      html += '<th class="am-col' + (last ? ' am-group-end' : '') + '" style="white-space:nowrap">Final <button onclick="applyAllPcpnTypes()" style="font-family:Arial,Calibri,sans-serif;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:var(--accent);color:#fff;border:none;border-radius:2px;padding:2px 6px;cursor:pointer;vertical-align:middle;margin-left:4px" title="Apply suggested pcpn type to all zones">All</button></th>';
+    } else {
+      html += '<th class="am-col' + (last ? ' am-group-end' : '') + (isWind ? ' wind-col-header' : '') + '">Final</th>';
+    }
+  }
+  html += '</tr></thead><tbody>';
+
+  fcstData.forEach((row) => {
+    const zone = row[0];
+    const rdps = rdpsData[zone] || [];
+    const wxobs = wxObsData[zone] || [];
+    const am = amData[zone] || row.slice(1).map(v => v);
+    const adjWarnings = getAdjacencyWarnings(zone);
+    const adjByCol = {};
+    adjWarnings.forEach(w => { adjByCol[w.ci] = w.msg; });
+
+    html += '<tr class="zone-pm">';
+    html += '<td class="zone" rowspan="3">' + esc(zone) + '</td>';
+    html += '<td class="row-label lbl-pm">GOA</td>';
+    for (let ci = 0; ci < nFcst; ci++) {
+      const last = ci === nFcst - 1;
+      const pmVal = row[ci+1] !== undefined ? row[ci+1] : '';
+      const isTrend = ci === TREND_CI;
+      const pmTrendClass = isTrend ? trendClass(pmVal) : '';
+      const extraCls = colExtraClass(ci);
+const pmIsSource = finalSource === 'GOA' && !!fcstData.length;
+      html += '<td class="pm-cell' + extraCls + (pmIsSource ? ' pm-source' : '') + '"><input type="text" value="' + esc(displayVal(pmVal, ci)) + '" class="' + pmTrendClass + '" readonly tabindex="-1"></td>';
+
+      const amVal = am[ci] !== undefined && am[ci] !== '' ? am[ci] : pmVal;
+      const amCls = isTrend ? trendClass(amVal) : '';
+      const amExtraCls = colExtraClass(ci);
+const cautionTip = buildCautionTip(zone, ci);
+      const dpTip = (ci === 0) ? buildDpTip(amVal, am[1]) : (ci === 1) ? buildDpTip(am[0], amVal) : '';
+
+      const tipParts = [];
+      if (cautionTip) tipParts.push(cautionTip);
+      if (dpTip) tipParts.push(dpTip);
+      const tipText = tipParts.join('\n');
+
+      // Short caution message for suggestion box
+      const cautionShort = (() => {
+        if (ci !== 0 && ci !== 1) return '';
+        const finalVal = parseFloat(amVal);
+        if (isNaN(finalVal)) return '';
+        const threshold = ci === 0 ? 5 : 10;
+        const goaVal = parseFloat(row[ci+1]);
+        const obsVal = parseFloat((wxObsData[zone] || [])[ci]);
+        const parts = [];
+        if (!isNaN(goaVal) && Math.abs(finalVal - goaVal) >= threshold)
+          parts.push('GOA' + (finalVal > goaVal ? '+' : '') + Math.round(finalVal - goaVal));
+        if (!isNaN(obsVal) && Math.abs(finalVal - obsVal) >= threshold)
+          parts.push('OBS' + (finalVal > obsVal ? '+' : '') + Math.round(finalVal - obsVal));
+        return parts.length ? '⚠ ' + parts.join(' ') : '';
+      })();
+
+      const hasAdj = ADJ_MSG_COLS.has(ci) && adjByCol[ci];
+      const adjMsgHtml = hasAdj
+        ? '<div class="adj-msg" data-tip="' + esc(adjByCol[ci]) + '">\u26a0 Adj</div>'
+        : '';
+
+      html += '<td class="am-cell' + amExtraCls + (last ? ' am-group-end' : '') + '" rowspan="3">';
+      html += '<input type="text" value="' + esc(displayVal(amVal, ci)) + '" class="' + amCls + '"';
+      if (tipText) html += ' data-tip="' + esc(tipText) + '"';
+html += ' oninput="onAmEdit(this,\'' + zone + '\',' + ci + ')" onfocus="this.select();focusZone(this,\'' + zone + '\',' + ci + ')" onblur="setTimeout(blurZone,80)">';
+html += '<div class="suggested" id="sug-' + zone + '-' + ci + '">&nbsp;</div>';
+      html += cautionShort ? '<div class="adj-msg" id="caut-' + zone + '-' + ci + '" data-tip="' + esc(cautionTip) + '">' + esc(cautionShort) + '</div>' : '<div id="caut-' + zone + '-' + ci + '"></div>';
+      html += adjMsgHtml;
+      html += '</td>';
+    }
+    html += '</tr>';
+
+    html += '<tr class="zone-rdps"><td class="row-label lbl-rdps">RDPS</td>';
+    for (let ci = 0; ci < nFcst; ci++) {
+      const pmVal = row[ci+1] !== undefined ? row[ci+1] : '';
+      const rdpsVal = rdps[ci] !== undefined ? rdps[ci] : '';
+      const isTrend = ci === TREND_CI;
+      const rdpsTrendClass = isTrend ? trendClass(rdpsVal) : '';
+      const diff = rdpsVal !== '' && pmVal !== '' && rdpsVal !== pmVal;
+      const extraCls = colExtraClass(ci);
+const rdpsIsSource = finalSource === 'RDPS' && !!rdpsData[zone];
+      html += '<td class="rdps-cell' + extraCls + (diff ? ' diff-hi' : '') + (rdpsIsSource ? ' rdps-source' : '') + '"><input type="text" value="' + esc(displayVal(rdpsVal, ci)) + '" class="' + rdpsTrendClass + '" readonly tabindex="-1"></td>';
+    }
+    html += '</tr>';
+
+    html += '<tr class="zone-obs"><td class="row-label lbl-obs">OBS</td>';
+    for (let ci = 0; ci < nFcst; ci++) {
+      const pmVal = row[ci+1] !== undefined ? row[ci+1] : '';
+      const obsVal = wxobs[ci] !== undefined ? wxobs[ci] : '';
+      const isTrend = ci === TREND_CI;
+      const obsTrendClass = isTrend ? trendClass(obsVal) : '';
+      const diff = obsVal !== '' && pmVal !== '' && obsVal !== pmVal;
+      const extraCls = colExtraClass(ci);
+      html += '<td class="obs-cell' + extraCls + (diff ? ' diff-hi' : '') + '"><input type="text" value="' + esc(displayVal(obsVal, ci)) + '" class="' + obsTrendClass + '" readonly tabindex="-1"></td>';
+    }
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  document.getElementById('legend').style.display = 'block';
+  assignTabOrder();
+  computeAllSuggestions();
+  if (typeof updateMapMarkers === 'function') { updateMapMarkers(); hookTableRowClicks(); }
+}
+
+function buildDpTip(tempVal, rhVal) {
+  const dp = calcDewpoint(tempVal, rhVal);
+  if (dp === null) return '';
+  return 'Dewpoint ~' + dp.toFixed(1) + 'C (Temp: ' + tempVal + 'C, RH: ' + rhVal + '%)';
+}
+
+function trendClass(v) { const t = (v || '').trim().toUpperCase(); return t === 'UP' ? 'UP' : t === 'LC' ? 'LC' : t === 'DN' ? 'DN' : ''; }
+
+function updateAmCellTip(zone, ci) {
+  const cautDiv = document.getElementById('caut-' + zone + '-' + ci);
+  if (cautDiv && (ci === 0 || ci === 1)) {
+    const am2 = amData[zone] || [];
+    const finalVal = parseFloat(am2[ci]);
+    const row2 = fcstData.find(r => r[0] === zone) || [];
+    const threshold = ci === 0 ? 5 : 10;
+    const goaVal = parseFloat(row2[ci+1]);
+    const obsVal = parseFloat((wxObsData[zone] || [])[ci]);
+    const parts = [];
+    if (!isNaN(finalVal) && !isNaN(goaVal) && Math.abs(finalVal - goaVal) >= threshold)
+      parts.push('GOA' + (finalVal > goaVal ? '+' : '') + Math.round(finalVal - goaVal));
+    if (!isNaN(finalVal) && !isNaN(obsVal) && Math.abs(finalVal - obsVal) >= threshold)
+      parts.push('OBS' + (finalVal > obsVal ? '+' : '') + Math.round(finalVal - obsVal));
+    const short = parts.length ? '⚠ ' + parts.join(' ') : '';
+    cautDiv.textContent = short;
+    if (short) cautDiv.setAttribute('data-tip', buildCautionTip(zone, ci));
+    else cautDiv.removeAttribute('data-tip');
+    cautDiv.className = short ? 'adj-msg' : '';
+  }
+const cautionTip = buildCautionTip(zone, ci);
+  const am = amData[zone] || [];
+  const dpTip = (ci === 0 || ci === 1) ? buildDpTip(am[0], am[1]) : '';
+  const tipParts = [];
+  if (cautionTip) tipParts.push(cautionTip);
+  if (dpTip) tipParts.push(dpTip);
+  const tipText = tipParts.join('\n');
+  const allAmInputs = document.querySelectorAll('td.am-cell input[type="text"]');
+  allAmInputs.forEach(inp => {
+    const attr = inp.getAttribute('oninput') || '';
+    if (attr.includes("'" + zone + "'," + ci)) {
+      if (tipText) inp.setAttribute('data-tip', tipText);
+      else inp.removeAttribute('data-tip');
+    }
+  });
+  updateAdjMsgDiv(zone, ci);
+}
+
+function updateAdjMsgDiv(zone, ci) {
+  if (ci !== 0 && ci !== 1) return;
+  const adjWarnings = getAdjacencyWarnings(zone);
+  const adjWarn = adjWarnings.find(w => w.ci === ci);
+  const sugEl = document.getElementById('sug-' + zone + '-' + ci);
+  if (!sugEl) return;
+  const cell = sugEl.closest('td.am-cell');
+  if (!cell) return;
+  let adjEl = cell.querySelector('.adj-msg');
+  if (adjWarn) {
+    if (!adjEl) {
+      adjEl = document.createElement('div');
+      adjEl.className = 'adj-msg';
+      cell.appendChild(adjEl);
+    }
+    adjEl.textContent = '\u26a0 Adj';
+    adjEl.setAttribute('data-tip', adjWarn.msg);
+  } else {
+    if (adjEl) adjEl.remove();
+  }
+}
+
+function onAmEdit(input, zone, ci) {
+  const pos = input.selectionStart;
+  const upper = normDash(input.value).toUpperCase();
+  if (input.value !== upper) { input.value = upper; try { input.setSelectionRange(pos, pos); } catch(e) {} }
+  if (!amData[zone]) amData[zone] = (fcstData.find(r => r[0] === zone) || []).slice(1).map(v => v);
+if (ci === 6) {
+    const windBad = !validateWindDir(input.value) || hasBackwardsWindRange(input.value);
+    if (windBad) {
+      input.setAttribute('data-tip', hasBackwardsWindRange(input.value) ? 'Range must be low-high, e.g. N10-15 not N15-10' : 'Format: DIR+SPD e.g. NE20G40, S15, W30G55');
+      input.style.background = '#ff2200';
+      input.style.borderColor = '#cc1100';
+      input.style.color = '#ffffff';
+    } else {
+      input.removeAttribute('data-tip');
+      input.style.background = '';
+      input.style.borderColor = '';
+      input.style.color = '';
+    }
+  }
+  else if (ci !== 1) input.removeAttribute('data-tip');
+  amData[zone][ci] = input.value;
+  if (ci === 5) input.className = trendClass(input.value);
+  updateAmCellTip(zone, 0);
+  updateAmCellTip(zone, 1);
+  computeSuggestions(zone);
+  updateAdjacencyTips(zone);
+  if (typeof updateSingleMapMarker === 'function') updateSingleMapMarker(zone);
+}
+
+function updateAdjacencyTips(zone) {
+  const toUpdate = new Set([zone, ...getZoneAdj(zone)]);
+  toUpdate.forEach(z => {
+    updateAmCellTip(z, 0);
+    updateAmCellTip(z, 1);
+    if (typeof updateSingleMapMarker === 'function') updateSingleMapMarker(z);
+  });
+}
+
+function parsePcpn(pcpnRaw) {
+  const p = (pcpnRaw || '').trim().toUpperCase();
+  if (!p || p === '-' || p === 'NIL') return { isNil: true, covg: 0, rate: null, rateHigh: null };
+  const rangeMatch = p.match(/^(\d+)([LMH])-([LMH])$/);
+  if (rangeMatch) return { isNil: false, covg: parseInt(rangeMatch[1],10), rate: rangeMatch[2], rateHigh: rangeMatch[3] };
+  const singleMatch = p.match(/^(\d+)([LMH])$/);
+  if (singleMatch) return { isNil: false, covg: parseInt(singleMatch[1],10), rate: singleMatch[2], rateHigh: singleMatch[2] };
+  return { isNil: false, covg: 0, rate: null, rateHigh: null };
+}
+
+function getSuggestions(zone) {
+  const am = amData[zone] || [];
+  const suggestions = new Array(FCST_COLS.length).fill('');
+  const sugReasons = new Array(FCST_COLS.length).fill('');
+  const ltg = (am[4] || '').trim().toUpperCase();
+  const rh = parseFloat(am[1]);
+  const temp = parseFloat(am[0]);
+  const pcpnRaw = (am[2] || '').trim().toUpperCase();
+  const pcpnType = (am[3] || '').trim().toUpperCase();
+  const pcpn = parsePcpn(pcpnRaw);
+  const hasTrwTrigger = /M|H/.test(ltg);
+  let covgTypeSug = '', covgTypeReason = '';
+  if (!pcpn.isNil && pcpn.rate !== null) {
+    const isWarm = !isNaN(temp) ? (temp >= 5) : true;
+    const rateLow = pcpn.rate === 'L';
+    if (rateLow) { covgTypeSug = isWarm ? 'RW' : 'SW'; covgTypeReason = 'Pcpn ' + pcpnRaw + ' rate L/L-M + Temp ' + (isNaN(temp)?'?':temp) + 'C -> ' + covgTypeSug; }
+    else { covgTypeSug = isWarm ? 'R' : 'S'; covgTypeReason = 'Pcpn ' + pcpnRaw + ' rate M/M-H/H + Temp ' + (isNaN(temp)?'?':temp) + 'C -> ' + covgTypeSug; }
+  }
+  if (hasTrwTrigger && covgTypeSug) { suggestions[3] = covgTypeSug + ' TRW'; sugReasons[3] = 'Ltg M/H -> TRW; ' + covgTypeReason; }
+  else if (hasTrwTrigger) { suggestions[3] = 'TRW'; sugReasons[3] = 'Ltg contains M or H -> TRW (pair with R/RW/S/SW)'; }
+  else if (covgTypeSug) { suggestions[3] = covgTypeSug; sugReasons[3] = covgTypeReason; }
+
+  // Fire Danger Trend — always suggest UP, LC, or DN
+const pcpnNil = pcpn.isNil || pcpn.covg === 0;
+const pcpnTrace = !pcpn.isNil && pcpn.rate !== null && pcpn.covg > 0 && pcpn.covg < 30;
+  const pcpnLow = pcpnNil || pcpnTrace;
+  const pcpnHeavy = !pcpn.isNil && pcpn.covg >= 50 && pcpn.rate !== null;
+  if (!isNaN(rh) && rh <= 30 && pcpnLow) {
+    suggestions[5] = 'UP';
+    sugReasons[5] = 'RH=' + rh + '% <=30 + Pcpn nil/trace (<=30% covg) -> UP';
+  } else if (pcpnHeavy) {
+    suggestions[5] = 'DN';
+    sugReasons[5] = 'Pcpn ' + pcpnRaw + ' >=50% covg with measurable amount -> DN';
+  } else {
+    suggestions[5] = 'LC';
+    sugReasons[5] = 'Conditions do not meet UP or DN criteria -> LC\n'
+      + 'UP: RH<=30% + Pcpn nil or <=30% covg with any amount\n'
+      + 'DN: Pcpn >=50% covg with measurable amount (>=0.5mm)';
+  }
+
+  if (!pcpn.isNil) {
+    const hr = pcpn.rateHigh;
+    if (pcpn.covg >= 70 && hr === 'H') { suggestions[1] = '55'; sugReasons[1] = 'Pcpn ' + pcpnRaw + ' >=70% H -> Low RH 55%'; }
+    else if (pcpn.covg >= 60 && (hr === 'M' || hr === 'H')) { suggestions[1] = '40'; sugReasons[1] = 'Pcpn ' + pcpnRaw + ' >=60% M+ -> Low RH 40%'; }
+  }
+  const typeNotNil = pcpnType && pcpnType !== 'NIL' && pcpnType !== '-';
+  if (typeNotNil) {
+    suggestions[2] = '>10L';
+    const covgEmpty = !am[2] || am[2].trim() === '' || am[2].trim().toUpperCase() === 'NIL' || am[2].trim() === '-';
+    const typeLabel = pcpnType;
+    const baseReason = covgEmpty
+      ? 'Pcpn Type = ' + typeLabel + ' is set\nCovg is empty \u2192 default >10L'
+      : 'Pcpn Type = ' + typeLabel + ' is set\nDefault Pcpn Covg suggestion: >10L';
+    sugReasons[2] = baseReason;
+  }
+
+  // Rule 5 - LTG suggestion when TRW is in Pcpn Type Final
+  const pcpnTypeFinal = pcpnType;
+  if (pcpnTypeFinal.includes('TRW')) {
+    suggestions[4] = 'M/I';
+    sugReasons[4] = 'Pcpn Type contains TRW\n\u2192 suggest Ltg M/I (Moderate/Isolated)';
+  }
+
+  // Rule 6 - TRW standalone validation
+  if (pcpnTypeFinal === 'TRW') {
+    suggestions[3] = suggestions[3] || 'RW TRW';
+    sugReasons[3] = sugReasons[3] || 'TRW cannot stand alone\nMust pair with R, RW, S, or SW\ne.g. RW TRW or R TRW';
+  }
+
+  return { suggestions, sugReasons };
+}
+
+function computeSuggestions(zone) {
+  const { suggestions, sugReasons } = getSuggestions(zone);
+  const am = amData[zone] || [];
+suggestions.forEach((val, ci) => {
+    const el = document.getElementById('sug-' + zone + '-' + ci);
+    if (!el) return;
+    if (ci === 6) {
+      el.textContent = '\u00a0';
+      el.removeAttribute('data-tip');
+      el.style.cursor = 'default';
+      el.classList.remove('sug-match','sug-caution','sug-mismatch');
+      el.classList.add('blank');
+      return;
+    }
+
+    function syncInputBg() {
+      const cell = el.closest('td.am-cell');
+      if (!cell) return;
+      const inp = cell.querySelector('input[type="text"]');
+      if (!inp) return;
+if (el.classList.contains('sug-mismatch')) {
+        inp.style.background = '#ff2200';
+        inp.style.borderColor = '#cc1100';
+        inp.style.color = '#ffffff';
+      } else if (el.classList.contains('sug-caution')) {
+        inp.style.background = '#ffaa00';
+        inp.style.borderColor = '#cc8800';
+        inp.style.color = '#1a1a00';
+} else if (el.classList.contains('sug-match')) {
+        inp.style.background = '';
+        inp.style.borderColor = '';
+        inp.style.color = '';
+      } else {
+        inp.style.background = '';
+        inp.style.borderColor = '';
+        inp.style.color = '';
+      }
+    }
+
+    const alwaysShow = SUG_ALWAYS_SHOW.has(ci);
+    if (!val) {
+      el.textContent = '\u00a0';
+      el.removeAttribute('data-tip');
+      el.style.cursor = 'default';
+      el.classList.remove('sug-match','sug-caution','sug-mismatch','blank');
+      el.classList.add('blank');
+      syncInputBg();
+      return;
+    }
+    el.textContent = val;
+    if (sugReasons[ci]) {
+      el.setAttribute('data-tip', sugReasons[ci]);
+      el.style.cursor = 'help';
+    } else {
+      el.removeAttribute('data-tip');
+      el.style.cursor = 'default';
+    }
+    el.classList.remove('blank','sug-match','sug-caution','sug-mismatch');
+    if (SUG_MATCH_COLS.has(ci) || alwaysShow) {
+      const finalVal = (am[ci] || '').trim().toUpperCase();
+      const sugVal = val.toUpperCase();
+      const isEmpty = !finalVal || finalVal === '-' || finalVal === 'NIL';
+if (ci === 2) {
+        if (isEmpty) el.classList.add('sug-mismatch');
+        else el.classList.add('sug-match');
+      } else if (ci === 3) {
+        // Check for TRW standalone mismatch first
+        if (finalVal === 'TRW') {
+          el.classList.add('sug-mismatch'); // standalone TRW always red
+        } else if (!isEmpty) {
+          const sugParts = sugVal.split(/[\s\/]+/), finalParts = finalVal.split(/[\s\/]+/);
+          if (sugVal === finalVal || (sugParts.every(p => finalParts.includes(p)) && finalParts.every(p => sugParts.includes(p)))) el.classList.add('sug-match');
+          else if (sugParts.some(p => finalParts.includes(p)) || finalParts.some(p => sugParts.includes(p))) el.classList.add('sug-caution');
+          else el.classList.add('sug-mismatch');
+        }
+} else if (ci === 4) {
+        // LTG: if TRW in Pcpn Type, must be M or H
+        const hasTrw = (am[3] || '').trim().toUpperCase().includes('TRW');
+        if (isEmpty) {
+          if (hasTrw) el.classList.add('sug-mismatch');
+        } else if (hasTrw) {
+          el.classList.add(finalVal.startsWith('M') || finalVal.startsWith('H') ? 'sug-match' : 'sug-mismatch');
+        } else {
+          el.classList.add(finalVal === sugVal ? 'sug-match' : finalVal.includes(sugVal) || sugVal.includes(finalVal) ? 'sug-caution' : 'sug-mismatch');
+        }
+      } else if (ci === 5) {
+        // Fire Danger Trend — always has a suggestion, mismatch = red
+        el.classList.add(isEmpty || finalVal !== sugVal ? 'sug-mismatch' : 'sug-match');
+} else {
+        // Default: exact = green, partial = amber, different = red (only when not empty)
+        if (!isEmpty) {
+          el.classList.add(finalVal === sugVal ? 'sug-match' : finalVal.includes(sugVal) || sugVal.includes(finalVal) ? 'sug-caution' : 'sug-mismatch');
+        }
+      }
+    }
+    syncInputBg();
+  });
+}
+function computeAllSuggestions() { fcstData.forEach(row => computeSuggestions(row[0])); }
+
+function applyAllTrends() {
+  fcstData.forEach(row => {
+    const zone = row[0];
+    const { suggestions } = getSuggestions(zone);
+    const sug = suggestions[5];
+    if (!sug) return;
+    if (!amData[zone]) amData[zone] = row.slice(1).map(v => v);
+    amData[zone][5] = sug;
+    const el = document.getElementById('sug-' + zone + '-5');
+    if (el) {
+      const cell = el.closest('td.am-cell');
+      if (cell) {
+        const inp = cell.querySelector('input[type="text"]');
+        if (inp) { inp.value = sug; inp.className = trendClass(sug); }
+      }
+    }
+    computeSuggestions(zone);
+  });
+}
+
+function applyAllPcpnTypes() {
+  fcstData.forEach(row => {
+    const zone = row[0];
+    const { suggestions } = getSuggestions(zone);
+    const sug = suggestions[3];
+    if (!sug) return;
+    if (!amData[zone]) amData[zone] = row.slice(1).map(v => v);
+    amData[zone][3] = sug;
+    const el = document.getElementById('sug-' + zone + '-3');
+    if (el) {
+      const cell = el.closest('td.am-cell');
+      if (cell) {
+        const inp = cell.querySelector('input[type="text"]');
+        if (inp) { inp.value = sug; }
+      }
+    }
+    computeSuggestions(zone);
+  });
+}
+function exportCSV() {
+  if (!fcstData.length) { setStatus('Nothing to export - import a file first.', 'err'); return; }
+  const q = v => '"' + normDash(String(v)).replace(/"/g, '""') + '"';
+  const EXPORT_HDRS = ['Forecast Zone','Maximum Temp','Low RH','Pcpn Covg / Amnt','Pcpn Type','Ltg Prob/Freq','Fire Trend', windLabel];
+  const lines = [EXPORT_HDRS.map(q).join(',')];
+  fcstData.forEach(row => {
+    const zone = row[0];
+    const am = amData[zone] || row.slice(1).map(v => v);
+const cells = [zone, ...FCST_COLS.map((_, ci) => { const v = am[ci] !== undefined ? am[ci] : ''; return ci === 6 ? v : displayVal(v, ci); })];
+    lines.push(cells.map(q).join(','));
+  });
+  const exportResult = computeExportFilename();
+  const fname = (exportResult && exportResult.fname) ? exportResult.fname : 'forecast.csv';
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus('Exported -> ' + fname, 'ok');
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function windDegToCompass(w) {
+  if (!w || w === '') return w;
+  const compass = ['N','NE','E','SE','S','SW','W','NW'];
+  let s = pickBestWindSegment(String(w));
+  s = s.replace(/(?<![A-Za-z])(\d{1,3})(\.\d+)?(?=\/)/g, (_, d) => { const n = parseInt(d, 10); return compass[Math.floor(((n+22.5)%360)/45)%8]; });
+  s = s.replace(/\//g,'').replace(/\s+G/gi,'G').replace(/\s+/g,'');
+  return s;
+}
+
+const WIND_RE = /^(N|NE|E|SE|S|SW|W|NW)(\d{1,3}(-\d{1,3})?)(G\d{1,3}(-\d{1,3})?)?$/i;
+function validateWindDir(val) {
+  if (!val || val.trim() === '') return true;
+  const segs = val.trim().split('/').map(s => s.trim()).filter(Boolean);
+  if (!segs.length) return true;
+  return segs.every(s => WIND_RE.test(s));
+}
+
+function hasBackwardsWindRange(val) {
+  if (!val || val.trim() === '') return false;
+  const segs = val.trim().split('/').map(s => s.trim()).filter(Boolean);
+  return segs.some(seg => {
+    const m = seg.match(/^(?:N|NE|E|SE|S|SW|W|NW)(\d{1,3})-(\d{1,3})(?:G(\d{1,3})-(\d{1,3}))?$/i);
+    if (!m) return false;
+    if (parseInt(m[1], 10) >= parseInt(m[2], 10)) return true;
+    if (m[3] && m[4] && parseInt(m[3], 10) >= parseInt(m[4], 10)) return true;
+    return false;
+  });
+}
+function displayVal(val, ci) { return (ci === 6) ? windDegToCompass(val) : val; }
+
+function setStatus(msg, type) { const el = document.getElementById('status'); el.textContent = msg; el.className = 'statusbar ' + (type || ''); }
+
+function computeExportFilename() {
+  const filenameText = document.getElementById('filename').textContent;
+  if (!filenameText.trim()) return null;
+  const isAM = /[_\-]AM[_\-.]/i.test(filenameText);
+  const fnMatch = filenameText.match(/([A-Za-z]+)[_\-](\d{1,2})[_\-](\d{4})/);
+  let fname = null;
+  if (fnMatch) {
+    const mon = fnMatch[1], day = fnMatch[2], yr = fnMatch[3];
+    if (isAM) { fname = mon + '_' + day + '_' + yr + '_PM.csv'; }
+    else {
+      const validIso = getValidDateISO();
+      if (validIso) { const d = new Date(validIso + 'T12:00:00Z'); const vMon = d.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' }); fname = vMon + '_' + d.getUTCDate() + '_' + d.getUTCFullYear() + '_AM.csv'; }
+      else { fname = mon + '_' + day + '_' + yr + '_AM.csv'; }
+    }
+  }
+  return { fname, isAM };
+}
+
+function previewExportName() {
+  const result = computeExportFilename();
+  const scopeEl = document.getElementById('export-scope');
+  const btnExport = document.getElementById('btn-export');
+  if (!result) return;
+  const { fname, isAM } = result;
+  if (scopeEl) scopeEl.textContent = isAM ? 'Temp, RH & Wind for tmr PM - Precip for next 24 hours' : 'Forecast for Today and Tonight';
+  if (btnExport && fname) btnExport.textContent = '⬇️️' + fname;
+}
+
+document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragging'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dragging'); });
+document.addEventListener('drop', e => {
+  e.preventDefault(); document.body.classList.remove('dragging');
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  if (f.name.endsWith('.docx')) { loadDocx(f); return; }
+  if (f.name.endsWith('.csv')) {
+    const sniffer = new FileReader();
+    sniffer.onload = ev => { if (/===\s*\d{4}-\d{2}-\d{2}/.test(ev.target.result)) loadObs(f); else loadRdps(f); };
+    sniffer.readAsText(f.slice(0, 2048));
+    return;
+  }
+  setStatus('Drop a .docx forecast or .csv file.', 'err');
+});
+</script>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
+<script>
+const KML_URL = 'http://orangecore.net/met/wxchart/Alberta_Fire_Weather_Forecast_Zones.kml';
+const KNOWN_ZONES = new Set(["OJ","FV","MA","RE","GP","SH","PY","MM","LB","ED","RM","BO","CR","CH","AG","JP","BP","WP"]);
+const ZONE_BORDER_NORMAL = '#c0380a';
+const ZONE_BORDER_CAUTION = '#c09000';
+let leafMap = null, mapMarkers = {}, zonePolygons = [], zoneCentroids = {}, zoneNames = {};
+let selectedZone = null, kmlLoaded = false;
+
+function buildKmlAdjacency() {
+  const zoneVertices = {};
+  zonePolygons.forEach(({name: zone, layer}) => {
+    try { let lls = layer.getLatLngs(); while (Array.isArray(lls[0])) lls = lls[0]; if (!Array.isArray(lls)) return; zoneVertices[zone] = lls; } catch(e) {}
+  });
+  const adj = {}, zKeys = Object.keys(zoneVertices);
+  const bboxes = {};
+  zKeys.forEach(z => {
+    const verts = zoneVertices[z]; if (!verts || !verts.length) return;
+    let minLat=Infinity,maxLat=-Infinity,minLng=Infinity,maxLng=-Infinity;
+    verts.forEach(p => { const lat=p.lat||p[0],lng=p.lng||p[1]; if(lat<minLat)minLat=lat;if(lat>maxLat)maxLat=lat;if(lng<minLng)minLng=lng;if(lng>maxLng)maxLng=lng; });
+    bboxes[z] = {minLat:minLat-0.1,maxLat:maxLat+0.1,minLng:minLng-0.1,maxLng:maxLng+0.1};
+  });
+  const DIST_SQ = 0.015*0.015;
+  const ptLat = p => p.lat !== undefined ? p.lat : p[0];
+  const ptLng = p => p.lng !== undefined ? p.lng : p[1];
+  const bboxOvlp = (a,b) => a.minLat<=b.maxLat&&a.maxLat>=b.minLat&&a.minLng<=b.maxLng&&a.maxLng>=b.minLng;
+  for (let i=0;i<zKeys.length;i++) {
+    const zA=zKeys[i]; if(!adj[zA])adj[zA]=[];
+    for (let j=i+1;j<zKeys.length;j++) {
+      const zB=zKeys[j];
+      if(!bboxes[zA]||!bboxes[zB]||!bboxOvlp(bboxes[zA],bboxes[zB]))continue;
+      const vA=zoneVertices[zA],vB=zoneVertices[zB]; let found=false;
+      outer: for(let a=0;a<vA.length;a+=Math.max(1,Math.floor(vA.length/80))){
+        const aLat=ptLat(vA[a]),aLng=ptLng(vA[a]);
+        for(let b=0;b<vB.length;b+=Math.max(1,Math.floor(vB.length/80))){
+          const dLat=aLat-ptLat(vB[b]),dLng=aLng-ptLng(vB[b]);
+          if(dLat*dLat+dLng*dLng<DIST_SQ){found=true;break outer;}
+        }
+      }
+      if(found){if(!adj[zA])adj[zA]=[];if(!adj[zB])adj[zB]=[];adj[zA].push(zB);adj[zB].push(zA);}
+    }
+  }
+  kmlAdjacency = adj;
+  if (fcstData.length) { fcstData.forEach(row => updateAdjacencyTips(row[0])); updateMapMarkers(); }
+}
+
+function colorForTemp(v){const n=parseFloat(v);if(isNaN(n))return null;if(n>=30)return{bg:'#c0380a',fg:'#fff',alpha:0.36};if(n>=25)return{bg:'#d4650a',fg:'#fff',alpha:0.26};if(n>=20)return{bg:'#e8a020',fg:'#111',alpha:0.20};return{bg:'#3b82f6',fg:'#fff',alpha:0.16};}
+function colorForRH(v){const n=parseFloat(v);if(isNaN(n))return null;if(n<=15)return{bg:'#7a3a10',fg:'#fff',alpha:0.50};if(n<=25)return{bg:'#a05a20',fg:'#fff',alpha:0.38};if(n<=35)return{bg:'#c8a060',fg:'#111',alpha:0.28};if(n<=50)return{bg:'#7ab87a',fg:'#111',alpha:0.22};return{bg:'#226622',fg:'#fff',alpha:0.20};}
+function colorForTrend(v){const t=(v||'').trim().toUpperCase();if(t==='UP')return{bg:'#c0380a',fg:'#fff',alpha:0.36};if(t==='DN')return{bg:'#1a5fd4',fg:'#fff',alpha:0.26};return{bg:'#b07500',fg:'#111',alpha:0.20};}
+function colorForDp(v){const n=parseFloat(v);if(isNaN(n))return null;if(n>=10)return{bg:'#226622',fg:'#fff',alpha:0.36};if(n>=5)return{bg:'#7ab87a',fg:'#111',alpha:0.26};if(n>=0)return{bg:'#c8a060',fg:'#111',alpha:0.24};if(n>=-5)return{bg:'#a05a20',fg:'#fff',alpha:0.32};return{bg:'#7a3a10',fg:'#fff',alpha:0.44};}
+
+function colorForPcpnType(v){
+  const t=(v||'').trim().toUpperCase();
+  if(!t||t==='-'||t==='NIL')return{bg:'#aaaaaa',fg:'#fff',alpha:0.18};
+  const hasTRW=t.includes('TRW');
+  let bg='#aaaaaa',fg='#111';
+  if(t.includes(' R ')||t==='R'||t.startsWith('R ')||t.endsWith(' R')){bg='#226622';fg='#fff';}
+  else if(t.includes('RW')){bg='#6abf6a';fg='#111';}
+  else if(t==='S'||t.startsWith('S ')||t.endsWith(' S')||(t.includes(' S '))){bg='#2255cc';fg='#fff';}
+  else if(t.includes('SW')){bg='#88aaee';fg='#111';}
+  else if(hasTRW){bg='#ddcc00';fg='#111';}
+  return{bg,fg,alpha:0.30,trwOutline:hasTRW};
+}
+
+function colorForPcpnCovg(v){
+  const t=(v||'').trim().toUpperCase();
+  if(!t||t==='-'||t==='NIL')return{bg:'#aaaaaa',fg:'#fff',alpha:0.14};
+  const m=t.match(/^(\d+)([LMH])(?:-([LMH]))?$/);
+  if(!m)return{bg:'#aaaaaa',fg:'#fff',alpha:0.14};
+  const rate=m[3]||m[2];
+  if(rate==='H')return{bg:'#145214',fg:'#fff',alpha:0.42};
+  if(rate==='M')return{bg:'#226622',fg:'#fff',alpha:0.32};
+  return{bg:'#6abf6a',fg:'#111',alpha:0.26};
+}
+
+function colorForLtg(v){
+  const t=(v||'').trim().toUpperCase();
+  if(!t||t==='-'||t==='NIL'||t.startsWith('L'))return{bg:'#aaaaaa',fg:'#fff',alpha:0.18};
+  if(t.startsWith('H'))return{bg:'#c0380a',fg:'#fff',alpha:0.42};
+  if(t.startsWith('M'))return{bg:'#ccbb00',fg:'#111',alpha:0.38};
+  return{bg:'#aaaaaa',fg:'#fff',alpha:0.18};
+}
+function getColorObj(fi,val){
+  if(fi===0)return colorForTemp(val);
+  if(fi===1)return colorForRH(val);
+  if(fi===2)return colorForPcpnCovg(val);
+  if(fi===3)return colorForPcpnType(val);
+if(fi===4)return colorForLtg(val);
+  if(fi===5)return colorForTrend(val);
+  if(fi===7)return colorForDp(val);
+  return{bg:'#5530c0',fg:'#fff',alpha:0.16};
+}
+
+// Wind barb SVG (inline, adapted from WMO station model script)
+function windBarbSVG(windStr, size){
+  size=size||50;
+  // ── Barb appearance controls ──────────────────────────────────────────
+  const BARB_STAFF_LEN   = 0.40;  // staff length as fraction of size
+  const BARB_FULL_LEN    = 0.20;  // full barb length
+  const BARB_HALF_LEN    = 0.10;  // half barb length
+  const BARB_SPACING     = 0.10;  // spacing between barbs
+  const BARB_LINE_WIDTH  = 0.045; // stroke width fraction
+  const BARB_FEATHER_SIDE= 0.82;  // barb horizontal reach fraction
+  const BARB_FEATHER_ANGLE=115;    // barb angle in degrees (60=WMO standard)
+  const CIRCLE_RADIUS    = 0.05;  // calm circle radius fraction
+  // ─────────────────────────────────────────────────────────────────────
+  // Parse: DIR + speed-or-range + optional gust  e.g. NE10-15G35  NE15  SW20G40
+const m=(windStr||'').match(/^(N|NE|E|SE|S|SW|W|NW)(\d+)(?:-(\d+))?(G(\d+)(?:-(\d+))?)?$/i);
+  if(!m)return '<text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" font-size="9" font-family="monospace" fill="#333">'+esc(windStr||'--')+'</text>';
+  const dirs = {N:0, NE:45, E:90, SE:135, S:180, SW:225, W:270, NW:315};
+
+  const dirDeg=dirs[(m[1]||'').toUpperCase()]||0;
+  // Use upper end of speed range (m[3]) if present, else m[2]
+  const spd=parseInt(m[3]||m[2],10)||0;
+  const gustSpd=m[5]?parseInt(m[5],10):0;
+  const W=size,H=size,cx=W/2,cy=H/2,R=size*CIRCLE_RADIUS;
+  const sl=size*BARB_STAFF_LEN,blen=size*BARB_FULL_LEN,bspc=size*BARB_SPACING,lw=Math.max(0.8,size*BARB_LINE_WIDTH);
+  const fx=blen*BARB_FEATHER_SIDE,tilt=Math.tan((BARB_FEATHER_ANGLE-90)*Math.PI/180)*blen;
+
+  function buildBarbParts(speed, stroke) {
+    let sg=parseInt(Math.round(speed/5))*5;
+    const pn=Math.floor(sg/50);sg-=pn*50;
+    const fu=Math.floor(sg/10);sg-=fu*10;
+    const ha=Math.floor(sg/5);
+    const staffBaseY=-R,staffTipY=-(R+sl);
+    const bp=[];
+    bp.push(`<circle cx="0" cy="0" r="${R}" fill="white" stroke="${stroke}" stroke-width="${lw}"/>`);
+    bp.push(`<line x1="0" y1="${staffBaseY.toFixed(2)}" x2="0" y2="${staffTipY.toFixed(2)}" stroke="${stroke}" stroke-width="${lw}" stroke-linecap="round"/>`);
+    let pos=0;
+    if(pn===0&&fu===0&&ha===1){
+      const hy=staffTipY+0.28*sl;
+      bp.push(`<line x1="0" y1="${hy.toFixed(2)}" x2="${fx.toFixed(2)}" y2="${(hy-tilt*0.5).toFixed(2)}" stroke="${stroke}" stroke-width="${lw}" stroke-linecap="round"/>`);
+    } else {
+      for(let i=0;i<pn;i++){const ay=staffTipY+pos,by2=staffTipY+pos+bspc*2;bp.push(`<polygon points="0,${ay.toFixed(2)} ${fx.toFixed(2)},${(ay-tilt).toFixed(2)} 0,${by2.toFixed(2)}" fill="${stroke}"/>`);pos+=bspc*1.5;}
+      for(let i=0;i<fu;i++){const fy=staffTipY+pos;bp.push(`<line x1="0" y1="${fy.toFixed(2)}" x2="${fx.toFixed(2)}" y2="${(fy-tilt).toFixed(2)}" stroke="${stroke}" stroke-width="${lw}" stroke-linecap="round"/>`);pos+=bspc;}
+      for(let i=0;i<ha;i++){const hy=staffTipY+pos;const hx=size*BARB_HALF_LEN*BARB_FEATHER_SIDE;bp.push(`<line x1="0" y1="${hy.toFixed(2)}" x2="${hx.toFixed(2)}" y2="${(hy-tilt*0.5).toFixed(2)}" stroke="${stroke}" stroke-width="${lw}" stroke-linecap="round"/>`);pos+=bspc;}
+    }
+    return bp;
+  }
+
+  if(spd<3)return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><circle cx="${cx}" cy="${cy}" r="${R*1.5}" fill="none" stroke="black" stroke-width="${lw}"/></svg>`;
+
+  // Build red gust barb first (behind), then black wind barb on top
+  const allParts=[];
+  if(gustSpd>=3){
+    const gustParts=buildBarbParts(gustSpd,'#cc2200');
+    allParts.push(...gustParts);
+  }
+  const windParts=buildBarbParts(spd,'black');
+  allParts.push(...windParts);
+
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><g transform="translate(${cx},${cy}) rotate(${dirDeg})">${allParts.join('')}</g></svg>`;
+}
+
+function polygonStyle(zone,isSelected){
+  const fi=parseInt(document.getElementById('map-field-select').value);
+  const am=amData[zone]||(fcstData.find(r=>r[0]===zone)||[]).slice(1);
+  const val=am&&am[fi]!==undefined?am[fi]:'';
+  const c=getColorObj(fi,val);
+  const fill=c?c.bg:'#e8ecf4';
+const alpha=c?c.alpha*0.45:0.06;
+const hasAdj=hasAdjacencyIssue(zone);
+  return{color:isSelected?'#000000':(hasAdj?ZONE_BORDER_CAUTION:ZONE_BORDER_NORMAL),weight:isSelected?5:(hasAdj?2.0:1.2),opacity:1.0,fillColor:fill,fillOpacity:alpha,dashArray:(!isSelected&&hasAdj)?'6 3':null};
+}
+
+function makeIcon(zone, fi, isSelected) {
+  const am = amData[zone] || (fcstData.find(r => r[0] === zone) || []).slice(1);
+  const rawAmv = am && am[fi] !== undefined ? am[fi] : '';
+const amv = fi === 7 ? (() => { const d = calcDewpoint(am[0], am[1]); return d !== null ? d.toFixed(1) + 'C' : ''; })()
+    : fi === 6 ? windDegToCompass(pickLastWindSegment(rawAmv)) : rawAmv;
+  const c = getColorObj(fi, amv) || { bg: '#e8ecf4', fg: '#1a2240' };
+  const hasAdj = hasAdjacencyIssue(zone);
+  const glow = isSelected ? '0 0 0 3px rgba(192,56,10,0.5),0 2px 10px rgba(0,0,0,0.25)'
+    : hasAdj ? '0 0 0 2px rgba(176,117,0,0.5),0 1px 6px rgba(0,0,0,0.18)'
+    : '0 1px 6px rgba(0,0,0,0.18)';
+  const bdr = isSelected ? '2px solid #c0380a'
+    : hasAdj ? '2px solid #c03000'
+    : c.trwOutline ? '2px solid #ccbb00'
+    : '1px solid rgba(0,0,0,0.15)';
+
+  if (fi === 6) {
+    const barbSvg = windBarbSVG(amv, 60);
+    return L.divIcon({ className: '', html: '<div style="pointer-events:none;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.3));width:100px;height:100px;overflow:visible">' + barbSvg + '</div>', iconSize: [160, 160], iconAnchor: [30, 30] });
+  }
+
+const dpLine = (fi === 0 || fi === 1) ? (() => {
+    const d = calcDewpoint(am[0], am[1]);
+    if (d === null) return '';
+    const t = Math.max(0, Math.min(1, (d + 30) / 60));
+    const lo = [139, 90, 43];   // brown  (-30C)
+    const hi = [27, 120, 55];   // green  (+30C)
+    const rC = Math.round(lo[0] + (hi[0] - lo[0]) * t);
+    const gC = Math.round(lo[1] + (hi[1] - lo[1]) * t);
+    const bC = Math.round(lo[2] + (hi[2] - lo[2]) * t);
+const dpColor = 'rgb(' + rC + ',' + gC + ',' + bC + ')';
+    return '<div style="padding:2px 6px;font-family:monospace;font-size:10px;font-weight:700;color:#ffffff;text-align:center;background:' + dpColor + ';border-top:1px solid rgba(0,0,0,0.08)">Dp ' + d.toFixed(1) + 'C</div>';
+  })() : '';
+
+const midBox = (fi === 0 || fi === 1) ? (() => {
+    const tC = getColorObj(0, am[0]) || { bg: '#e8ecf4' };
+    const rC = getColorObj(1, am[1]) || { bg: '#e8ecf4' };
+const tVal = am[0] !== undefined && am[0] !== '' ? am[0] + 'C' : '--';
+    const rVal = am[1] !== undefined && am[1] !== '' ? am[1] + '%' : '--';
+    const tNum = parseFloat(am[0]);
+    const rNum = parseFloat(am[1]);
+const rhLow = !isNaN(tNum) && !isNaN(rNum) && rNum < tNum;
+    const rhTextColor = rhLow ? '#ffffff' : rC.bg;
+    const rhBoxStyle = rhLow ? 'background:#d0210a;' : 'border-left:1px solid rgba(0,0,0,0.08);';
+    return '<div style="display:flex;font-family:monospace;font-size:13px;font-weight:700;text-align:center">'
+      + '<div style="flex:1;padding:2px 4px 3px;color:' + tC.bg + '">' + esc(tVal) + '</div>'
+      + '<div style="flex:1;padding:2px 4px 3px;color:' + rhTextColor + ';' + rhBoxStyle + '">' + esc(rVal) + '</div>'
+      + '</div>';
+  })() : '<div style="padding:2px 6px 3px;font-family:monospace;font-size:13px;font-weight:700;color:' + c.bg + ';text-align:center">' + esc(amv || '--') + '</div>';
+  const html = '<div style="background:#ffffff;border:' + bdr + ';border-radius:5px;box-shadow:' + glow + ';min-width:60px;overflow:visible;pointer-events:none">'
+    + '<div style="background:' + c.bg + ';color:' + c.fg + ';font-family:Arial,Calibri,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-align:center;padding:1px 5px">' + zone + (hasAdj ? ' !' : '') + '</div>'
+    + midBox
+    + dpLine
+    + '</div>';
+  return L.divIcon({ className: '', html, iconAnchor: [30, 12] });
+}
+
+function mapPopupHtml(zone){
+  const fi=parseInt(document.getElementById('map-field-select').value);
+  const am=amData[zone]||[];
+  const pm=(fcstData.find(r=>r[0]===zone)||[]).slice(1);
+  const rdps=rdpsData[zone]||[];
+  const obs=wxObsData[zone]||[];
+  const name=zoneNames[zone]||zone;
+  const hdr=(lbl,col)=>'<th style="padding:3px 6px;font-size:10px;color:'+col+';font-weight:700;text-align:right;border-bottom:1px solid #c8d0e0">'+lbl+'</th>';
+  const cel=(val,col,hi)=>'<td style="padding:3px 6px;font-size:11px;color:'+col+';text-align:right;border-bottom:1px solid #e8ecf4;'+(hi?'font-weight:bold;':'')+'">'+esc(String(val!==undefined&&val!==''?val:'--'))+'</td>';
+const colLabels=FCST_COLS.map((n,i)=>i===6?windLabel:n);
+  function dpStrP(tV,rV){const d=calcDewpoint(tV,rV);return d!==null?d.toFixed(1)+'C':'';}
+  const rows=colLabels.map((n,i)=>'<tr><td style="padding:3px 8px 3px 0;font-size:11px;color:#5a6a8a;border-bottom:1px solid #e8ecf4;white-space:nowrap">'+n+'</td>'+cel(displayVal(am[i],i),'#226622',i===fi)+cel(displayVal(pm[i],i),'#1a2240',false)+cel(displayVal(rdps[i],i),'#5530c0',false)+cel(displayVal(obs[i],i),'#1a7050',false)+'</tr>').join('')
+    +(fi===7?'<tr><td style="padding:3px 8px 3px 0;font-size:11px;color:#5a6a8a;border-bottom:1px solid #e8ecf4;white-space:nowrap">Dew Point</td>'+cel(dpStrP(am[0],am[1]),'#226622',true)+cel(dpStrP(pm[0],pm[1]),'#1a2240',false)+cel(dpStrP(rdps[0],rdps[1]),'#5530c0',false)+cel(dpStrP(obs[0],obs[1]),'#1a7050',false)+'</tr>':'');
+  const adjZones=getZoneAdj(zone);
+  const adjInfo=adjZones.length?'<div style="font-size:10px;color:#8899bb;margin-top:4px">KML adj: '+adjZones.join(', ')+'</div>':'';
+  return '<div style="font-family:monospace;background:#ffffff;color:#1a2240;padding:6px 4px 4px;min-width:300px"><div style="font-family:Arial,Calibri,sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;color:#c0380a;margin-bottom:8px">'+zone+' - '+name+'</div><table style="border-collapse:collapse;width:100%"><thead><tr><th style="padding:3px 8px 3px 0;font-size:10px;color:#5a6a8a;text-align:left;border-bottom:1px solid #c8d0e0">Field</th>'+hdr('Final','#226622')+hdr('GOA','#1a2240')+hdr('RDPS','#5530c0')+hdr('OBS','#1a7050')+'</tr></thead><tbody>'+rows+'</tbody></table>'+adjInfo+'<div style="font-size:10px;color:#8899bb;margin-top:4px">Click table row to sync map</div></div>';
+}
+
+// Step/count for the animation range only - not layer defs (those come from _wmsLayerMeta,
+// which is built once inside applyWmsOverlay() so there's a single source of truth).
+const ANIMET_RANGE_CFG = {
+  0: { step: 'PT1H', count: 24 },
+  1: { step: 'PT1H', count: 24 },
+  2: { step: 'PT6H', count: 12 },
+  3: { step: 'PT6H', count: 12 },
+  4: { step: 'PT6H', count: 12 },
+  5: { step: 'PT1H', count: 24 },
+  6: { step: 'PT1H', count: 24 },
+  7: { step: 'PT1H', count: 24 },
+};
+
+function buildAnimetUrl(fi) {
+  if (!_wmsLayerMeta.length) return null; // nothing on the map for this field (e.g. Dew Point tab)
+  const EXTENT = '-15983780,4640034,-8699424,9271795';
+  const cfg = ANIMET_RANGE_CFG[fi] || ANIMET_RANGE_CFG[0];
+  const layersParam = _wmsLayerMeta.map(m => {
+    const wp = (m.layer && m.layer.wmsParams) || {};
+    return (wp.layers || '') + ';0.75;0;1;' + (wp.styles || '') + ';1';
+  }).join(',');
+  return 'https://eccc-msc.github.io/msc-animet/?layers=' + layersParam + '&extent=' + EXTENT + '&overlays=Boundaries&range=' + cfg.count + ',0,l,' + cfg.step;
+}
+
+function makeLegend(fi){
+  const el=document.getElementById('map-legend');
+  const dot=bg=>'<span class="dot" style="background:'+bg+'"></span>';
+if(fi===0)el.innerHTML=dot('#3b82f6')+'<20C &nbsp;'+dot('#e8a020')+'20-24C &nbsp;'+dot('#d4650a')+'25-29C &nbsp;'+dot('#c0380a')+'>=30C';
+  else if(fi===1)el.innerHTML=dot('#7a3a10')+'<=15% &nbsp;'+dot('#a05a20')+'16-25% &nbsp;'+dot('#c8a060')+'26-35% &nbsp;'+dot('#7ab87a')+'36-50% &nbsp;'+dot('#226622')+'>50%';
+  else if(fi===2)el.innerHTML=dot('#aaaaaa')+'NIL &nbsp;'+dot('#6abf6a')+'L &nbsp;'+dot('#226622')+'M &nbsp;'+dot('#145214')+'H';
+  else if(fi===3)el.innerHTML=dot('#aaaaaa')+'NIL &nbsp;'+dot('#6abf6a')+'RW &nbsp;'+dot('#226622')+'R &nbsp;'+dot('#88aaee')+'SW &nbsp;'+dot('#2255cc')+'S &nbsp;'+dot('#ddcc00')+'TRW outline';
+else if(fi===4)el.innerHTML=dot('#aaaaaa')+'L/None &nbsp;'+dot('#ccbb00')+'M &nbsp;'+dot('#c0380a')+'H &nbsp;<span style="color:var(--fcst2-text);font-size:9px;">+ GDPS CAPE/LI overlay</span>';
+  else if(fi===5)el.innerHTML=dot('#c0380a')+'UP &nbsp;'+dot('#b07500')+'LC &nbsp;'+dot('#1a5fd4')+'DN';
+  else if(fi===7)el.innerHTML=dot('#3b82f6')+'<0C &nbsp;'+dot('#e8a020')+'0-4C &nbsp;'+dot('#d4650a')+'5-9C &nbsp;'+dot('#c0380a')+'>=10C';
+  else el.innerHTML='';
+el.innerHTML+='&nbsp;&nbsp;<span style="display:inline-flex;align-items:center;gap:4px"><svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="'+ZONE_BORDER_NORMAL+'" stroke-width="2"/></svg>Normal</span>&nbsp;<span style="display:inline-flex;align-items:center;gap:4px"><svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="'+ZONE_BORDER_CAUTION+'" stroke-width="2.5" stroke-dasharray="4 2"/></svg>Adj caution</span>';
+const animetUrl = buildAnimetUrl(fi);
+  if (animetUrl) el.innerHTML+='&nbsp;&nbsp;<a href="'+animetUrl+'" target="_blank" rel="noopener" style="font-family:Arial,Calibri,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--fcst2-text);text-decoration:none;border:1px solid var(--fcst2-border);background:var(--fcst2-header);border-radius:3px;padding:2px 8px">&#9654; Animate (msc-animet)</a>';
+}
+
+function polygonCentroid(latlngs){
+  const n=latlngs.length;if(!n)return null;
+  let area=0,lat=0,lng=0;
+  for(let i=0,j=n-1;i<n;j=i++){const a=latlngs[i].lng*latlngs[j].lat-latlngs[j].lng*latlngs[i].lat;area+=a;lng+=(latlngs[i].lng+latlngs[j].lng)*a;lat+=(latlngs[i].lat+latlngs[j].lat)*a;}
+  area/=2;
+  if(Math.abs(area)<1e-10)return{lat:latlngs.reduce((s,p)=>s+p.lat,0)/n,lng:latlngs.reduce((s,p)=>s+p.lng,0)/n};
+  return{lat:lat/(6*area),lng:lng/(6*area)};
+}
+
+function updateMapMarkers(){
+  applyWmsOverlay();
+  if(!leafMap||!kmlLoaded)return;
+  if(!leafMap||!kmlLoaded)return;
+  const fi=parseInt(document.getElementById('map-field-select').value);
+  zonePolygons.forEach(({name:zone,layer})=>{const isSel=zone===selectedZone;layer.setStyle(polygonStyle(zone,isSel));});
+  Object.keys(zoneCentroids).forEach(zone=>{
+    const c=zoneCentroids[zone],isSel=zone===selectedZone,icon=makeIcon(zone,fi,isSel);
+    if(mapMarkers[zone]){mapMarkers[zone].setIcon(icon);mapMarkers[zone].setPopupContent(mapPopupHtml(zone));}
+    else{const m=L.marker([c.lat,c.lng],{icon,zIndexOffset:200}).addTo(leafMap).bindPopup(mapPopupHtml(zone),{className:'fire-popup',maxWidth:360});m.on('click',()=>highlightZone(zone));mapMarkers[zone]=m;}
+  });
+  makeLegend(fi);
+}
+
+function updateSingleMapMarker(zone){
+  if(!leafMap||!zoneCentroids[zone])return;
+  const fi=parseInt(document.getElementById('map-field-select').value),isSel=zone===selectedZone;
+  zonePolygons.filter(z=>z.name===zone).forEach(({layer})=>layer.setStyle(polygonStyle(zone,isSel)));
+  if(mapMarkers[zone]){mapMarkers[zone].setIcon(makeIcon(zone,fi,isSel));mapMarkers[zone].setPopupContent(mapPopupHtml(zone));}
+}
+
+function clearCellHighlight(){
+  document.querySelectorAll('tbody td').forEach(td=>{td.style.background='';td.style.color='';});
+}
+
+function highlightZone(zone){
+  const prev=selectedZone;
+  if(prev===zone){selectedZone=null;updateSingleMapMarker(zone);clearCellHighlight();document.getElementById('map-meta').textContent='Click zone row to highlight';return;}
+  selectedZone=zone;
+  [prev,zone].filter(Boolean).forEach(z=>updateSingleMapMarker(z));
+  clearCellHighlight();
+  let target=null;
+  const wantCi=String(lastActiveCol);
+  document.querySelectorAll('td.am-cell input[type="text"]').forEach(inp=>{
+    const m=(inp.getAttribute('oninput')||'').match(/onAmEdit\(this,'(\w+)',(\d+)\)/);
+    if(m&&m[1]===zone&&m[2]===wantCi) target=inp;
+  });
+  if(target){
+    target.closest('td.am-cell').style.background='rgba(255,255,255,1)';
+    target.style.color='#000000';
+    target.focus();
+    target.select();
+    target.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+  document.getElementById('map-meta').textContent=zone+(zoneNames[zone]?' - '+zoneNames[zone]:'');
+}
+
+function zoomToZone(zone){
+  if(!leafMap)return;
+  const poly=zonePolygons.find(p=>p.name===zone);
+  if(poly&&poly.layer&&poly.layer.getBounds){
+    try{leafMap.fitBounds(poly.layer.getBounds(),{padding:[100,100],maxZoom:6,animate:true});return;}catch(e){}
+  }
+  const c=zoneCentroids[zone];
+  if(c)leafMap.setView([c.lat,c.lng],6,{animate:true});
+}
+
+function hookTableRowClicks(){
+  document.querySelectorAll('td.zone').forEach(td=>{
+    const fresh=td.cloneNode(true);
+    td.parentNode.replaceChild(fresh,td);
+    fresh.addEventListener('click',()=>{
+      const zone=fresh.textContent.trim();
+      if(selectedZone===zone){highlightZone(zone);zoomToZone(zone);return;}
+      highlightZone(zone);
+      zoomToZone(zone);
+      if(mapMarkers[zone])mapMarkers[zone].openPopup();
+    });
+  });
+}
+
+function loadKml(){
+  setStatus('Loading zone boundaries from KML...', '');
+  const kmlLayer=omnivore.kml(KML_URL).on('ready',function(){
+    this.setStyle({color:ZONE_BORDER_NORMAL,weight:1.8,opacity:1.0,fillOpacity:0.08,fillColor:'#c0380a'});
+    this.addTo(leafMap);
+    let count=0;
+    this.eachLayer(layer=>{
+      if(!layer.feature||!layer.feature.properties)return;
+      const rawName=(layer.feature.properties.name||layer.feature.properties.Name||'').trim();
+      if(!rawName||rawName==='WB')return;
+      const m=rawName.match(/^([A-Z]{2,3})\b/);
+      if(!m||!KNOWN_ZONES.has(m[1]))return;
+      const zone=m[1];
+      const fullName=rawName.replace(/^[A-Z]{2,3}\s*[-]?\s*/,'').trim()||rawName;
+      zoneNames[zone]=fullName;
+      zonePolygons.push({name:zone,layer});
+      layer.on('click',()=>highlightZone(zone));
+      if(layer.getBounds){
+        let lls=[];
+        try{const raw=layer.getLatLngs();lls=Array.isArray(raw[0])?raw[0]:raw;if(Array.isArray(lls[0]))lls=lls[0];}catch(e){}
+        if(lls.length){const c=polygonCentroid(lls);if(c&&Math.abs(c.lat)<90&&Math.abs(c.lng)<180)zoneCentroids[zone]=c;else{const bc=layer.getBounds().getCenter();zoneCentroids[zone]={lat:bc.lat,lng:bc.lng};}}
+        else{const bc=layer.getBounds().getCenter();zoneCentroids[zone]={lat:bc.lat,lng:bc.lng};}
+      }
+      count++;
+    });
+    kmlLoaded=true;
+    setStatus('KML loaded - '+count+' zones - building adjacency...','ok');
+    buildKmlAdjacency();
+    setStatus('KML loaded - '+count+' zones - adjacency computed','ok');
+    updateMapMarkers();hookTableRowClicks();
+    try{leafMap.fitBounds(this.getBounds(),{padding:[10,10]});}catch(e){}
+  }).on('error',function(){
+    setStatus('KML load failed - using static adjacency fallback','err');
+    const fallback={
+      OJ:{name:'High Level',lat:58.52,lng:-117.14},FV:{name:'Fort Vermilion',lat:58.40,lng:-116.05},
+      MA:{name:'Mackenzie',lat:57.70,lng:-117.60},RE:{name:'Red Earth Creek',lat:56.55,lng:-115.27},
+      GP:{name:'Grande Prairie',lat:55.17,lng:-118.80},SH:{name:'Swan Hills',lat:54.72,lng:-115.40},
+      PY:{name:'Fort Chipewyan',lat:58.72,lng:-111.12},MM:{name:'Fort McMurray',lat:56.73,lng:-111.38},
+      LB:{name:'Lac La Biche',lat:54.77,lng:-111.97},ED:{name:'Edson',lat:53.58,lng:-116.44},
+      RM:{name:'Rocky Mountain House',lat:52.37,lng:-114.92},BO:{name:'Bow (Calgary area)',lat:51.05,lng:-114.07},
+      CR:{name:'Crow (SW Alberta)',lat:49.80,lng:-114.60},CH:{name:'Cypress Hills',lat:49.65,lng:-110.25},
+      JP:{name:'Jasper',lat:52.88,lng:-118.08},BP:{name:'Banff',lat:51.18,lng:-115.57},
+      WP:{name:'Waterton',lat:49.05,lng:-113.90},AG:{name:'Agriculture',lat:51.80,lng:-112.80},
+    };
+    Object.entries(fallback).forEach(([z,d])=>{zoneCentroids[z]=d;zoneNames[z]=d.name;});
+    kmlLoaded=true;updateMapMarkers();
+    leafMap.fitBounds([[49.0,-120.0],[60.0,-110.0]],{padding:[10,10]});
+  });
+}
+
+// ── WMS overlay state ─────────────────────────────────────────
+let _wmsLayer = null;
+let _wmsLayerMeta = []; // [{layer, label, enabled}]
+
+function buildWmsToggles(items) {
+  // items = [{layer, label, enabled}] - enabled defaults to true
+  _wmsLayerMeta = items.map(it => ({ ...it, enabled: it.enabled !== false }));
+  const container = document.getElementById('wms-layer-toggles');
+  if (!container) return;
+  container.innerHTML = '';
+  container.style.display = _wmsLayerMeta.length ? 'inline-flex' : 'none';
+  _wmsLayerMeta.forEach((meta, idx) => {
+    const id = 'wms-tog-' + idx;
+    const wrap = document.createElement('label');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;gap:3px;cursor:pointer;padding:2px 7px;border-radius:3px;border:1px solid var(--fcst2-border);background:var(--fcst2-header);color:var(--fcst2-text);font-size:11px;font-weight:700;white-space:nowrap;';
+    if (!meta.enabled) wrap.style.opacity = '0.45';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = id;
+    cb.checked = meta.enabled;
+    cb.style.cursor = 'pointer';
+    cb.addEventListener('change', () => {
+      _wmsLayerMeta[idx].enabled = cb.checked;
+      if (!leafMap) return;
+      if (cb.checked) {
+        if (!leafMap.hasLayer(meta.layer)) meta.layer.addTo(leafMap);
+      } else {
+        if (leafMap.hasLayer(meta.layer)) leafMap.removeLayer(meta.layer);
+      }
+      wrap.style.opacity = cb.checked ? '1' : '0.45';
+    });
+    wrap.appendChild(cb);
+    wrap.appendChild(document.createTextNode(' ' + meta.label));
+    container.appendChild(wrap);
+  });
+}
+
+function clearWmsToggles() {
+  const container = document.getElementById('wms-layer-toggles');
+  if (container) { container.innerHTML = ''; container.style.display = 'none'; }
+  _wmsLayerMeta = [];
+}
+
+function snapTo12Z(isoDate) {
+  // isoDate = "YYYY-MM-DD", returns "YYYY-MM-DDT12:00:00Z"
+  return isoDate + 'T12:00:00Z';
+}
+
+function getTime24hEnd(dateIso) {
+  // Precip accumulation window end time, in UTC.
+  // AM forecast (24h accum): ends at local noon (MDT = 18Z) on dateIso.
+  // PM forecast (12h accum): ends at local midnight (MDT = 06Z) on dateIso + 1 day.
+  if (isAMFile) {
+    return dateIso + 'T18:00:00Z';
+  }
+  const nextDay = new Date(dateIso + 'T12:00:00Z');
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  return nextDay.toISOString().slice(0, 10) + 'T06:00:00Z';
+}
+
+let _wmsDateOverride = null;
+let _precipDateOverride = null;
+
+function getWms21ZDate() {
+  if (_wmsDateOverride) return _wmsDateOverride;
+  const validIso = getValidDateISO();
+  return validIso || new Date().toISOString().slice(0, 10);
+}
+
+function getPrecipDateISO() {
+  // Precip layers key off the forecast's own valid date, unless the user manually picks a date via the calendar.
+  if (_precipDateOverride) return _precipDateOverride;
+  return getValidDateISO() || new Date().toISOString().slice(0, 10);
+}
+
+function setWmsTimeLabel(timeStr, accumLabel, calendarIso) {
+  const el = document.getElementById('wms-time-label');
+  const inp = document.getElementById('wms-date-input');
+  if (!el) return;
+  if (!timeStr) {
+    el.style.display = 'none';
+    if (inp) inp.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  const d = new Date(timeStr);
+  const mon = d.toLocaleDateString('en-CA', { month: 'short', timeZone: 'UTC' });
+  const day = d.getUTCDate();
+  const hr = String(d.getUTCHours()).padStart(2, '0');
+  el.textContent = 'WMS: ' + mon + ' ' + day + ' ' + hr + 'Z' + (accumLabel ? ' (' + accumLabel + ')' : '');
+  el.style.display = 'inline-block';
+  if (inp) {
+    inp.value = calendarIso || timeStr.slice(0, 10);
+    inp.style.display = 'inline-block';
+  }
+}
+
+function onWmsDateChange(val) {
+  if (!val) return;
+  const fi = parseInt(document.getElementById('map-field-select').value);
+  if (fi === 2 || fi === 3) _precipDateOverride = val;
+  else _wmsDateOverride = val;
+  applyWmsOverlay(); // recomputes the tile, and setWmsTimeLabel() inside it updates the label + calendar correctly
+}
+
+
+function rgbToHslRH(r,g,b){
+  r/=255;g/=255;b/=255;
+  const max=Math.max(r,g,b),min=Math.min(r,g,b);
+  let h,sat,l=(max+min)/2;
+  if(max===min){h=sat=0;}
+  else{
+    const d=max-min;
+    sat=l>0.5?d/(2-max-min):d/(max+min);
+    switch(max){case r:h=((g-b)/d+(g<b?6:0))/6;break;case g:h=((b-r)/d+2)/6;break;case b:h=((r-g)/d+4)/6;break;}
+  }
+  return[h,sat,l];
+}
+const RHInvertedLayer = L.TileLayer.WMS.extend({
+  createTile(coords,done){
+    const tile=document.createElement("canvas");
+    tile.width=tile.height=256;
+    const ctx=tile.getContext("2d");
+    const url=this.getTileUrl(coords);
+    const img=new Image();
+    img.crossOrigin="anonymous";
+    img.onerror=()=>done(null,tile);
+    img.onload=()=>{
+      ctx.drawImage(img,0,0);
+      const imgData=ctx.getImageData(0,0,256,256);
+      const d=imgData.data;
+      const ramp=[
+        [0.00,139,  0,  0],
+        [0.15,220,  0,  0],
+        [0.30,255, 80,  0],
+        [0.45,255,180,  0],
+        [0.55,255,255,  0],
+        [0.65,150,255, 50],
+        [0.75,  0,220,180],
+        [0.87,  0,120,255],
+        [1.00,  0,  0,180]
+      ];
+      function rampColor(t){
+        t=Math.max(0,Math.min(1,t));
+        for(let i2=1;i2<ramp.length;i2++){
+          if(t<=ramp[i2][0]){
+            const t0=ramp[i2-1][0],t1=ramp[i2][0],f=(t-t0)/(t1-t0);
+            return[
+              Math.round(ramp[i2-1][1]+f*(ramp[i2][1]-ramp[i2-1][1])),
+              Math.round(ramp[i2-1][2]+f*(ramp[i2][2]-ramp[i2-1][2])),
+              Math.round(ramp[i2-1][3]+f*(ramp[i2][3]-ramp[i2-1][3]))
+            ];
+          }
+        }
+        return[ramp[ramp.length-1][1],ramp[ramp.length-1][2],ramp[ramp.length-1][3]];
+      }
+      for(let i=0;i<d.length;i+=4){
+        if(d[i+3]===0)continue;
+        const[h,sat,l]=rgbToHslRH(d[i],d[i+1],d[i+2]);
+        const t=sat<0.1?(l>0.8?1.0:0.0):1.0-Math.min(1,h/0.70);
+        const[nr,ng,nb]=rampColor(t);
+        d[i]=nr;d[i+1]=ng;d[i+2]=nb;
+      }
+      ctx.putImageData(imgData,0,0);
+      done(null,tile);
+    };
+    img.src=url;
+    return tile;
+  }
+});
+
+function applyWmsOverlay() {
+  if (!leafMap) return;
+  if (_wmsLayer) {
+    if (Array.isArray(_wmsLayer)) { _wmsLayer.forEach(l => { try { leafMap.removeLayer(l); } catch(e) {} }); }
+    else { try { leafMap.removeLayer(_wmsLayer); } catch(e) {} }
+    _wmsLayer = null;
+  }
+  clearWmsToggles();
+
+const fi = parseInt(document.getElementById('map-field-select').value);
+  const dateIso = getWms21ZDate();
+  const timeExact = dateIso + 'T21:00:00Z';
+  const time12Z   = snapTo12Z(dateIso);
+  const precipDateIso = getPrecipDateISO();
+  const GEO = 'https://geo.weather.gc.ca/geomet';
+
+function prevRun(timeStr) {
+    // Step back 6 hours
+    const d = new Date(timeStr);
+    d.setUTCHours(d.getUTCHours() - 6);
+    return d.toISOString().slice(0, 19) + 'Z';
+  }
+
+  function wmsWithFallback(layers, styles, time, opacity) {
+    return L.tileLayer.wms(GEO, {
+      layers, styles: styles || '', format: 'image/png',
+      transparent: true, opacity: opacity || 0.65, version: '1.3.0',
+      attribution: '© ECCC GeoMet',
+      TIME: time
+    });
+  }
+
+  const wms = (layers, styles, time, opacity) => wmsWithFallback(layers, styles, time, opacity);
+
+if (fi === 0) {
+    const t  = wms('RDPS_10km_AirTemp_2m', 'Temperature_-50to50C_Dis', timeExact, 0.70);
+    const c  = wms('RDPS_10km_AirTemp-Contour_2m', '', timeExact, 0.75);
+    const cl = wms('RDPS_10km_TotalCloudCover', 'CloudCover_50-100Pct_Dis', timeExact, 0.45);
+    t.addTo(leafMap); c.addTo(leafMap); cl.addTo(leafMap);
+    _wmsLayer = [t, c, cl];
+    buildWmsToggles([{ layer: t, label: 'Temp Fill' }, { layer: c, label: 'Contour' }, { layer: cl, label: 'Cloud' }]);
+    setWmsTimeLabel(timeExact);
+
+  } else if (fi === 1) {
+    const r  = new RHInvertedLayer('https://geo.weather.gc.ca/geomet', {
+      layers: 'RDPS_10km_RelativeHumidity_2m',
+      styles: 'RelativeHumidity_0to100Pct_Dis',
+      format: 'image/png', transparent: true, opacity: 0.65,
+      version: '1.3.0', attribution: '© ECCC GeoMet', TIME: timeExact
+    });
+    const cl = wms('RDPS_10km_TotalCloudCover', 'CloudCover_50-100Pct_Dis', timeExact, 0.45);
+    r.addTo(leafMap); cl.addTo(leafMap);
+    _wmsLayer = [r, cl];
+    buildWmsToggles([{ layer: r, label: 'RH' }, { layer: cl, label: 'Cloud' }]);
+    setWmsTimeLabel(timeExact);
+
+} else if (fi === 2 || fi === 3) {
+    const time24h = getTime24hEnd(precipDateIso);
+    const precipLayerName = isAMFile ? 'RDPS_10km_Precip-Accum24h' : 'RDPS_10km_Precip-Accum12h';
+    const accumLabel = isAMFile ? '24h Accum' : '12h Accum';
+const p = wms(precipLayerName, 'Precip-Accum_0to1000mm_Dis', time24h, 0.70);
+    p.addTo(leafMap);
+    _wmsLayer = p;
+    buildWmsToggles([{ layer: p, label: isAMFile ? 'Precip 24h' : 'Precip 12h' }]);
+    setWmsTimeLabel(time24h, accumLabel, precipDateIso);
+
+} else if (fi === 4) {
+    const cape = wms('RDPS_10km_CAPE', '', timeExact, 0.70);
+    const li   = wms('RDPS_10km_MU-LI-Contour_500mb', '', timeExact, 0.75);
+cape.addTo(leafMap); li.addTo(leafMap);
+    const time24h = getTime24hEnd(precipDateIso);
+    const precipLayerName = isAMFile ? 'RDPS_10km_Precip-Accum24h' : 'RDPS_10km_Precip-Accum12h';
+    const p = wmsWithFallback(precipLayerName, 'Precip-Accum_0to1000mm_Dis', time24h, 0.55);
+    p.addTo(leafMap);
+    _wmsLayer = [cape, li, p];
+    buildWmsToggles([{ layer: cape, label: 'CAPE' }, { layer: li, label: 'LI Contour' }, { layer: p, label: isAMFile ? 'Precip 24h' : 'Precip 12h' }]);
+    setWmsTimeLabel(timeExact);
+
+} else if (fi === 5) {
+    const r = new RHInvertedLayer('https://geo.weather.gc.ca/geomet', {
+      layers: 'RDPS_10km_RelativeHumidity_2m',
+      styles: 'RelativeHumidity_0to100Pct_Dis',
+      format: 'image/png', transparent: true, opacity: 0.55,
+version: '1.3.0', attribution: '© ECCC GeoMet', TIME: timeExact
+    });
+    const time24h = getTime24hEnd(precipDateIso);
+    const precipLayerName = isAMFile ? 'RDPS_10km_Precip-Accum24h' : 'RDPS_10km_Precip-Accum12h';
+    const p = wmsWithFallback(precipLayerName, 'Precip-Accum_0to1000mm_Dis', time24h, 0.55);
+    r.addTo(leafMap); p.addTo(leafMap);
+    _wmsLayer = [r, p];
+    buildWmsToggles([{ layer: r, label: 'RH' }, { layer: p, label: isAMFile ? 'Precip 24h' : 'Precip 12h' }]);
+    setWmsTimeLabel(timeExact);
+
+} else if (fi === 6) {
+    const w  = wms('RDPS_10km_WindSpeed_850mb', 'WindSpeed_knots_Dis_0-60', timeExact, 0.75);
+    const b  = wms('RDPS_10km_Winds_10m', 'WindBarbs_Sfc', timeExact, 0.75);
+    const pr = wms('RDPS_10km_Pressure_MSL-Contour', 'SeaLevelPressure_940to1076mb-Int4mb-BoldLine24mb', timeExact, 0.75);
+    const th = wms('RDPS_10km_Thickness-Contour_1000to500mb', 'Thickness_1000-500mb_468to594dam_Contour', timeExact, 0.75);
+    const b40 = wms('RDPS_10km_Winds_40m', 'WindBarbs_Sfc', timeExact, 0.75);
+    const gust = wms('RDPS_10km_WindGust_10m', 'GUST_MS2KMH_WL', timeExact, 0.75);
+    w.addTo(leafMap); pr.addTo(leafMap); th.addTo(leafMap); b40.addTo(leafMap);
+    _wmsLayer = [w, b, pr, th, b40, gust];
+    buildWmsToggles([{ layer: w, label: '850mb Wind' }, { layer: b, label: 'Wind Barbs', enabled: false }, { layer: pr, label: 'Pressure' }, { layer: th, label: '1000-500mb Thickness' }, { layer: b40, label: '40m Wind Barbs' }, { layer: gust, label: 'Wind Gust' }]);
+    setWmsTimeLabel(timeExact);
+
+  } else {
+    _wmsLayer = null;
+    setWmsTimeLabel(null);
+  }
+}
+
+function initMap(){
+  if(typeof L==='undefined'||typeof omnivore==='undefined'){setTimeout(initMap,200);return;}
+  leafMap=L.map('map',{zoomControl:true}).setView([54.5,-115.5],5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'(c) OpenStreetMap',maxZoom:13}).addTo(leafMap);
+  const style=document.createElement('style');
+  style.textContent=['.fire-popup .leaflet-popup-content-wrapper{background:#fff;color:#1a2240;border:1px solid #c8d0e0;border-radius:4px;padding:0;box-shadow:0 4px 16px rgba(0,0,0,0.15)}','.fire-popup .leaflet-popup-content{margin:10px 12px}','.fire-popup .leaflet-popup-tip{background:#fff}'].join('');
+  document.head.appendChild(style);
+loadKml();
+
+  // Source banner overlay on map
+  const sourceBanner = document.createElement('div');
+  sourceBanner.id = 'map-source-banner';
+  sourceBanner.style.cssText = 'position:absolute;top:10px;left:10px;z-index:1000;font-family:Arial,Calibri,sans-serif;font-size:22px;font-weight:900;letter-spacing:2px;text-transform:uppercase;padding:6px 16px;border-radius:5px;pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,0.25);transition:all 0.2s;';
+  document.getElementById('map').appendChild(sourceBanner);
+  updateSourceBanner();
+}
+
+window.addEventListener('load', initMap);
+
+const FCST_CSV_URL = 'http://orangecore.net/met/wxchart/fcsttable/fcstsummary_latest.csv';
+const OBS_CSV_URL = 'http://orangecore.net/met/wxchart/fcsttable/wxsummary_latest.csv';
+const AUTOFORECAST_URL = 'http://orangecore.net/met/wxchart/autoForecast.html';
+const COLDFRONTFINDER_URL = 'http://orangecore.net/met/wxchart/coldfrontfinder.html';
+
+async function fetchAllData() {
+  const btn = document.getElementById('btn-reload-csv');
+  if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+  setStatus('Fetching latest docx + CSVs...', '');
+  const fname = getLatestDocxFilename();
+  const docxUrl = DOCX_BASE_URL + fname + '?_=' + Date.now();
+  try {
+    const resp = await fetch(docxUrl);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' for ' + fname);
+    const ab = await resp.arrayBuffer();
+    const file = new File([ab], fname, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    loadDocx(file);
+    setStatus('Docx loaded, fetching CSVs...', '');
+  } catch(err) {
+    setStatus('Docx fetch failed: ' + err.message + ' - trying CSVs anyway', 'err');
+  }
+await autoImportCSVs();
+  if (btn) { btn.textContent = 'Load Latest'; btn.disabled = false; btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text-dim)'; btn.style.fontWeight = ''; }
+}
+
+async function autoImportCSVs() {
+  const btn = document.getElementById('btn-reload-csv');
+  if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+  setStatus('Loading RDPS and OBS CSVs...', '');
+  let rdpsOk = false, obsOk = false;
+  try {
+    const bust = '?_=' + Date.now();
+    const r1 = await fetch(FCST_CSV_URL + bust);
+    if (!r1.ok) throw new Error('fcstsummary_latest.csv: HTTP ' + r1.status);
+    const text1 = (await r1.text()).replace(/^\uFEFF/, '');
+    const parsed = parseCSV(text1);
+    if (parsed.length) {
+      const headers = parsed[0].map(h => h.trim().toLowerCase());
+      if (headers.includes('date') && headers.includes('zone')) {
+        const ci = {
+          date: headers.indexOf('date'), zone: headers.indexOf('zone'),
+tempmax: headers.findIndex(h => h.includes('tempmax')),
+minrh: headers.findIndex(h => h.includes('minrh')),
+          covg: headers.findIndex(h => h.includes('coverage') || h.includes('covg') || h.includes('amt')),
+          type: headers.findIndex(h => h === 'type'),
+          ltg: headers.findIndex(h => h === 'lightning' || h.includes('ltg')),
+          trend: headers.findIndex(h => h.includes('trend')),
+          wind: headers.findIndex(h => h === 'wind'),
+        };
+        rdpsRaw = {};
+        for (let i = 1; i < parsed.length; i++) {
+          const row = parsed[i];
+          if (row.length < 3) continue;
+          const rowDate = (row[ci.date] || '').trim();
+          const zone = (row[ci.zone] || '').trim().toUpperCase();
+          if (!rowDate || !ZONES.has(zone)) continue;
+          if (!rdpsRaw[rowDate]) rdpsRaw[rowDate] = {};
+          rdpsRaw[rowDate][zone] = [
+            ci.tempmax >= 0 ? row[ci.tempmax] : '', ci.minrh >= 0 ? row[ci.minrh] : '',
+            ci.covg >= 0 ? row[ci.covg] : '', ci.type >= 0 ? row[ci.type] : '',
+            ci.ltg >= 0 ? row[ci.ltg] : '', ci.trend >= 0 ? row[ci.trend] : '',
+            ci.wind >= 0 ? pickBestWindSegment(row[ci.wind]) : '',
+          ].map(v => normDash((v || '').trim()));
+        }
+allRdpsDates = Object.keys(rdpsRaw).sort();
+        if (allRdpsDates.length) {
+          const validIso = getValidDateISO();
+          const rdpsIso = validIso ? (isAMFile ? validIso : prevDay(validIso)) : null;
+          const useDate = (rdpsIso && rdpsRaw[rdpsIso]) ? rdpsIso : allRdpsDates[0];
+          hasRdps = true;
+          applyRdpsDate(useDate);
+  setButtonLoaded('btn-rdps', 'loaded-rdps', 'RDPS ' + isoToLabel(useDate));
+          rdpsOk = true;
+        }
+      }
+    }
+  } catch(e) { console.warn('[AutoCSV] RDPS load failed:', e); setStatus('RDPS load failed: ' + e.message, 'err'); }
+  try {
+    const bust = '?_=' + Date.now();
+    const r2 = await fetch(OBS_CSV_URL + bust);
+    if (!r2.ok) throw new Error('wxsummary_latest.csv: HTTP ' + r2.status);
+    const text2 = (await r2.text()).replace(/^\uFEFF/, '');
+    if (/===\s*\d{4}-\d{2}-\d{2}/.test(text2)) {
+loadWxSummary(text2, 'wxsummary_latest.csv');
+      setButtonLoaded('btn-obs', 'loaded-obs', 'OBS ' + (allObsDates.length ? isoToLabel(allObsDates[allObsDates.length - 1]) : ''));
+      obsOk = true;
+    } else { throw new Error('wxsummary_latest.csv format not recognised'); }
+  } catch(e) { console.warn('[AutoCSV] OBS load failed:', e); setStatus('OBS load failed: ' + e.message, 'err'); }
+  if (btn) { btn.textContent = 'Load CSVs'; btn.disabled = false; }
+  if (rdpsOk && obsOk) setStatus('Loaded: RDPS (' + allRdpsDates.length + ' days) + OBS (' + allObsDates.length + ' days)', 'ok');
+  else if (rdpsOk) setStatus('RDPS loaded - OBS failed', 'err');
+  else if (obsOk) setStatus('RDPS failed - OBS loaded', 'err');
+  else setStatus('Both CSV loads failed', 'err');
+  if (fcstData.length) renderTable();
+}
+
+function triggerAutoSave() {
+  const btn = document.getElementById('btn-autosave-trigger');
+  btn.textContent = 'Refreshing...';
+  btn.disabled = true;
+  let done = 0;
+  const total = 2;
+  function onDone(label, success) {
+    done++;
+    console.log('[AutoSave] ' + label + ': ' + (success ? 'OK' : 'failed'));
+    if (done >= total) {
+      btn.textContent = 'AutoSave Sent';
+      btn.disabled = false;
+      setStatus('AutoSave triggered on autoForecast + coldFrontFinder', 'ok');
+      setTimeout(() => { btn.textContent = 'Refresh FCST/OBS'; }, 3000);
+    }
+  }
+['autoForecast', 'coldFrontFinder'].forEach((label, idx) => {
+    const url = idx === 0 ? AUTOFORECAST_URL : COLDFRONTFINDER_URL;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'display:none;width:0;height:0;border:none;position:absolute;';
+    iframe.src = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+    document.body.appendChild(iframe);
+    const timeout = setTimeout(() => { onDone(label, false); try { document.body.removeChild(iframe); } catch(e) {} }, 30000);
+    iframe.onload = () => { clearTimeout(timeout); setTimeout(() => { onDone(label, true); try { document.body.removeChild(iframe); } catch(e) {} }, 12000); };
+    iframe.onerror = () => { clearTimeout(timeout); onDone(label, false); try { document.body.removeChild(iframe); } catch(e) {} };
+  });
+  setStatus('AutoSave triggered - waiting for pages to complete...', '');
+}
+
+let lastActiveCol = 0;
+
+function focusZone(inputEl, zone, ci) {
+  const prev = selectedZone;
+  selectedZone = zone;
+  if (ci !== undefined) lastActiveCol = ci;
+  [prev, zone].filter(Boolean).forEach(z => updateSingleMapMarker(z));
+  clearCellHighlight();
+  const cell = inputEl && inputEl.closest ? inputEl.closest('td.am-cell') : null;
+  if (cell) cell.style.background = 'rgba(255,255,255,1)';
+  document.getElementById('map-meta').textContent = zone + (zoneNames[zone] ? ' - ' + zoneNames[zone] : '');
+  zoomToZone(zone);
+}
+
+function blurZone() {
+  const a = document.activeElement;
+  if (a && a.getAttribute('onfocus') && a.getAttribute('onfocus').includes('focusZone')) return;
+  const prev = selectedZone;
+  selectedZone = null;
+  if (prev) updateSingleMapMarker(prev);
+  clearCellHighlight();
+  document.getElementById('map-meta').textContent = 'Click zone row to highlight';
+}
+</script>
+
+
+
+
+</body>
+</html>
