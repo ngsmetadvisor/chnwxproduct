@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head> 
@@ -1703,7 +1702,7 @@ function rebuildStationIcons(){
   const shadow = isLight ? '#fff' : '#000';
   const fontSize = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-sm').trim() || '11px';
   // Update CSS only — no DOM mutation on any marker
-_stnStyle.textContent = '.stn-label{color:'+color+';font-size:'+fontSize+';font-family:monospace;white-space:nowrap;cursor:crosshair;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';display:flex;align-items:center;justify-content:center;width:100%;height:100%;box-sizing:border-box;}';
+_stnStyle.textContent = '.stn-label{color:'+color+';font-size:'+fontSize+';font-family:monospace;white-space:nowrap;cursor:crosshair;line-height:1;text-shadow:0 0 3px '+shadow+',0 0 3px '+shadow+';display:flex;align-items:center;justify-content:center;width:100%;height:100%;box-sizing:border-box;}'+   '.stn-label.has-ip{color:#fff;}';
 }
 loadZones();
 map.fitBounds(getABBounds(), {animate:false}); // initial view = Alberta overview, matching the same bounds used everywhere else (zoneZoomSelect "AB", PNG export, storm-tracking overview zoom)
@@ -5993,6 +5992,10 @@ function showStationPopup(id){
     const km = haversineKm(slat, slon, s.lat, s.lon);
     distStr = km < 1 ? (km * 1000).toFixed(0) + ' m' : km.toFixed(1) + ' km';
   }
+const stnIP = stationIPs[id];
+  const ipHtml = stnIP
+    ? '<div><span style="color:#666;">Wx&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><a href="http://' + stnIP + ':8000" target="_blank" style="color:#88ccff;">' + stnIP + ':8000</a></div>'
+    : '<div><span style="color:#666;">Wx&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span style="color:#555;font-style:italic;">No live Wx (no IP on file)</span></div>';
   const stnAlerts = getStationAlertInfo(id);
   const warnBlockHtml = stnAlerts.length
     ? '<div style="margin-top:6px;padding-top:6px;border-top:0.5px solid rgba(255,255,255,0.1);cursor:pointer;" onclick="window._openStationAlerts(\'' + id + '\')">' +
@@ -6012,7 +6015,8 @@ stnAlerts.map(a => {
     '<div><span style="color:#666;">Elevation</span> ' + elevStr + '</div>' +
     '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lat.toFixed(4) + '°</div>' +
     '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' + s.lon.toFixed(4) + '°</div>' +
-    (distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
+(distStr ? '<div><span style="color:#666;">Distance from ME: </span><span style="color:#ffdd00;">' + distStr + '</span></div>' : '') +
+    ipHtml +
     warnBlockHtml +
     '<div style="margin-top:6px;"><a href="https://www.google.com/maps?q=' + s.lat.toFixed(5) + ',' + s.lon.toFixed(5) + '" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>' +
     '</div>';
@@ -6051,6 +6055,48 @@ function showStationAlertPopup(label, station, labels, isWarning, color){
 const stations = {};
 let stationLabelsVisible = true, stationFocusMarker = null;
 
+// ── Station IP lookup (orangecore.net) ─────────────────────────
+const stationIPs = {}; // Stn. ID -> IP Address (port :8000 appended at display time)
+function parseCSVLine(line){
+  const result=[];
+  let cur='', inQuotes=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(inQuotes){
+      if(c==='"'){
+        if(line[i+1]==='"'){ cur+='"'; i++; }
+        else inQuotes=false;
+      } else cur+=c;
+    } else {
+      if(c==='"') inQuotes=true;
+      else if(c===','){ result.push(cur); cur=''; }
+      else cur+=c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+fetch('https://raw.githubusercontent.com/ngsmetadvisor/chnwxproduct/refs/heads/main/stationIP.csv')
+  .then(r=>r.text())
+  .then(text=>{
+    const clean=text.replace(/^\uFEFF/,'');
+    const lines=clean.split(/\r?\n/);
+    lines.slice(1).forEach(line=>{
+      if(!line.trim()) return;
+      const cols=parseCSVLine(line);
+      const id=cols[1]?cols[1].trim():'';
+      const ip=cols[5]?cols[5].trim():'';
+      if(id&&ip) stationIPs[id]=ip;
+    });
+    // Station markers may already be built by this point (independent fetch) — apply
+    // the white "has IP" label styling to any that weren't yet known to have one.
+    stationLabelMarkers.forEach(m=>{
+      if(!stationIPs[m._stationId]) return;
+      const el=m.getElement()?.querySelector('.stn-label');
+      if(el) el.classList.add('has-ip');
+    });
+  }).catch(e=>console.warn('[stationIPs]',e));
+
 fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/stations.csv')
   .then(r => r.text())
   .then(text => {
@@ -6069,7 +6115,7 @@ const charW = 6.6, padX = 6, padY = 6;
       const ih = 11 + padY * 2;
       const icon = L.divIcon({
         className: '',
-        html: '<div class="stn-label">'+id+'</div>',
+        html: '<div class="stn-label'+(stationIPs[id]?' has-ip':'')+'">'+id+'</div>',
         iconSize: [iw, ih],
         iconAnchor: [iw/2, ih/2]
       });
