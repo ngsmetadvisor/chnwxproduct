@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head> 
@@ -8,7 +9,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>* { -webkit-tap-highlight-color: transparent; }</style>
-<title>Thunderstorm tracking map – Alberta - Live</title>
+<title>Lightning Map – Alberta - Live</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,7 +32,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;
   background: rgba(8,8,18,0.9); border: 0.5px solid rgba(255,255,255,0.12);
   border-radius: 16px; padding: 4px 8px; align-items: center;
-  backdrop-filter: blur(6px); width: 430px; max-width: calc(100vw - 20px);
+  backdrop-filter: blur(6px); width: auto; max-width: calc(100vw - 20px);
 }
 @media (max-width: 600px) {
   #toolbar {
@@ -41,10 +42,11 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     gap: 4px;
   }
   #toolbar::-webkit-scrollbar { display: none; }
-#toolbar .tb-btn, #toolbar #zone-toggle, #toolbar #gps-btn {
+#toolbar .tb-btn, #toolbar #zone-toggle, #toolbar #gps-btn, #toolbar #radar-toggle {
     flex-shrink: 0; padding: 7px 10px; min-width: 32px; min-height: 32px;
     font-size: 13px; display: inline-flex; align-items: center; justify-content: center;
   }
+
   #toolbar .tb-text { display: none; }
 }
 .tb-btn { background: transparent; border: 0.5px solid rgba(255,255,255,0.2); color: #ccc; font-size: 11px; padding: 3px 9px; border-radius: 10px; cursor: pointer; transition: all 0.15s; min-height: 22px; }
@@ -94,13 +96,22 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 }
 @media (max-width: 600px) {
   #radar-panel { padding: 5px 10px; gap: 4px; left: 10px; right: 10px; width: auto; max-width: none; }
+  #radar-top-row { gap: 4px; }
+  #radarStatus { max-width: 28px !important; flex: 0 1 28px !important; font-size: 9px; }
+  #radar-max-count-badge { max-width: 30px; overflow: hidden; text-overflow: ellipsis; font-size: 9px; }
 }
-#radar-top-row { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-#radar-top-row::-webkit-scrollbar { display: none; }
-#radar-top-row > * { flex-shrink: 0; }
-#radar-toggle { background: transparent; border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 11px; padding: 3px 10px; border-radius: 12px; cursor: pointer; transition: all 0.15s; opacity: 0.6; flex-shrink: 0; }
-#radar-toggle.active { background: rgba(100,180,255,0.15); border-color: #88ccff; opacity: 1; }
-#radar-toggle:hover { background: rgba(100,180,255,0.1); opacity: 1; }
+#radar-top-row { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; }
+#radar-top-row > *:not(#radarStatus):not(#radar-max-count-badge) { flex-shrink: 0; }
+#radar-max-count-badge {
+  font-size: 10px; color: #88ccff; font-family: 'Courier New', monospace;
+  white-space: nowrap; flex-shrink: 0;
+}
+#radarStatus {
+  font-size: 10px; color: #88ccff; text-align: right;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; flex: 1 1 30px;
+}
+
 #radar-options-btn { background: transparent; border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 11px; padding: 3px 8px; border-radius: 12px; cursor: pointer; transition: all 0.15s; opacity: 0.6; flex-shrink: 0; }
 #radar-options-btn.active { background: rgba(100,180,255,0.15); border-color: #88ccff; opacity: 1; }
 #radar-options-btn:hover { background: rgba(100,180,255,0.1); opacity: 1; }
@@ -108,7 +119,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 #radar-controls.visible { display: flex; }
 @media (max-width: 600px) {
   #radar-controls.visible {
-    position: absolute; z-index: 2000; max-width: 260px;
+    position: absolute; z-index: 2000; width: calc(100vw - 20px); max-width: none;
     background: rgba(8,8,18,0.97); border: 0.5px solid rgba(100,180,255,0.3);
     border-radius: 14px; padding: 10px; backdrop-filter: blur(8px);
     box-shadow: 0 4px 20px rgba(0,0,0,0.7);
@@ -123,6 +134,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 #radar-panel-row { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 #radar-panel-row::-webkit-scrollbar { display: none; }
 #radar-panel-row > * { flex-shrink: 0; }
+@media (max-width: 600px) {
+  #radarStatus { max-width: 60px !important; }
+}
 #radar-type { background: rgba(8,8,18,0.9); border: 0.5px solid rgba(100,180,255,0.4); color: #88ccff; font-size: 10px; padding: 2px 2px; border-radius: 8px; cursor: pointer; font-family: monospace; width: 54px; }
 #radar-opacity { width: 55px; accent-color: #88ccff; cursor: pointer; }
 #frame-count-wrap { display: flex; gap: 3px; }
@@ -362,15 +376,17 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <!-- Toolbar -->
   <div id="toolbar">
 
-<button id="zone-toggle" class="active"><span class="tb-icon">▦</span><span class="tb-text"> Zones</span></button>
+<button id="gps-btn"><span class="tb-icon">⊕</span><span class="tb-text"> GPS</span></button>
+    <div class="sep"></div>
+<button id="zone-toggle" class="active"><span class="tb-icon"><svg width="12" height="12" viewBox="0 0 14 14" style="display:inline-block;vertical-align:-1px;"><rect x="1" y="1" width="5" height="5" fill="currentColor"/><rect x="8" y="1" width="5" height="5" fill="currentColor"/><rect x="1" y="8" width="5" height="5" fill="currentColor"/><rect x="8" y="8" width="5" height="5" fill="currentColor"/></svg></span><span class="tb-text"> Zones</span></button>
     <div class="sep"></div>
     <button id="basemap-btn" class="tb-btn">🌙 Dark</button>
     <div class="sep"></div>
-<button id="gps-btn"><span class="tb-icon">⊕</span><span class="tb-text"> GPS</span></button>
+<button id="radar-toggle" class="tb-btn"><span class="tb-icon">📡</span><span class="tb-text"> Radar</span></button>
     <div class="sep"></div>
-<button id="ec-lightning-toggle" class="tb-btn"><span class="tb-icon">EC⚡</span><span class="tb-text"> Off</span></button>
+<button id="ec-lightning-toggle" class="tb-btn"><span class="tb-icon">⚡</span><span class="tb-text"> EC</span></button>
     <div class="sep"></div>
-    <button id="station-toggle" class="tb-btn active"><span class="tb-icon">📡</span><span class="tb-text"> Stns</span></button>
+    <button id="station-toggle" class="tb-btn active"><span class="tb-icon">📍</span><span class="tb-text"> Stns</span></button>
     <div class="sep"></div>
 <button id="compass-menu-btn" class="tb-btn active"><span class="tb-icon">🧭</span><span class="tb-text"> Compass</span></button>
     <div class="sep"></div>
@@ -385,13 +401,12 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <!-- Radar panel -->
 <div id="radar-panel">
     <div id="radar-top-row">
-      <button id="radar-toggle">Radar</button>
       <button id="radar-options-btn" title="Show/hide radar options">▼</button>
-      <span id="radar-max-count-badge" style="font-size:10px;color:#88ccff;font-family:'Courier New',monospace;white-space:nowrap;"></span>
-      <span id="radarStatus" style="font-size:10px;color:#88ccff;flex:1;text-align:right;"></span>
 <button id="radar-max-addview-btn" type="button" title="Track current view, keep existing storms" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">+</button>
 <button id="radar-max-toggle" type="button" title="Track storm maxima across frames and mark with ✕" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">Track storms</button>
 <input id="radar-max-opacity-slider" type="range" min="10" max="100" value="70" title="Storm marker/trail/projection opacity" style="width:36px;accent-color:rgba(255,255,255,0.7);">
+<span id="radar-max-count-badge"></span>
+<span id="radarStatus" title=""></span>
 <button id="radar-max-recalc-btn" type="button" title="Recalculate storm tracks now" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">⟳</button>
 <button id="radar-max-settings-btn" type="button" title="Storm tracking parameters" style="background:transparent;border:0.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;white-space:nowrap;">⚙</button>
 </div>
@@ -407,7 +422,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <button id="legend-toggle-btn" title="Toggle precip legend" style="display:none;background:transparent;border:0.5px solid rgba(100,180,255,0.3);color:rgba(136,204,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">Legend</button>
         <input id="anim-scrub" type="range" min="0" max="11" value="11" step="1" style="width:45px;">
         <span id="anim-time-label">--:--</span>
-        <button id="frame-count-toggle" data-frames="12" title="Tap to cycle frame count" style="background:transparent;border:0.5px solid rgba(100,180,255,0.3);color:rgba(136,204,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">12×</button>
+        
         <button id="anim-speed-btn">1×</button>
       </div>
 </div>
@@ -749,7 +764,7 @@ const BASEMAPS = {
     attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
   })
 };
-const BASEMAP_ICONS = {dark:'🌙', sat:'🌍', street:'🗺'};
+const BASEMAP_ICONS = {dark:'🌍', sat:'🌍', street:'🌍'};
 const BASEMAP_TEXT = {dark:'Dark', sat:'Sat', street:'Street'};
 const BASEMAP_ORDER = ['dark','sat','street'];
 
@@ -1840,6 +1855,16 @@ function geometryHasVertexInZone(geometry, zoneLatLngs){
   return false;
 }
 
+// Gathers every currently-active alert (from whichever feature set is currently drawn —
+// AB or Canada scope) whose real polygon geometry contains the given latlng. Used so
+// clicking one alert polygon shows ALL overlapping alerts at that spot, not just the
+// single classification the topmost polygon layer happens to belong to.
+function getAllAlertInfoAtLatLng(latlng){
+  const feats=(alertsVisible && alertsScope==='CA') ? (window._lastCanadaAlertsFeatures||[]) : (window._lastAbAlertsFeatures||[]);
+  const hits=feats.filter(f=>f.geometry && pointInGeoJSON(latlng.lat,latlng.lng,f.geometry));
+  return sortAlertsBySeverity(hits.map(f=>extractAlertInfoWithPriority(f.properties||{})));
+}
+
 // Point-in-polygon with holes for a GeoJSON Polygon or MultiPolygon geometry
 function pointInGeoJSON(lat,lon,geometry){
   if(!geometry) return false;
@@ -2026,9 +2051,10 @@ if(name.includes('severe thunderstorm warning')){
     if(isWarning) results.push({priority:3,label:'Large Hail Warning ('+hailLabel+')',hailMM});
     else if(isWatch) results.push({priority:4,label:'Large Hail Watch ('+hailLabel+')',hailMM});
   }
-  if(name.includes('heat warning')) results.push({priority:7,label:'Heat Warning',hailMM});
+if(name.includes('heat warning')) results.push({priority:7,label:'Heat Warning',hailMM});
   if(name.includes('air quality')) results.push({priority:8,label:'Air Quality Warning',hailMM});
-  if(!results.length) results.push({priority:9,label:extractAlertInfo(props).headline,hailMM});
+  if(name.includes('wind warning')) results.push({priority:9,label:'Wind Warning',hailMM});
+  if(!results.length) results.push({priority:10,label:extractAlertInfo(props).headline,hailMM});
   return results;
 }
 
@@ -2188,7 +2214,8 @@ const AB_ALERT_CANONICAL=[
   {priority:5,label:'Severe T-Storm Warning'},
   {priority:6,label:'Severe T-Storm Watch'},
   {priority:7,label:'Heat Warning'},
-  {priority:8,label:'Air Quality Warning'}
+  {priority:8,label:'Air Quality Warning'},
+{group:'wind',priorities:[9,9],label:'Wind Warning'}
 ];
 
 // Tornado/Large Hail circle markers — red for warning-tier (priority 1 or 3), yellow for
@@ -2202,7 +2229,7 @@ function updateTornadoHailCircles(rows){
   // handled exclusively by toggleOtherAlertCircles(), gated behind row expand/collapse.
   // Grouped separately (tornado vs hail) so collapsing one row's details also hides
   // only that group's circles, not both.
-  const GROUPS={tornado:[1,2],hail:[3,4]};
+const GROUPS={tornado:[1,2],hail:[3,4],wind:[9,9]};
 const addCircle=(id,color)=>{
     const s=stations[id];
     if(!s) return;
@@ -2241,7 +2268,7 @@ function updateTornadoHailPolygons(){
   if(!tornadoHailPolygonLayer){ tornadoHailPolygonLayer=L.layerGroup().addTo(map); }
   tornadoHailPolygonLayer.clearLayers();
   Object.entries(tornadoHailPolygonGeoms).forEach(([groupKey,list])=>{
-    const isTornadoHail = (groupKey==='tornado'||groupKey==='hail');
+const isTornadoHail = (groupKey==='tornado'||groupKey==='hail'||groupKey==='wind');
     // Tornado/Hail polygons follow the group's Hide/Show button (same as their circles).
     // Every other alert type only draws its polygon while its row is expanded — matching
     // the same on-demand behavior toggleOtherAlertCircles() already uses for its circles.
@@ -2254,10 +2281,9 @@ function updateTornadoHailPolygons(){
       try{
         gj=L.geoJSON(item.geometry,{pane:'alertPolygons',style:{color,weight:2,opacity:0.85,fillColor:color,fillOpacity:0.1}});
       }catch(e){ console.warn('[tornadoHailPolygons] bad geometry',e); return; }
-      const info=extractAlertInfoWithPriority(item.props);
-      gj.on('click', e=>{
+gj.on('click', e=>{
         if(handlePickModeClick(e)) return;
-        showAlertModal([info]);
+        showAlertModal(getAllAlertInfoAtLatLng(e.latlng));
       });
       gj.addTo(tornadoHailPolygonLayer);
     });
@@ -2303,14 +2329,13 @@ function updateAlertPolygons(features){
     const style=top?alertStyleForPriority(top.priority, props.risk_colour_en):null;
     const sev=severityColorInfo(props.risk_colour_en);
     const color=style?(style.mode==='banner'?style.bg:style.color):sev.border;
-    const info=extractAlertInfoWithPriority(props);
-    let gj;
+let gj;
     try{
       gj=L.geoJSON(f.geometry,{pane:'alertPolygons',style:{color,weight:2,opacity:0.85,fillColor:color,fillOpacity:0.12}});
     }catch(e){ console.warn('[alertPolygons] bad geometry',e); return; }
 gj.on('click',e=>{
       if(handlePickModeClick(e)) return;
-      showAlertModal([info]);
+      showAlertModal(getAllAlertInfoAtLatLng(e.latlng));
     });
     gj.addTo(alertPolygonLayer);
   });
@@ -2365,7 +2390,7 @@ classes.forEach(cls=>{
       // row's own expand/collapse state (_collapsedAlertGroups for tornado/hail,
       // _openAlertRowGroups for everything else) so visibility stays in sync.
       if(f.geometry){
-        const gKey=cls.priority<=2?'tornado':cls.priority<=4?'hail':('ab-alert-grp-lbl-'+cls.label);
+const gKey=cls.priority<=2?'tornado':cls.priority<=4?'hail':cls.priority===9?'wind':('ab-alert-grp-lbl-'+cls.label);
         if(!tornadoHailPolygonGeoms[gKey]) tornadoHailPolygonGeoms[gKey]=[];
         tornadoHailPolygonGeoms[gKey].push({geometry:f.geometry, priority:cls.priority, props});
       }
@@ -2392,11 +2417,15 @@ const _fBBox=geometryBBox(f.geometry);
         // station the alert doesn't actually reach, even if other stations in the same
         // zone are genuinely covered.
 let hitStations=z.stations.filter(s=>pointInGeoJSON(s.lat,s.lon,f.geometry));
-        // No longer gated on hitStations/vertex/centroid matches — any zone whose bbox
-        // overlaps the alert's bbox (already checked above) is included, with whatever
-        // stations it actually contains (possibly zero). This is what lets an expanded
-        // row show its zones even when the alert polygon doesn't directly contain any
-        // station point in that zone.
+        // Real geometric hit required before a zone is included — bbox overlap above is
+        // only a cheap pre-filter, not proof the alert polygon actually reaches the zone.
+        // A zone qualifies if: a station of its own falls inside the polygon, OR the
+        // zone's centroid falls inside the polygon, OR the polygon has a vertex inside
+        // the zone (catches a small alert shape sitting entirely within a zone).
+        const zoneGeomHit = hitStations.length>0
+          || pointInGeoJSON(z.centroid.lat,z.centroid.lon,f.geometry)
+          || geometryHasVertexInZone(f.geometry,z.latlngs);
+        if(!zoneGeomHit) return;
 if(cls.priority<=6){
           console.log('[abAlerts-debug]',cls.label,'vs zone',z.shortId,'geomType:',f.geometry&&f.geometry.type,'bboxOverlap:',_fBBox&&z.bbox?bboxOverlap(_fBBox,z.bbox):'n/a','match:',hitStations.length?'station':'zone-included (no station)');
         }
@@ -2420,7 +2449,7 @@ rows.sort((a,b)=>{
 window._lastAbAlertsRows=rows;
   updateTornadoHailCircles(rows);
   updateTornadoHailPolygons();
-  window._abAlertsCurrentKey=JSON.stringify(rows.filter(r=>r.priority<=4).map(r=>({p:r.priority,z:Object.keys(r.zoneStations).sort()})));
+  window._abAlertsCurrentKey=JSON.stringify(rows.filter(r=>r.priority<=4||r.priority===9).map(r=>({p:r.priority,z:Object.keys(r.zoneStations).sort()})));
 // Priorities 2, 4, 6 (Tornado Watch, Large Hail Watch, Severe T-Storm Watch) are the
 // watch tier; everything else active (1,3,5,7,8) is warning-tier — counted by distinct
 // zone, same as the row badges above.
@@ -2468,7 +2497,7 @@ const stnHtml=stnList.map(id=>'<span class="ab-alert-stn-id" data-stnid="'+id+'"
     const wrapStyle=isBanner?'border-radius:6px;padding:4px 8px;background:'+style.bg+';':'';
     const badgeStyle=isBanner?'color:'+col+';background:rgba(255,255,255,0.3);':'color:'+col+';background:rgba(255,255,255,0.06);';
     const zoneLabel=zoneIds.length+' zone'+(zoneIds.length!==1?'s':'');
-const isCircleGroup=(groupId==='tornado'||groupId==='hail');
+const isCircleGroup=(groupId==='tornado'||groupId==='hail'||groupId==='wind');
     const circlesHidden=isCircleGroup && _collapsedAlertGroups.has(groupId);
 const hideBtnHtml=isCircleGroup
       ? '<button class="ab-alert-hide-circles-btn" data-gid="'+groupId+'" style="font-size:9px;font-weight:700;background:rgba(0,0,0,0.25);border:0.5px solid '+col+';color:'+col+';border-radius:8px;padding:1px 6px;cursor:pointer;white-space:nowrap;font-family:monospace;">'+(circlesHidden?'Show zone':'Hide zone')+'</button>'
@@ -2548,10 +2577,12 @@ html+=renderActiveRow(merged,rIdx++, alertStyleForPriority(hasWarning?c.prioriti
       }
       return;
     }
-    const matchIdx=rows.findIndex((r,i)=>!usedRowIdx.has(i)&&r.priority===c.priority);
+const matchIdx=rows.findIndex((r,i)=>!usedRowIdx.has(i)&&r.priority===c.priority);
     if(matchIdx!==-1){
       usedRowIdx.add(matchIdx);
-      html+=renderActiveRow(rows[matchIdx],rIdx++, alertStyleForPriority(c.priority, rows[matchIdx].severity));
+      const style=alertStyleForPriority(c.priority, rows[matchIdx].severity);
+      if(style&&style.mode==='banner') priorityWarnActive=true; // e.g. Wind Warning — force panel open/vibrate/notify like Tornado/Hail
+      html+=renderActiveRow(rows[matchIdx],rIdx++, style);
     } else {
       html+=renderGreyRow(c.label);
     }
@@ -2595,7 +2626,7 @@ if(_abAlertsDismissedKey!==window._abAlertsCurrentKey){
     }
 if(window._abAlertsCurrentKey!==_abAlertsLastVibrateKey){
       triggerProximityVibrate(); // buzz like a lightning proximity hit on new priority alert (also fires on first load if one's already active; Android only — iOS Safari has no Vibration API)
-      const topRow=rows.find(r=>r.priority<=4);
+      const topRow=rows.find(r=>r.priority<=4||r.priority===9);
       if(topRow){
         const zoneCount=Object.keys(topRow.zoneStations).length;
         sendPriorityAlertNotification('🚨 '+topRow.label, zoneCount+' zone'+(zoneCount>1?'s':'')+' affected — tap for details', 'ab-priority-alert');
@@ -2621,7 +2652,7 @@ listEl.querySelectorAll('.ab-alert-grp-header').forEach(h=>{
 // Tornado/Hail circle visibility is controlled ONLY by the explicit Hide/Show
       // circles button now — expanding/collapsing the station detail list here no
       // longer touches the map circles for those two groups.
-      if(gid!=='tornado' && gid!=='hail'){
+if(gid!=='tornado' && gid!=='hail' && gid!=='wind'){
         toggleOtherAlertCircles(gid, willOpen);
       }
       updateTornadoHailPolygons(); // redraw so this group's polygon appears/disappears immediately on expand/collapse
@@ -2688,7 +2719,7 @@ function _updateLocationTornadoHailCircle(existingCircle, latlng, alerts, label)
   let color=null, isWarning=false, labels=[];
 (alerts||[]).forEach(m=>{
     (m.classes||[]).forEach(cls=>{
-      if(cls.priority===1||cls.priority===3){ color='#cc00cc'; isWarning=true; labels.push({label:cls.label,infos:[m.info]}); }
+      if(cls.priority===1||cls.priority===3||cls.priority===9){ color='#cc00cc'; isWarning=true; labels.push({label:cls.label,infos:[m.info]}); }
       else if(cls.priority===2||cls.priority===4){ if(color!=='#cc00cc'){ color='#ff2222'; } labels.push({label:cls.label,infos:[m.info]}); }
     });
   });
@@ -2904,7 +2935,7 @@ function alertStyleForPriority(priority, riskColour){
   if(priority===2||priority===4){
     return {mode:'banner',color:'#fff',bg:'#cc2200'};
   }
-  // Severe Thunderstorm Warning/Watch (priority 5/6) isn't automatically escalated by
+// Severe Thunderstorm Warning/Watch (priority 5/6) isn't automatically escalated by
   // our own tornado/hail rules — color follows ECCC's own risk_colour_en instead.
   if(priority===5||priority===6){
     const rc=(riskColour||'').toLowerCase();
@@ -2913,6 +2944,11 @@ function alertStyleForPriority(priority, riskColour){
     if(rc==='yellow') return {mode:'text',color:'#ffdd00'};
     // ECCC didn't supply a risk colour — fall back to warning=red / watch=yellow
     return priority===5?{mode:'text',color:'#ff5555'}:{mode:'text',color:'#ffdd00'};
+  }
+// Wind Warning — same magenta warning-tier styling as Tornado/Large Hail warnings,
+  // sharing their forced-priority banner treatment (auto-popup/vibrate/notify).
+  if(priority===9){
+    return {mode:'banner',color:'#fff',bg:'#cc00cc'};
   }
   return null;
 }
@@ -3068,7 +3104,7 @@ if(hits.length){
 const infos=sortedHits.map(f=>extractAlertInfoWithPriority(f.properties||{}));
     // Priority = tornado/large-hail warning-or-watch tier, or ECCC's own Red severity —
     // forces the banner fully open even if the user had minimized it to the small pill.
-    const hasPriority=sortedHits.some(f=>minAbPriorityForFeature(f.properties||{})<=4)
+const hasPriority=sortedHits.some(f=>{const p=minAbPriorityForFeature(f.properties||{}); return p<=4||p===9;})
       || infos.some(i=>severityColorInfo(i.severity).key==='red');
 if(hasPriority && alertBannerMinimized){
       alertBannerMinimized=false;
@@ -3522,16 +3558,6 @@ const detailClusters=clusterFociForDetailScan(foci);
   setTimeout(proceed, 700); // fallback in case the view was already framed and moveend never fires
 }
 
-const FRAME_COUNT_OPTIONS=[6,12];
-document.getElementById('frame-count-toggle').addEventListener('click',function(){
-  const cur=parseInt(this.dataset.frames);
-  const idx=FRAME_COUNT_OPTIONS.indexOf(cur);
-  const next=FRAME_COUNT_OPTIONS[(idx+1)%FRAME_COUNT_OPTIONS.length];
-  this.dataset.frames=next;
-  this.textContent=next+'f';
-  ANIM_STEPS=next;
-  if(radarVisible)buildRadarAnimLoop();
-});
 
 let loadBarHideTimer=null;
 function setLoadProgress(pct){
@@ -4237,6 +4263,7 @@ async function buildRadarAnimLoop(){
   const layerName=document.getElementById('radar-type').value;
   radarOpacity=parseInt(document.getElementById('radar-opacity').value)/100;
   document.getElementById('radarStatus').textContent='⟳ Loading…';
+document.getElementById('radarStatus').title='⟳ Loading…';
   setLoadProgress(5);
 stopAnim();
   radarFramesLoaded=false;
@@ -5970,9 +5997,10 @@ function showStationPopup(id){
   const warnBlockHtml = stnAlerts.length
     ? '<div style="margin-top:6px;padding-top:6px;border-top:0.5px solid rgba(255,255,255,0.1);cursor:pointer;" onclick="window._openStationAlerts(\'' + id + '\')">' +
         '<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Active Alerts (tap for details)</div>' +
-        stnAlerts.map(a => {
+stnAlerts.map(a => {
           const style = alertStyleForPriority(a.priority) || {mode:'text', color: severityColorInfo(a.info.severity).text};
-          return '<div style="margin-top:2px;color:' + style.color + ';font-weight:700;">🚨 ' + a.label + '</div>';
+          const c = style.mode==='banner' ? style.bg : style.color;
+          return '<div style="margin-top:2px;color:' + c + ';font-weight:700;">🚨 ' + a.label + '</div>';
         }).join('') +
       '</div>'
     : '';
