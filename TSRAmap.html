@@ -1228,6 +1228,17 @@ function bearingTo(lat1,lon1,lat2,lon2){
   return {deg:brng, dir:BEARING_DIR_NAMES[Math.round(brng/22.5)%16]};
 }
 
+// Formats a minute-based lead time as "now" / "~Ym" / "~Xh Ym" — used everywhere a
+// projected storm arrival time is shown, so timing reads at minute precision instead
+// of being rounded to the nearest hour.
+function formatMinutesLabel(mins){
+  if(mins<=0) return 'now';
+  const h=Math.floor(mins/60), m=Math.round(mins%60);
+  if(h<=0) return '~'+m+'m';
+  if(m===0) return '~'+h+'h';
+  return '~'+h+'h '+m+'m';
+}
+
 function checkLightningProximity(){
   const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
   if(!src) return;
@@ -1932,6 +1943,18 @@ function isAlertExpired(props){
   return !isNaN(t) && t<Date.now();
 }
 
+// The AB bbox query (fetchAlbertaAlerts) pads outward past Alberta's actual border to
+// make sure border-zone alerts aren't missed — but that same padding pulls in
+// neighboring-province alerts (BC, SK, NT) whose polygon happens to poke into the
+// padded bbox. Zone-matching's own vertex/centroid fallbacks could then mistakenly
+// attach a BC-only alert to a bordering AB zone. Filter to ECCC's own province field
+// before anything reaches zone matching, so only alerts actually flagged AB get through.
+function isAlbertaAlertFeature(props){
+  const prov=(props.province||'').trim();
+  if(!prov) return true; // no province field supplied — don't drop it over missing data
+  return /^ab$/i.test(prov) || /alberta/i.test(prov);
+}
+
 async function fetchAlertsNear(lat,lon,bufferDeg){
   bufferDeg = bufferDeg || 0.75;
   const minLon=lon-bufferDeg, maxLon=lon+bufferDeg, minLat=lat-bufferDeg, maxLat=lat+bufferDeg;
@@ -1942,6 +1965,8 @@ async function fetchAlertsNear(lat,lon,bufferDeg){
     const res=await _fetchWithTimeout(url,12000);
     if(!res.ok){ console.warn('[alerts] bad response', res.status); return []; }
     const gj=await res.json();
+    // Note: this stays province-agnostic (no isAlbertaAlertFeature filter) since it's
+    // used for arbitrary click/GPS locations that may legitimately be outside Alberta.
     return (gj.features||[]).filter(f=>!isAlertExpired(f.properties||{}));
   }catch(e){ console.warn('[alerts] fetch failed:',e.message||e); return []; }
 }
@@ -2098,7 +2123,8 @@ async function fetchAlertsInBbox(minLon,minLat,maxLon,maxLat,label){
 }
 function fetchAlbertaAlerts(buffer){
   buffer = buffer==null ? 0.5 : buffer;
-  return fetchAlertsInBbox(AB.lonMin-buffer, AB.latMin-buffer, AB.lonMax+buffer, AB.latMax+buffer, 'abAlerts');
+  return fetchAlertsInBbox(AB.lonMin-buffer, AB.latMin-buffer, AB.lonMax+buffer, AB.latMax+buffer, 'abAlerts')
+    .then(feats=>feats.filter(f=>isAlbertaAlertFeature(f.properties||{})));
 }
 // Canada-wide bbox — covers all provinces/territories including offshore/Arctic alert zones
 const CANADA_BBOX={minLon:-141.5,minLat:41.5,maxLon:-51.5,maxLat:83.5};
@@ -3185,7 +3211,12 @@ let radarMaxTrackedCellCount=0;    // cumulative count of currently-tracked stor
 window._endedTrackIdsGlobal=window._endedTrackIdsGlobal||new Set();
 let radarMaxLastSpeedKmh=null;     // speed (km/h) of the closest tracked storm from the most recent detection pass — shown in the status bar since the center banner is timing-sensitive
 let radarMaxLastClosestKm=null;    // closest-approach distance (km) of the closest tracked storm from the most recent detection pass
-let radarMaxLastClosestHour=null;  // hour index (0=now) at which that closest approach occurs
+let radarMaxLastClosestMin=null;  // minutes (0=now) at which that closest approach occurs
+// Persisted across additive detection passes (one pass per tracked storm/cluster) so
+// that scanning storm #2 doesn't erase the airport warning or proximity banner raised
+// by storm #1's own pass — only reset on a genuine fresh (non-additive) start.
+let radarMaxAirportHits=[];
+let radarMaxProximityBest=null;
 function stormStatusSuffix(){
   // Storm speed/closest-approach text removed from the status bar — too long on
   // mobile. radarMaxLastSpeedKmh/radarMaxLastClosestKm are still tracked and used
@@ -3839,7 +3870,7 @@ if(!el){
     el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);z-index:8900;pointer-events:none;min-width:260px;max-width:90vw;';
     document.body.appendChild(el);
   }
-const hourLabel=status.hour===0?'now':('~'+status.hour+'h');
+const hourLabel=formatMinutesLabel(status.min);
   const dirStr=status.bearing?(' · from '+status.bearing.dir+' ('+Math.round(status.bearing.deg)+'°)'):'';
   const speedStr=(status.speedKmh!=null&&isFinite(status.speedKmh))?(' · moving '+status.speedKmh.toFixed(0)+' km/h'):'';
 el.innerHTML=
@@ -3861,7 +3892,38 @@ function repositionStormBanner(){
   el2.style.bottom=ltgBanner?(baseBottom+ltgBanner.getBoundingClientRect().height+gap)+'px':baseBottom+'px';
 }
 
-
+// Panel listing every airport a tracked storm's projected path comes within
+// PROX_WARNING_KM of — one row per airport (closest approach kept if a storm hits
+// it more than once), showing distance and hours-out. Hidden entirely when no
+// airport is currently in any tracked storm's path, or when the user has turned
+// this panel off via long-press/right-click on the airport toolbar button.
+let airportStormPanelEnabled = localStorage.getItem('airport_storm_panel_enabled')!=='0';
+let _lastAirportStormHits=[];
+function updateAirportStormPanel(hits){
+  _lastAirportStormHits=hits||[];
+  let el=document.getElementById('airport-storm-panel');
+  if(!airportStormPanelEnabled||!hits||!hits.length){
+    if(el) el.remove();
+    return;
+  }
+  const byAirport={};
+  hits.forEach(h=>{ if(!byAirport[h.airport]||h.distKm<byAirport[h.airport].distKm) byAirport[h.airport]=h; });
+  const rows=Object.values(byAirport).sort((a,b)=>a.distKm-b.distKm);
+  if(!el){
+    el=document.createElement('div');
+    el.id='airport-storm-panel';
+el.style.cssText='position:fixed;bottom:46px;right:10px;z-index:9050;max-width:260px;background:rgba(8,8,18,0.92);border:2px solid #ff8c00;border-radius:10px;padding:8px 12px;font-family:\'Courier New\',monospace;box-shadow:0 4px 16px rgba(0,0,0,0.6);';
+    document.body.appendChild(el);
+  }
+const rowsHtml=rows.map(h=>{
+    const timeLabel=formatMinutesLabel(h.min);
+    return '<div style="margin-top:4px;padding-top:4px;border-top:0.5px solid rgba(255,140,0,0.2);">'+
+      '<div style="font-size:12px;font-weight:700;color:#ff8c00;">✈ '+h.airport+'</div>'+
+      '<div style="font-size:11px;color:#ffaa66;">'+h.distKm.toFixed(0)+' km · '+timeLabel+'</div>'+
+      '</div>';
+  }).join('');
+  el.innerHTML='<div style="font-size:12px;font-weight:800;color:#ff8c00;letter-spacing:0.05em;">⛈ AIRPORTS IN STORM PATH</div>'+rowsHtml;
+}
 
 function showStormTrackingBanner(current,total){
   const el=document.getElementById('storm-tracking-banner');
@@ -3909,9 +3971,12 @@ function clearRadarMaxMarkers(){
   radarMaxProjectionLines=[];
   radarMaxProjectionMarkers.forEach(m=>map.removeLayer(m));
   radarMaxProjectionMarkers=[];
-  radarMaxCurrentMarkers.forEach(m=>map.removeLayer(m));
+radarMaxCurrentMarkers.forEach(m=>map.removeLayer(m));
   radarMaxCurrentMarkers=[];
+  radarMaxAirportHits=[];
+  radarMaxProximityBest=null;
   updateStormProximityBanner({level:'none'});
+  updateAirportStormPanel([]);
 }
 
 async function runRadarMaxDetection(additive){
@@ -4079,8 +4144,9 @@ const activeTracks=tracks.filter(tr=>
     tr.points.length>=MIN_PROJECTION_POINTS &&
     !isDiminishingTrack(tr)
   );
-  const projEPSG=L.CRS.EPSG3857;
-let stormClosestKm=Infinity, stormClosestHour=null, stormClosestPos=null, stormClosestSpeedKmh=null;
+ const projEPSG=L.CRS.EPSG3857;
+let stormClosestKm=Infinity, stormClosestMin=null, stormClosestPos=null, stormClosestSpeedKmh=null;
+let airportStormHits=[];
 activeTracks.forEach(tr=>{
     const t0=tr.points[0].t;
     const regPts=tr.points.map(p=>{
@@ -4090,9 +4156,21 @@ activeTracks.forEach(tr=>{
     const regX=linearRegression(regPts.map(p=>({t:p.t,v:p.x})));
     const regY=linearRegression(regPts.map(p=>({t:p.t,v:p.y})));
     const trSpeedKmh=Math.hypot(regX.b,regY.b)*60/1000; // regX.b/regY.b are meters/minute (projected coords) -> km/h
-    const lastPt=tr.points[tr.points.length-1];
+const lastPt=tr.points[tr.points.length-1];
     const trColor=lastPt.color||tr.color;
 const projPts=[[lastPt.lat,lastPt.lon]];
+    // Finer-grained (5-minute step) projection points, used only for closest-approach
+    // and airport-warning timing so those read at minute precision instead of being
+    // rounded to the nearest hour like the on-map +Nh markers below.
+    const FINE_STEP_MIN=5;
+    const finePts=[{min:0,lat:lastPt.lat,lon:lastPt.lon}];
+    for(let fm=FINE_STEP_MIN; fm<=RADAR_MAX_PROJECT_HOURS*60; fm+=FINE_STEP_MIN){
+      const futureT=lastPt.t+fm*60000;
+      const tMin=(futureT-t0)/60000;
+      const x=regX.a+regX.b*tMin, y=regY.a+regY.b*tMin;
+      const ll=projEPSG.unproject(L.point(x,y));
+      finePts.push({min:fm,lat:ll.lat,lon:ll.lng});
+    }
     const speedLabel=(isFinite(trSpeedKmh)?Math.round(trSpeedKmh):'--')+' km/h';
     for(let h=1;h<=RADAR_MAX_PROJECT_HOURS;h++){
       const futureT=lastPt.t+h*3600000;
@@ -4120,42 +4198,81 @@ const phalo=L.polyline(projPts,{pane:'radarMax',color:'#ffffff',weight:5,opacity
     const pline=L.polyline(projPts,{pane:'radarMax',color:trColor,weight:2,opacity:0.95,interactive:false}).addTo(map);
     radarMaxProjectionLines.push(pline);
 
-    // Check current position (hour 0) and every hourly projection against refLL,
-    // using the same watch/warning radii as the lightning proximity system.
+// Check current position (now) and every 5-minute projected point against refLL,
+    // using the same watch/warning radii as the lightning proximity system — minute
+    // precision instead of only checking hourly projection points.
 if(refLL){
-      const distByHour=projPts.map(p=>haversineKm(refLL.lat,refLL.lng,p[0],p[1]));
-      // A track whose distance is already increasing by the next projected hour is
-      // moving away — if its closest point is "now" (hour 0), it's not a growing
-      // threat, so don't let it trigger a warning/caution.
-      const isDeparting=distByHour.length>1 && distByHour[1]>distByHour[0];
-      let trackClosestKm=Infinity, trackClosestHour=null, trackClosestPos=null;
-      distByHour.forEach((dKm,hIdx)=>{
-        if(dKm<trackClosestKm){ trackClosestKm=dKm; trackClosestHour=hIdx; trackClosestPos=projPts[hIdx]; }
+      const distByMin=finePts.map(p=>haversineKm(refLL.lat,refLL.lng,p.lat,p.lon));
+      // A track whose distance is already increasing at the next fine step is moving
+      // away — if its closest point is "now" (min 0), it's not a growing threat, so
+      // don't let it trigger a warning/caution.
+      const isDeparting=distByMin.length>1 && distByMin[1]>distByMin[0];
+      let trackClosestKm=Infinity, trackClosestMin=null, trackClosestPos=null;
+      distByMin.forEach((dKm,idx)=>{
+        if(dKm<trackClosestKm){ trackClosestKm=dKm; trackClosestMin=finePts[idx].min; trackClosestPos=[finePts[idx].lat,finePts[idx].lon]; }
       });
-if(!(trackClosestHour===0 && isDeparting) && trackClosestKm<stormClosestKm){
-        stormClosestKm=trackClosestKm; stormClosestHour=trackClosestHour; stormClosestPos=trackClosestPos; stormClosestSpeedKmh=trSpeedKmh;
+if(!(trackClosestMin===0 && isDeparting) && trackClosestKm<stormClosestKm){
+        stormClosestKm=trackClosestKm; stormClosestMin=trackClosestMin; stormClosestPos=trackClosestPos; stormClosestSpeedKmh=trSpeedKmh;
       }
     }
+
+    // Check this track's projected path against every airport's warning radius —
+    // collects {airport,distKm,min} for any airport the track comes within
+    // PROX_WARNING_KM of, at its closest approach along the projection, checked at
+    // 5-minute resolution so the reported time-to-impact isn't rounded to the hour.
+    AIRPORTS.forEach(ap=>{
+      let apClosestKm=Infinity, apClosestMin=null;
+      finePts.forEach(p=>{
+        const dKm=haversineKm(ap.lat,ap.lon,p.lat,p.lon);
+        if(dKm<apClosestKm){ apClosestKm=dKm; apClosestMin=p.min; }
+      });
+      if(apClosestKm<=PROX_WARNING_KM){
+        airportStormHits.push({airport:ap.name,distKm:apClosestKm,min:apClosestMin});
+      }
+    });
   });
 
+// Fresh (non-additive) start replaces the running best; an additive pass (scanning
+  // another storm/cluster) only overwrites it if THIS pass found something closer —
+  // a farther/no-threat result from a later pass never silently clears an earlier
+  // pass's genuine warning.
+  if(!additive){
+    radarMaxProximityBest = isFinite(stormClosestKm)
+      ? {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh}
+      : null;
+  } else if(isFinite(stormClosestKm) && (!radarMaxProximityBest || stormClosestKm<radarMaxProximityBest.km)){
+    radarMaxProximityBest = {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh};
+  }
+  const bannerData=radarMaxProximityBest||{km:Infinity,min:null,pos:null,speedKmh:null};
   let stormLevel='none';
-  if(stormClosestKm<=PROX_WARNING_KM && stormClosestHour<=1) stormLevel='severe';
-  else if(stormClosestKm<=PROX_WARNING_KM) stormLevel='warning';
-  else if(stormClosestKm<=PROX_RADIUS_KM) stormLevel='caution';
+  if(bannerData.km<=PROX_WARNING_KM && bannerData.min<=60) stormLevel='severe';
+  else if(bannerData.km<=PROX_WARNING_KM) stormLevel='warning';
+  else if(bannerData.km<=PROX_RADIUS_KM) stormLevel='caution';
 let stormBearing=null;
-  if(refLL && stormClosestPos) stormBearing=bearingTo(refLL.lat,refLL.lng,stormClosestPos[0],stormClosestPos[1]);
-  updateStormProximityBanner({level:stormLevel, km:stormClosestKm, hour:stormClosestHour, bearing:stormBearing, speedKmh:stormClosestSpeedKmh});
+  if(refLL && bannerData.pos) stormBearing=bearingTo(refLL.lat,refLL.lng,bannerData.pos[0],bannerData.pos[1]);
+  updateStormProximityBanner({level:stormLevel, km:bannerData.km, min:bannerData.min, bearing:stormBearing, speedKmh:bannerData.speedKmh});
+
+  // Same merge logic for airport hits — union with the running list, per-airport,
+  // keeping whichever pass found the closer approach. A fresh (non-additive) start
+  // replaces the list outright with this pass's own hits.
+  const mergedAirportHits={};
+  (additive?radarMaxAirportHits:[]).forEach(h=>{ mergedAirportHits[h.airport]=h; });
+  airportStormHits.forEach(h=>{
+    const existing=mergedAirportHits[h.airport];
+    if(!existing||h.distKm<existing.distKm) mergedAirportHits[h.airport]=h;
+  });
+  radarMaxAirportHits=Object.values(mergedAirportHits);
+  updateAirportStormPanel(radarMaxAirportHits);
 
 radarMaxLastSpeedKmh=stormClosestSpeedKmh;
   radarMaxLastClosestKm=isFinite(stormClosestKm)?stormClosestKm:null;
-  radarMaxLastClosestHour=stormClosestHour;
+  radarMaxLastClosestMin=stormClosestMin;
   const speedEl=document.getElementById('storm-tracking-speed');
   if(speedEl){
     const parts=[];
     if(stormClosestSpeedKmh!=null && isFinite(stormClosestSpeedKmh)) parts.push('Speed: '+stormClosestSpeedKmh.toFixed(0)+' km/h');
     if(radarMaxLastClosestKm!=null){
-      const hourLabel=stormClosestHour===0?'now':('~'+stormClosestHour+'h');
-      parts.push('Closest approach: '+radarMaxLastClosestKm.toFixed(0)+' km @ '+hourLabel);
+      parts.push('Closest approach: '+radarMaxLastClosestKm.toFixed(0)+' km @ '+formatMinutesLabel(stormClosestMin));
     }
     if(parts.length){
       speedEl.textContent=parts.join(' · ');
@@ -6202,16 +6319,25 @@ function buildAirportMarkers(){
       iconSize:[80,34],
       iconAnchor:[40,10]
     });
-    const m = L.marker([a.lat,a.lon],{icon,interactive:true,pane:'airports'}).addTo(map);
-    m.bindPopup(
+const m = L.marker([a.lat,a.lon],{icon,interactive:true,pane:'airports'}).addTo(map);
+    const _airportPopupHtml=
       '<div style="font-family:monospace;font-size:11px;line-height:1.8;color:#ccc;min-width:150px;">'+
       '<div style="font-size:13px;font-weight:700;color:#ff8c00;margin-bottom:4px;">✈ '+a.name+'</div>'+
       '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>'+a.lat.toFixed(4)+'°</div>'+
       '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>'+a.lon.toFixed(4)+'°</div>'+
       '<div style="margin-top:6px;"><a href="https://www.google.com/maps?q='+a.lat.toFixed(5)+','+a.lon.toFixed(5)+'" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>'+
-      '</div>',
-      {className:'strike-popup',maxWidth:220}
-    );
+      '</div>';
+    // Route through handlePickModeClick first so tapping an airport icon/label while
+    // "+" (add focus area) or mock-GPS pick mode is armed fires the pick action instead
+    // of being swallowed by the marker's own popup — this was blocking map taps
+    // anywhere near an airport, including inside its warning circle.
+    m.on('click', function(e){
+      if(handlePickModeClick(e)) return;
+      L.popup({closeButton:true,className:'strike-popup',maxWidth:220})
+        .setLatLng([a.lat,a.lon])
+        .setContent(_airportPopupHtml)
+        .openOn(map);
+    });
     airportMarkers.push(m);
 
     const circle = L.circle([a.lat,a.lon],{
@@ -6224,15 +6350,73 @@ function buildAirportMarkers(){
 }
 buildAirportMarkers();
 document.getElementById('airport-toggle').addEventListener('click', function(){
+  if(_airportBtnLongPressFired){ _airportBtnLongPressFired=false; return; }
   airportsVisible = !airportsVisible;
   airportMarkers.forEach(m=>{
     if(airportsVisible) m.addTo(map); else map.removeLayer(m);
   });
-  airportCircles.forEach(c=>{
+airportCircles.forEach(c=>{
     if(airportsVisible) c.addTo(map); else map.removeLayer(c);
   });
   this.classList.toggle('active', airportsVisible);
 });
+
+// Right-click / long-press on the airport toggle — opens a small popup to turn the
+// "Airports in storm path" panel on/off, independent of airport marker visibility.
+let _airportBtnLongPressFired=false;
+(function initAirportStormToggle(){
+  const btn=document.getElementById('airport-toggle');
+  if(!btn) return;
+  let popup=null;
+  function closePopup(){ if(popup){ popup.remove(); popup=null; } }
+  function openPopup(){
+    closePopup();
+    popup=document.createElement('div');
+    popup.id='airport-storm-toggle-popup';
+    popup.style.cssText='position:fixed;z-index:9200;background:rgba(8,8,18,0.97);border:0.5px solid rgba(255,140,0,0.45);border-radius:14px;padding:6px;min-width:200px;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.7);font-family:monospace;';
+    const br=btn.getBoundingClientRect();
+    let left=br.left;
+    if(left+200>window.innerWidth-8) left=window.innerWidth-208;
+    if(left<8) left=8;
+    popup.style.left=left+'px';
+    popup.style.top=(br.bottom+6)+'px';
+    popup.innerHTML=
+      '<div id="apst-toggle-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;cursor:pointer;">'+
+        '<span style="font-size:12px;color:#ffcc99;">Storm path warnings</span>'+
+        '<span id="apst-toggle-indicator" style="font-size:10px;padding:2px 8px;border-radius:8px;'+(airportStormPanelEnabled?'background:rgba(0,255,150,0.15);border:0.5px solid #00ff96;color:#00ff96;':'background:rgba(255,100,100,0.12);border:0.5px solid rgba(255,100,100,0.5);color:#f87171;')+'">'+(airportStormPanelEnabled?'ON':'OFF')+'</span>'+
+      '</div>';
+    document.body.appendChild(popup);
+    document.getElementById('apst-toggle-row').addEventListener('click', ()=>{
+      airportStormPanelEnabled=!airportStormPanelEnabled;
+      localStorage.setItem('airport_storm_panel_enabled', airportStormPanelEnabled?'1':'0');
+      updateAirportStormPanel(airportStormPanelEnabled?_lastAirportStormHits:[]);
+      closePopup();
+    });
+  }
+  btn.addEventListener('contextmenu', function(e){
+    e.preventDefault();
+    if(popup) closePopup(); else openPopup();
+  });
+  let touchTimer=null;
+  btn.addEventListener('touchstart', function(){
+    _airportBtnLongPressFired=false;
+    touchTimer=setTimeout(()=>{
+      _airportBtnLongPressFired=true;
+      if(popup) closePopup(); else openPopup();
+      if(navigator.vibrate) navigator.vibrate(30);
+    },550);
+  },{passive:true});
+  btn.addEventListener('touchend', function(e){
+    if(touchTimer){ clearTimeout(touchTimer); touchTimer=null; }
+    if(_airportBtnLongPressFired) e.preventDefault();
+  },{passive:false});
+  btn.addEventListener('touchmove', function(){ if(touchTimer){ clearTimeout(touchTimer); touchTimer=null; } },{passive:true});
+  btn.addEventListener('touchcancel', function(){ if(touchTimer){ clearTimeout(touchTimer); touchTimer=null; } },{passive:true});
+  document.addEventListener('click', function(e){
+    if(popup && !popup.contains(e.target) && e.target!==btn) closePopup();
+  });
+  map.on('click', closePopup);
+})();
 
 (function initCompassMenu(){
   const btn      = document.getElementById('compass-menu-btn');
