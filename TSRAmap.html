@@ -6716,9 +6716,19 @@ document.getElementById('apst-toggle-row').addEventListener('click', ()=>{
       closePopup();
     });
   }
+  // Android fires BOTH a synthetic 'contextmenu' AND our own touch-timer on one
+  // long-press — this collapses the resulting double-call into a single toggle,
+  // same debounce approach used by the GPS button's long-press (#gps-btn).
+  let _airportBtnLastTriggerAt=0;
+  function _airportEnterPopupToggle(){
+    const now=Date.now();
+    if(now-_airportBtnLastTriggerAt<600) return;
+    _airportBtnLastTriggerAt=now;
+    if(popup) closePopup(); else openPopup();
+  }
   btn.addEventListener('contextmenu', function(e){
     e.preventDefault();
-    if(popup) closePopup(); else openPopup();
+    _airportEnterPopupToggle();
   });
 let touchTimer=null, airportBtnTouchStart=null;
   btn.addEventListener('touchstart', function(e){
@@ -6726,7 +6736,7 @@ let touchTimer=null, airportBtnTouchStart=null;
     airportBtnTouchStart=e.touches[0]?{x:e.touches[0].clientX,y:e.touches[0].clientY}:null;
     touchTimer=setTimeout(()=>{
       _airportBtnLongPressFired=true;
-      if(popup) closePopup(); else openPopup();
+      _airportEnterPopupToggle();
       if(navigator.vibrate) navigator.vibrate(30);
     },550);
   },{passive:true});
