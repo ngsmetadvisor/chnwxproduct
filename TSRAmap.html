@@ -863,8 +863,40 @@ window.addEventListener('unhandledrejection', function(e){
 });
 
 
+// Set by station/airport marker click handlers right before they act — lets the
+// general map click handler below bail out if a marker (station/airport) already
+// handled this exact tap. Needed because on touch devices Leaflet can fire BOTH the
+// marker's own 'click' and the map's 'click' for a single tap (visible as duplicate
+// [map div click] debug log lines at identical coordinates) — without this guard, the
+// map's own zone/stroke hit-test runs right after and its popup silently replaces the
+// station popup that had just opened.
+let _markerClickHandledAt=0;
+const MARKER_CLICK_GUARD_MS=250;
+
 map.on('click', function(e){
   if(_addViewPicking) return;
+  // Direct DOM hit-test at the exact tap coordinates — bypasses Leaflet's own click
+  // routing entirely. On touch devices Leaflet can synthesize its own tap-click that
+  // doesn't reliably fire through the marker's DOM element (visible as the same
+  // [map div click] debug line logging twice for one tap), which meant the station
+  // marker's own 'click' handler sometimes never ran at all, letting this general
+  // handler fall through to the zone-popup logic instead. Since the station label's
+  // visible text IS the station id, this check is self-contained and doesn't depend
+  // on Leaflet ever having dispatched a click on the marker itself.
+  if(e.originalEvent && document.elementsFromPoint){
+    const hitEls=document.elementsFromPoint(e.originalEvent.clientX, e.originalEvent.clientY);
+    const stnEl=hitEls.find(el=>el.classList && el.classList.contains('stn-label'));
+    if(stnEl){
+      const stnId=stnEl.textContent.trim();
+      if(stations[stnId]){
+        _markerClickHandledAt=Date.now();
+        console.log('[station click via hit-test]', stnId);
+        showStationPopup(stnId);
+        return;
+      }
+    }
+  }
+  if(Date.now()-_markerClickHandledAt<MARKER_CLICK_GUARD_MS) return;
   if(!strokes.length && !ecLightningPoints.length && (!zonesVisible || !zonePolygons.length)) return;
   const clickLL=e.latlng;
   const clickPx=map.latLngToContainerPoint(clickLL);
@@ -6353,9 +6385,14 @@ fetch('https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/refs/heads/main/st
       const elev = p[5] ? parseFloat(p[5].trim()) : null;
       if(isNaN(lat)||isNaN(lon)) return;
 stations[id] = {lat, lon, name, type, elev};
-const charW = 6.6, padX = 6, padY = 6;
-      const iw = id.length * charW + padX * 2;
-      const ih = 11 + padY * 2;
+// padX/padY enlarged (was 6/6) — .stn-label has no visible background box, just
+      // text on a shadow, so growing the invisible hit box doesn't change how the
+      // label looks, it just makes it far easier to actually tap on mobile instead
+      // of missing the marker and falling through to the map's own zone-popup logic.
+      const charW = 6.6, padX = 6, padY = 6;
+      const touchPadX = 14, touchPadY = 14;
+      const iw = id.length * charW + padX * 2 + touchPadX * 2;
+      const ih = 11 + padY * 2 + touchPadY * 2;
       const icon = L.divIcon({
         className: '',
         html: '<div class="stn-label'+(stationIPs[id]?' has-ip':'')+'">'+id+'</div>',
@@ -6365,6 +6402,7 @@ const charW = 6.6, padX = 6, padY = 6;
 const m = L.marker([lat, lon], {icon, interactive: true, pane: 'stations'}).addTo(map);
       m._stationId = id;
 m.on('click', function(e){
+        _markerClickHandledAt=Date.now(); // suppress the map's own fall-through click handler (see guard above)
         if(handlePickModeClick(e)) return;
         console.log('[station click]', id);
         showStationPopup(id);
@@ -6453,6 +6491,7 @@ const m = L.marker([a.lat,a.lon],{icon,interactive:true,pane:'airports'}).addTo(
     // of being swallowed by the marker's own popup — this was blocking map taps
     // anywhere near an airport, including inside its warning circle.
     m.on('click', function(e){
+      _markerClickHandledAt=Date.now(); // suppress the map's own fall-through click handler (see guard above)
       if(handlePickModeClick(e)) return;
       L.popup({closeButton:true,className:'strike-popup',maxWidth:220})
         .setLatLng([a.lat,a.lon])
