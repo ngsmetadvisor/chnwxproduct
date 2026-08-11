@@ -680,20 +680,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     </div>
   </div>
 
-  <!-- Mock Location Alerts panel — mirrors AB Warnings/Watches styling exactly, only visible while mock GPS is active -->
-<div id="mock-alerts-panel" style="display:none;position:absolute;z-index:1000;background:rgba(8,8,18,0.88);border:0.5px solid rgba(255,80,80,0.35);border-radius:10px;padding:8px 12px;min-width:220px;max-width:280px;backdrop-filter:blur(6px);font-family:monospace;font-size:13px;color:#888;">
-    <div class="title" style="font-size:14px;color:#ff5555;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;border-bottom:0.5px solid rgba(255,80,80,0.25);padding-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
-      <span>Mock Location Alerts</span>
-      <span id="mock-alerts-collapse-btn" style="cursor:pointer;font-size:14px;color:#ff5555;margin-left:auto;">▼</span>
-    </div>
-    <div id="mock-alerts-total-row" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-      <span id="mock-alerts-total-num" style="font-size:22px;font-weight:700;color:#ffdd00;line-height:1;">0</span>
-      <span style="font-size:11px;color:#888;">active</span>
-    </div>
-    <div id="mock-alerts-list" style="max-height:380px;overflow-y:auto;margin-top:4px;display:none;">
-      <div style="color:#555;font-size:11px;text-align:center;padding:6px 0;">No active alerts</div>
-    </div>
-  </div>
+
 
 <!-- Status bar -->
   <div id="status">
@@ -1888,7 +1875,7 @@ let _abAlertsPriorityActive=false;
 let _collapsedAlertGroups=new Set(); // stable keys 'tornado'/'hail' — controls ONLY circle visibility (via the Hide/Show button), independent of row expand/collapse
 let _openAlertRowGroups=new Set(); // stable keys — tracks which rows are manually expanded, independent of _collapsedAlertGroups
 let _abAlertsDismissedKey=null, _abAlertsLastVibrateKey=null;
-let tornadoHailCircleLayer=null, mockTornadoHailCircle=null, gpsTornadoHailCircle=null;
+let tornadoHailCircleLayer=null, gpsTornadoHailCircle=null;
 // airportName -> {type:'tornado'|'hail', tier:'warning'|'watch'} — rebuilt on every
 // refreshAbAlertsPanel() pass from real ECCC polygon geometry, so the airport panel
 // can show a Tornado/Large Hail Warning or Watch even for airports with no station
@@ -2287,11 +2274,10 @@ function positionAbAlertsPanel(){
   const abPanel=document.getElementById('ab-panel');
   const alertsPanel=document.getElementById('ab-alerts-panel');
   if(!abPanel||!alertsPanel) return;
-  if(window.innerWidth<=600){ positionMockAlertsPanel(); return; }
+  if(window.innerWidth<=600){ return; }
   const r=abPanel.getBoundingClientRect();
   alertsPanel.style.top=(r.bottom+8)+'px';
   alertsPanel.style.right='10px';
-  positionMockAlertsPanel();
 }
 window.addEventListener('resize', positionAbAlertsPanel);
 
@@ -2357,37 +2343,7 @@ document.getElementById('combo-alert-btn')?.addEventListener('click',()=>{
 });
 map.on('click', ()=>closeComboPanels());
 
-// Stacks directly below the AB Warnings/Watches panel on desktop. On mobile, the AB
-// Warnings/Watches panel is display:none unless its combo tab is open — using its
-// bounding rect unconditionally collapsed to {top:0,bottom:0} and pinned the mock
-// panel to the very top of the screen, on top of the toolbar/radar controls. On
-// mobile, anchor below the open AB alerts combo panel if it's showing, otherwise
-// below the combo bar itself, matching how the other mobile combo popups position.
-function positionMockAlertsPanel(){
-  const mockPanel=document.getElementById('mock-alerts-panel');
-  if(!mockPanel) return;
-  if(window.innerWidth<=600){
-    const alertsPanel=document.getElementById('ab-alerts-panel');
-    const bar=document.getElementById('mobile-combo-bar');
-    const anchor=(alertsPanel&&alertsPanel.classList.contains('combo-show'))?alertsPanel:bar;
-    if(!anchor) return;
-    const r=anchor.getBoundingClientRect();
-    mockPanel.style.position='fixed';
-    mockPanel.style.top=(r.bottom+8)+'px';
-    mockPanel.style.left='10px';
-    mockPanel.style.right='10px';
-    mockPanel.style.maxWidth='none';
-    return;
-  }
-  const alertsPanel=document.getElementById('ab-alerts-panel');
-  if(!alertsPanel) return;
-  const r=alertsPanel.getBoundingClientRect();
-  mockPanel.style.position='absolute';
-  mockPanel.style.top=(r.bottom+8)+'px';
-  mockPanel.style.left='';
-  mockPanel.style.right='10px';
-  mockPanel.style.maxWidth='280px';
-}
+
 
 const AB_ALERT_CANONICAL=[
   {group:'tornado',priorities:[1,2],label:'Tornado'},
@@ -2946,80 +2902,16 @@ function _updateLocationTornadoHailCircle(existingCircle, latlng, alerts, label)
   return circle;
 }
 
-function updateMockTornadoHailCircle(){
-  mockTornadoHailCircle=_updateLocationTornadoHailCircle(mockTornadoHailCircle, window._mockLocationLL, window._mockLocationAlerts, 'Mock Location');
-}
 
-// Same logic as updateMockTornadoHailCircle, but at the real GPS fix — this was
-// previously mock-only, so switching from mock back to real GPS never drew a
-// per-location warning circle at all, even when the real position was inside one.
+
+// Uses the current reference location — the real GPS fix if GPS is active, otherwise
+// whatever _gpsLastLL currently holds (mock-set position, or the fallback location) —
+// so the tornado/hail warning circle always reflects wherever the app is actually
+// "looking" from, mock or real, using the same real ECCC-fetched warning data.
 function updateGpsTornadoHailCircle(){
-  const src=gpsActive?(gpsMarker?gpsMarker.getLatLng():_gpsLastLL):null;
+  const src=(gpsActive&&gpsMarker)?gpsMarker.getLatLng():_gpsLastLL;
   gpsTornadoHailCircle=_updateLocationTornadoHailCircle(gpsTornadoHailCircle, src, window._gpsLocationAlerts, 'My Location');
 }
-// Same rendering/styling rules as the AB panel (per-classification, banner for
-// Tornado/Large Hail warning-or-watch, plain colored text for the rest) — but built
-// straight from the single mock point's own classifications, no zone/station grouping.
-function refreshMockAlertsPanel(){
-  const panel=document.getElementById('mock-alerts-panel');
-  if(!panel) return;
-  updateMockTornadoHailCircle();
-  if(!window._mockLocationLL){
-    panel.style.display='none';
-    return;
-  }
-  panel.style.display='block';
-  const listEl=document.getElementById('mock-alerts-list');
-  const totalEl=document.getElementById('mock-alerts-total-num');
-  const mockAlerts=window._mockLocationAlerts||[];
-  totalEl.textContent=mockAlerts.length;
-  let priorityActive=false;
-  let html='';
-  if(mockAlerts.length){
-    mockAlerts.forEach(m=>{
-      const info=m.info;
-      const classes=m.classes||[];
-      classes.forEach(cls=>{
-        const style=alertStyleForPriority(cls.priority)||{mode:'text',color:severityColorInfo(info.severity).text};
-        const isBanner=style.mode==='banner';
-        const wrapStyle=isBanner?'border-radius:6px;padding:4px 8px;background:'+style.bg+';':'';
-        if(isBanner) priorityActive=true;
-        html+='<div style="border-bottom:0.5px solid rgba(255,255,255,0.06);padding:4px 0;'+wrapStyle+'">'+
-          '<span style="font-size:12px;font-weight:800;color:'+style.color+';">'+cls.label+'</span>'+
-          (info.area?'<div style="font-size:11px;color:'+(isBanner?style.color:'#888')+';margin-top:1px;">'+info.area+'</div>':'')+
-          '</div>';
-      });
-    });
-  } else {
-    html='<div style="color:#555;font-size:9px;text-align:center;padding:6px 0;">No active alerts</div>';
-  }
-  listEl.innerHTML=html;
-  const collapseBtn=document.getElementById('mock-alerts-collapse-btn');
-  if(priorityActive){
-    listEl.style.display='block';
-    if(collapseBtn) collapseBtn.textContent='▲';
-    totalEl.style.color='#fff';
-    totalEl.style.background='#cc2200';
-    totalEl.style.padding='1px 8px';
-    totalEl.style.borderRadius='10px';
-  } else {
-    listEl.style.display='none';
-    if(collapseBtn) collapseBtn.textContent='▼';
-    totalEl.style.color='#ffdd00';
-    totalEl.style.background='transparent';
-    totalEl.style.padding='0';
-    totalEl.style.borderRadius='0';
-  }
-  positionMockAlertsPanel();
-}
-document.getElementById('mock-alerts-collapse-btn')?.addEventListener('click',()=>{
-  const list=document.getElementById('mock-alerts-list');
-  const btn=document.getElementById('mock-alerts-collapse-btn');
-  const collapsed=list.style.display==='none';
-  list.style.display=collapsed?'block':'none';
-  btn.textContent=collapsed?'▲':'▼';
-  positionMockAlertsPanel();
-});
 
 let alertBannerMinimized = localStorage.getItem('alert_banner_min')==='1';
 let alertMinPill=null;
@@ -5841,9 +5733,6 @@ console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarke
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
     if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
-    window._mockLocationLL=null;
-    window._mockLocationAlerts=[];
-    refreshMockAlertsPanel();
     refreshAbAlertsPanel();
 // Clear stale location-based alert state left over from the mock location — the
 // mock's warning banner/key would otherwise linger (or falsely dedupe against) the
@@ -6035,17 +5924,13 @@ function setMockGPSAt(lat,lon){
   _showCompassRings(lat,lon);
   document.getElementById('gpsStatus').textContent='📍 (mock) '+lat.toFixed(4)+', '+lon.toFixed(4);
   document.getElementById('gpsStatus').style.color='#ffdd00';
-  checkAlertsAtCurrentLocation();
-window._mockLocationLL={lat,lon};
-  window._mockLocationAlerts=[];
-  refreshMockAlertsPanel();
-fetchAlertsNear(lat,lon,0.75).then(features=>{
-    const hits=features.filter(f=>pointInGeoJSON(lat,lon,f.geometry));
-    window._mockLocationAlerts=hits.map(f=>({info:extractAlertInfo(f.properties||{}),classes:classifyAbAlert(f.properties||{})}));
-    refreshMockAlertsPanel();
-    refreshAbAlertsPanel();
-  });
+  // Real warning pipeline: force a fresh fetch for this exact spot (bypassing the
+  // locKey dedupe) so the real alert banner + tornado/hail circle reflect the mock
+  // position immediately, using the same live ECCC data as a real GPS fix.
+  checkAlertsAtCurrentLocation(true);
+  refreshAbAlertsPanel();
 }
+
 let _gpsBtnLastTriggerAt=0;
 function _gpsBtnEnterMockPickMode(){
   const now=Date.now();
@@ -6681,9 +6566,8 @@ buildStationDropdown();
     // Stations may finish loading before or after the zones fetch — refreshAbAlertsPanel()
     // (and the vibrate/notify it fires) only runs once both are confirmed ready, via
     // _maybeRefreshAbAlertsOnLoad(), instead of racing two independent partial calls.
-    _stationsLoadedReady=true;
+_stationsLoadedReady=true;
     _maybeRefreshAbAlertsOnLoad();
-    refreshMockAlertsPanel();
   });
   
 function buildStationDropdown(){
