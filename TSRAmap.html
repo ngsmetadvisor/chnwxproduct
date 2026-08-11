@@ -7153,7 +7153,7 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
       try{ return typeof a === 'object' ? JSON.stringify(a) : String(a); }catch(e){ return '[obj]'; }
     }).join(' ');
     panel.appendChild(line);
-    // Keep max 80 lines
+    // Keep max 80 lines 
     while(panel.children.length > 80) panel.removeChild(panel.firstChild);
     panel.scrollTop = panel.scrollHeight;
     _origLog(...args);
