@@ -4032,11 +4032,29 @@ if(!el){
   }
 const hourLabel=formatMinutesLabel(status.min);
   const dirStr=status.bearing?(' · from '+status.bearing.dir+' ('+Math.round(status.bearing.deg)+'°)'):'';
-  const speedStr=(status.speedKmh!=null&&isFinite(status.speedKmh))?(' · moving '+status.speedKmh.toFixed(0)+' km/h'):'';
+  // Storm's own direction of travel (where it's headed TO), shown separately from
+  // "from S" above (which is the bearing FROM you TO the storm) — e.g. "moving NE (45°)".
+  const stormHeadingStr=(status.stormHeadingDeg!=null&&isFinite(status.stormHeadingDeg))
+    ? (' moving '+BEARING_DIR_NAMES[Math.round(status.stormHeadingDeg/22.5)%16]+' ('+Math.round(status.stormHeadingDeg)+'°)')
+    : '';
+  const speedStr=(status.speedKmh!=null&&isFinite(status.speedKmh))?(' @ '+status.speedKmh.toFixed(0)+' km/h'):'';
+  // While driving mode is on and a live GPS heading+speed is available, the
+  // closest-approach figures above already account for the user's own forward motion
+  // (see projectedUserLL) — surface both the user's speed and their own heading, and
+  // label the line as relative so it's clear this isn't just the storm's motion alone.
+  const userSpeedStr=(status.userSpeedKmh!=null&&isFinite(status.userSpeedKmh)&&status.userSpeedKmh>0)
+    ? ' @ '+status.userSpeedKmh.toFixed(0)+' km/h'
+    : '';
+  const userHeadingStr=(status.userHeadingDeg!=null&&isFinite(status.userHeadingDeg))
+    ? (' you: '+BEARING_DIR_NAMES[Math.round(status.userHeadingDeg/22.5)%16]+' ('+Math.round(status.userHeadingDeg)+'°)')
+    : '';
+  const relativeNote=(status.isRelative)?' (relative)':'';
 el.innerHTML=
     '<div style="border-radius:10px;padding:9px 20px;text-align:center;font-family:\'Courier New\',monospace;border:2px solid '+c.color+';background:#e8e8e8;animation:'+c.anim+';box-sizing:border-box;">'+
     '<div style="font-size:14px;font-weight:800;letter-spacing:0.07em;color:'+c.color+';">'+c.label+'</div>'+
-    '<div style="font-size:11px;font-weight:700;margin-top:3px;color:'+c.color+';">Closest approach: '+status.km.toFixed(0)+' km, '+hourLabel+dirStr+speedStr+'</div>'+
+    '<div style="font-size:11px;font-weight:700;margin-top:3px;color:'+c.color+';">Closest approach'+relativeNote+': '+status.km.toFixed(0)+' km, '+hourLabel+dirStr+'</div>'+
+    (stormHeadingStr?'<div style="font-size:10px;font-weight:600;margin-top:2px;color:'+c.color+';">Storm:'+stormHeadingStr+speedStr+'</div>':'')+
+    (userHeadingStr?'<div style="font-size:10px;font-weight:600;margin-top:1px;color:'+c.color+';">You:'+userHeadingStr+userSpeedStr+'</div>':'')+
     '</div>';
   repositionStormBanner();
 }
@@ -4352,7 +4370,7 @@ const activeTracks=tracks.filter(tr=>
     !isDiminishingTrack(tr)
   );
  const projEPSG=L.CRS.EPSG3857;
-let stormClosestKm=Infinity, stormClosestMin=null, stormClosestPos=null, stormClosestSpeedKmh=null;
+let stormClosestKm=Infinity, stormClosestMin=null, stormClosestPos=null, stormClosestSpeedKmh=null, stormClosestHeadingDeg=null;
 let airportStormHits=[];
 activeTracks.forEach(tr=>{
     const t0=tr.points[0].t;
@@ -4426,6 +4444,10 @@ if(refLL){
       });
 if(!(trackClosestMin===0 && isDeparting) && trackClosestKm<stormClosestKm){
         stormClosestKm=trackClosestKm; stormClosestMin=trackClosestMin; stormClosestPos=trackClosestPos; stormClosestSpeedKmh=trSpeedKmh;
+        // Direction the storm itself is heading toward — bearing from its last observed
+        // point to its next projected (+5min) point along the same regression fit used
+        // for the on-map projection line, so this matches the drawn track's own heading.
+        stormClosestHeadingDeg = finePts.length>1 ? bearingTo(finePts[0].lat,finePts[0].lon,finePts[1].lat,finePts[1].lon).deg : null;
       }
     }
 
@@ -4449,14 +4471,14 @@ if(!(trackClosestMin===0 && isDeparting) && trackClosestKm<stormClosestKm){
   // another storm/cluster) only overwrites it if THIS pass found something closer —
   // a farther/no-threat result from a later pass never silently clears an earlier
   // pass's genuine warning.
-  if(!additive){
+if(!additive){
     radarMaxProximityBest = isFinite(stormClosestKm)
-      ? {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh}
+      ? {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg}
       : null;
   } else if(isFinite(stormClosestKm) && (!radarMaxProximityBest || stormClosestKm<radarMaxProximityBest.km)){
-    radarMaxProximityBest = {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh};
+    radarMaxProximityBest = {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg};
   }
-  const bannerData=radarMaxProximityBest||{km:Infinity,min:null,pos:null,speedKmh:null};
+  const bannerData=radarMaxProximityBest||{km:Infinity,min:null,pos:null,speedKmh:null,headingDeg:null};
   let stormLevel='none';
   if(bannerData.km<=PROX_WARNING_KM && bannerData.min<=60) stormLevel='severe';
   else if(bannerData.km<=PROX_WARNING_KM) stormLevel='warning';
@@ -4468,7 +4490,17 @@ let stormBearing=null;
   } else if(refLL && bannerData.pos){
     stormBearing=bearingTo(refLL.lat,refLL.lng,bannerData.pos[0],bannerData.pos[1]);
   }
-  updateStormProximityBanner({level:stormLevel, km:bannerData.km, min:bannerData.min, bearing:stormBearing, speedKmh:bannerData.speedKmh});
+  const _isRelative = drivingMode && _devLastGpsHeading!=null && _devLastGpsSpeedKmh>0;
+  // Storm's own direction of travel (where it's headed TO, not where it's coming
+  // from) — derived from the same regression-fit track used for the projection line,
+  // via bearingTo() over the track's own start/end points.
+  updateStormProximityBanner({
+    level:stormLevel, km:bannerData.km, min:bannerData.min, bearing:stormBearing,
+    speedKmh:bannerData.speedKmh, stormHeadingDeg:bannerData.headingDeg,
+    userSpeedKmh:_isRelative?_devLastGpsSpeedKmh:null,
+    userHeadingDeg:_isRelative?_devLastGpsHeading:null,
+    isRelative:_isRelative
+  });
 
   // Same merge logic for airport hits — union with the running list, per-airport,
   // keeping whichever pass found the closer approach. A fresh (non-additive) start
