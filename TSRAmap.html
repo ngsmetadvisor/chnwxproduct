@@ -3898,9 +3898,11 @@ function repositionStormBanner(){
 // airport is currently in any tracked storm's path, or when the user has turned
 // this panel off via long-press/right-click on the airport toolbar button.
 let airportStormPanelEnabled = localStorage.getItem('airport_storm_panel_enabled')!=='0';
-let _lastAirportStormHits=[];
+// Note: the underlying data lives in radarMaxAirportHits (see runRadarMaxDetection) —
+// this function only controls what's DISPLAYED. Hiding the panel (disabled, or no
+// hits this pass) must never discard radarMaxAirportHits, or re-enabling later has
+// nothing left to show.
 function updateAirportStormPanel(hits){
-  _lastAirportStormHits=hits||[];
   let el=document.getElementById('airport-storm-panel');
   if(!airportStormPanelEnabled||!hits||!hits.length){
     if(el) el.remove();
@@ -6386,10 +6388,10 @@ let _airportBtnLongPressFired=false;
         '<span id="apst-toggle-indicator" style="font-size:10px;padding:2px 8px;border-radius:8px;'+(airportStormPanelEnabled?'background:rgba(0,255,150,0.15);border:0.5px solid #00ff96;color:#00ff96;':'background:rgba(255,100,100,0.12);border:0.5px solid rgba(255,100,100,0.5);color:#f87171;')+'">'+(airportStormPanelEnabled?'ON':'OFF')+'</span>'+
       '</div>';
     document.body.appendChild(popup);
-    document.getElementById('apst-toggle-row').addEventListener('click', ()=>{
+document.getElementById('apst-toggle-row').addEventListener('click', ()=>{
       airportStormPanelEnabled=!airportStormPanelEnabled;
       localStorage.setItem('airport_storm_panel_enabled', airportStormPanelEnabled?'1':'0');
-      updateAirportStormPanel(airportStormPanelEnabled?_lastAirportStormHits:[]);
+      updateAirportStormPanel(airportStormPanelEnabled?radarMaxAirportHits:[]);
       closePopup();
     });
   }
