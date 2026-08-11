@@ -4168,7 +4168,7 @@ function repositionStormBanner(){
 // Warning or Watch polygon (from airportTornadoHailAlerts, rebuilt every alerts pass).
 // Hidden entirely when neither condition applies to any airport, or when the user has
 // turned this panel off via long-press/right-click on the airport toolbar button.
-let airportStormPanelEnabled = localStorage.getItem('airport_storm_panel_enabled')!=='0';
+let airportStormPanelEnabled = true;
 // Note: the underlying storm-track data lives in radarMaxAirportHits (see
 // runRadarMaxDetection) and the alert-badge data lives in airportTornadoHailAlerts
 // (see refreshAbAlertsPanel) — this function only controls what's DISPLAYED. Hiding
@@ -6828,7 +6828,6 @@ let _airportBtnLongPressFired=false;
     document.body.appendChild(popup);
 document.getElementById('apst-toggle-row').addEventListener('click', ()=>{
       airportStormPanelEnabled=!airportStormPanelEnabled;
-      localStorage.setItem('airport_storm_panel_enabled', airportStormPanelEnabled?'1':'0');
       updateAirportStormPanel(airportStormPanelEnabled?radarMaxAirportHits:[]);
       closePopup();
     });
@@ -6867,7 +6866,7 @@ let _drivingModePrevAirportPanelEnabled=null;
 function updateDrivingModeFlash(){
   const el=document.getElementById('driving-mode-flash');
   if(!el) return;
-  el.classList.toggle('active', drivingMode && _lastTornadoHailActive);
+  el.classList.remove('active');
 }
 
 function updateModeToggleBtnUI(){
@@ -6894,9 +6893,9 @@ function setDrivingMode(on){
     const ref=getRadarMaxReferenceLL();
     if(ref) runAddViewTrackingAt(ref.lat, ref.lng);
   } else {
-    airportStormPanelEnabled = (_drivingModePrevAirportPanelEnabled!==null)
+airportStormPanelEnabled = (_drivingModePrevAirportPanelEnabled!==null)
       ? _drivingModePrevAirportPanelEnabled
-      : (localStorage.getItem('airport_storm_panel_enabled')!=='0');
+      : true;
     _drivingModePrevAirportPanelEnabled=null;
     updateAirportStormPanel(radarMaxAirportHits);
   }
