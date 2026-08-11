@@ -953,7 +953,31 @@ if(!best){
       for(const z of zonePolygons){
         if(pip(clickLat,clickLon,z.latlngs)){
 const ec1=z._ec1||0, ec2=z._ec2||0, ec3=z._ec3||0, ec12=z._ec12||0;
-          L.popup({closeButton:true,className:'strike-popup',maxWidth:240})
+// Point-level lookup — only alerts whose actual polygon contains the exact spot
+          // clicked, not every alert touching the zone anywhere. Works off the fetched
+          // AB features list (window._lastAbAlertsFeatures), which is populated on every
+          // refreshAbAlertsPanel() pass regardless of whether the Alerts toolbar toggle
+          // is on, so this still works even when alerts display is turned off.
+          const clickAlerts=getAllAlertInfoAtLatLng(e.latlng);
+          // Group by our own classification label — a single point can still be inside
+          // more than one overlapping polygon (e.g. a Watch nested inside a wider SWS).
+          const zoneAlertGroups={};
+          clickAlerts.forEach(info=>{
+            const label=info._abPriorityLabel||info.headline;
+            if(!zoneAlertGroups[label]) zoneAlertGroups[label]={priority:info._abPriority!=null?info._abPriority:99,infos:[]};
+            zoneAlertGroups[label].infos.push(info);
+          });
+          const warnBlockHtml=clickAlerts.length
+            ? '<div id="zone-click-alert-block" style="margin-top:6px;padding-top:6px;border-top:0.5px solid rgba(255,255,255,0.1);cursor:pointer;">'+
+                '<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Active Alerts Here (tap for details)</div>'+
+Object.entries(zoneAlertGroups).map(([label,g])=>{
+                  const style=alertStyleForPriority(g.priority)||{mode:'text',color:'#ccc'};
+                  const c=style.mode==='banner'?style.bg:style.color;
+                  return '<div style="margin-top:2px;color:'+c+';font-weight:700;">🚨 '+label+(g.infos.length>1?' <span style="opacity:0.7;font-weight:400;">('+g.infos.length+')</span>':'')+'</div>';
+                }).join('')+
+              '</div>'
+            : '';
+          L.popup({closeButton:true,className:'strike-popup',maxWidth:clickAlerts.length?260:240})
             .setLatLng(e.latlng)
             .setContent(
               '<div style="font-family:monospace;min-width:170px;line-height:1.6;">'+
@@ -966,8 +990,14 @@ const ec1=z._ec1||0, ec2=z._ec2||0, ec3=z._ec3||0, ec12=z._ec12||0;
           '<table style="border-collapse:collapse;font-size:11px;color:#ffaa00;">'+
           '<tr><td style="padding-right:10px;color:#888;">1h</td><td style="padding-right:10px;color:#888;">2h</td><td style="padding-right:10px;color:#888;">3h</td><td style="color:#888;">12h</td></tr>'+
           '<tr><td style="padding-right:10px;">'+ec1+'</td><td style="padding-right:10px;">'+ec2+'</td><td style="padding-right:10px;">'+ec3+'</td><td>'+(ecLightningWindowH>3?ec12:'–')+'</td></tr>'+
-          '</table></div>'
+'</table>'+warnBlockHtml+'</div>'
             ).openOn(map);
+if(clickAlerts.length){
+            setTimeout(()=>{
+              const el=document.getElementById('zone-click-alert-block');
+              if(el) el.addEventListener('click', ()=>showAlertModal(clickAlerts));
+            },0);
+          }
           break;
         }
       }
@@ -2560,8 +2590,8 @@ const gKey=cls.priority<=2?'tornado':cls.priority<=4?'hail':cls.priority===9?'wi
           }
         });
       }
-      const key=cls.priority+'|'+cls.label;
-if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null,infos:[],_infoKeySet:new Set(),stationInfos:{}};
+const key=cls.priority+'|'+cls.label;
+if(!groups[key]) groups[key]={...cls,zoneStations:{},severity:props.risk_colour_en||null,infos:[],_infoKeySet:new Set(),stationInfos:{},zoneInfos:{}};
 const infoObj=extractAlertInfo(props);
       infoObj._abPriorityLabel=cls.label;
       infoObj._abPriority=cls.priority;
@@ -2596,12 +2626,19 @@ if(cls.priority<=6){
           console.log('[abAlerts-debug]',cls.label,'vs zone',z.shortId,'geomType:',f.geometry&&f.geometry.type,'bboxOverlap:',_fBBox&&z.bbox?bboxOverlap(_fBBox,z.bbox):'n/a','match:',hitStations.length?'station':'zone-included (no station)');
         }
 
-        if(!groups[key].zoneStations[z.shortId]) groups[key].zoneStations[z.shortId]=new Set();
+if(!groups[key].zoneStations[z.shortId]) groups[key].zoneStations[z.shortId]=new Set();
         hitStations.forEach(s=>{
           groups[key].zoneStations[z.shortId].add(s.id);
           if(!groups[key].stationInfos[s.id]) groups[key].stationInfos[s.id]=[];
           if(!groups[key].stationInfos[s.id].some(x=>x===infoObj)) groups[key].stationInfos[s.id].push(infoObj);
         });
+// This feature (infoObj) genuinely matched this zone (via a station, its
+        // centroid, or a polygon vertex) — record it per-zone so getZoneAlertInfo()
+        // never has to fall back to the group's province-wide infos list.
+        if(!groups[key].zoneInfos[z.shortId]) groups[key].zoneInfos[z.shortId]=[];
+        if(!groups[key].zoneInfos[z.shortId].some(x=>x===infoObj)){
+          groups[key].zoneInfos[z.shortId].push(infoObj);
+        }
       });
     });
   });
@@ -6420,6 +6457,34 @@ window._openStationAlerts=function(stationId){
   if(found.length) showAlertModal(found.map(a=>a.info));
 };
 
+// Same lookup as getStationAlertInfo, but keyed by zone shortId instead of a station id —
+// used to show warnings inline in the zone popup (map click on a fire weather zone).
+// Scoped to THIS zone's own matched stations (r.stationInfos), not r.infos — r.infos
+// accumulates every feature matching that classification across all of Alberta, so
+// using it here was showing alerts from unrelated zones (e.g. dozens of unrelated
+// Severe T-Storm Watch polygons) instead of just the ones actually covering this zone.
+function getZoneAlertInfo(zoneShortId){
+  const rows=window._lastAbAlertsRows||[];
+  const found=[];
+  rows.forEach(r=>{
+    const stnIds=r.zoneStations && r.zoneStations[zoneShortId];
+    if(!stnIds) return; // this alert group doesn't cover the zone at all
+    // zoneInfos[zoneShortId] holds exactly the features that were confirmed to match
+    // THIS zone (via a station, centroid, or vertex) — covers both the station-matched
+    // and zone-included-no-station cases without ever pulling in the group's
+    // province-wide infos list.
+    const infos=(r.zoneInfos&&r.zoneInfos[zoneShortId])||[];
+    infos.forEach(info=>{
+      if(!found.some(x=>x.info===info)) found.push({label:r.label,priority:r.priority,info});
+    });
+  });
+  return found;
+}
+window._openZoneAlerts=function(zoneShortId){
+  const found=getZoneAlertInfo(zoneShortId);
+  if(found.length) showAlertModal(found.map(a=>a.info));
+};
+
 // Builds and opens the station-details popup (Name/Type/Elevation/Lat/Lon/Distance +
 // any active alerts) — shared by both the station marker click and warning-circle click,
 // so clicking a warning circle shows the SAME station details, not just the alert modal.
@@ -6563,9 +6628,9 @@ stations[id] = {lat, lon, name, type, elev};
       const ih = 11 + padY * 2 + touchPadY * 2;
       const icon = L.divIcon({
       className:'',
-      html:'<div class="airport-icon">✈</div><div class="airport-label">'+a.name+'</div>',
-      iconSize:[80,50],
-      iconAnchor:[40,18]
+      html:'<div class="stn-label'+(stationIPs[id]?' has-ip':'')+'">'+id+'</div>',
+      iconSize:[iw,ih],
+      iconAnchor:[iw/2,ih/2]
     });
 const m = L.marker([lat, lon], {icon, interactive: true, pane: 'stations'}).addTo(map);
       m._stationId = id;
@@ -6681,7 +6746,7 @@ const circle = L.circle([a.lat,a.lon],{
       icon: L.divIcon({
         className:'',
         html:'<span style="color:#ff8c00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000,0 0 3px #000;opacity:0.75;">'+AIRPORT_WARNING_KM+'km</span>',
-        iconSize:[0,0], iconAnchor:[-4,0]
+        iconSize:[0,0], iconAnchor:[5,5]
       })
     }).addTo(map);
     airportCircles.push(circleLabel);
