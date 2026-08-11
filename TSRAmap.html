@@ -6640,11 +6640,11 @@ const airportMarkers = [];
 const airportCircles = [];
 function buildAirportMarkers(){
   AIRPORTS.forEach(a=>{
-    const icon = L.divIcon({
+const icon = L.divIcon({
       className:'',
       html:'<div class="airport-icon">✈</div><div class="airport-label">'+a.name+'</div>',
       iconSize:[80,34],
-      iconAnchor:[40,10]
+      iconAnchor:[40,16]
     });
 const m = L.marker([a.lat,a.lon],{icon,interactive:true,pane:'airports'}).addTo(map);
     const _airportPopupHtml=
@@ -6668,12 +6668,23 @@ const m = L.marker([a.lat,a.lon],{icon,interactive:true,pane:'airports'}).addTo(
     });
     airportMarkers.push(m);
 
-    const circle = L.circle([a.lat,a.lon],{
+const circle = L.circle([a.lat,a.lon],{
       radius: AIRPORT_WARNING_KM*1000, pane:'airports',
       color:'#ff8c00', weight:1, opacity:0.6,
       fill:false, interactive:false
     }).addTo(map);
     airportCircles.push(circle);
+
+    const circleLabelLL = _destPoint(a.lat, a.lon, 180, AIRPORT_WARNING_KM);
+    const circleLabel = L.marker(circleLabelLL, {
+      interactive:false, pane:'airports',
+      icon: L.divIcon({
+        className:'',
+        html:'<span style="color:#ff8c00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000,0 0 3px #000;opacity:0.75;">'+AIRPORT_WARNING_KM+'km</span>',
+        iconSize:[0,0], iconAnchor:[-4,0]
+      })
+    }).addTo(map);
+    airportCircles.push(circleLabel);
   });
 }
 buildAirportMarkers();
