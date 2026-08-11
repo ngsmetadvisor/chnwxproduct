@@ -366,6 +366,30 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 .airport-icon{font-size:16px;color:#ff8c00;text-align:center;text-shadow:0 0 3px #000,0 0 3px #000,0 0 3px #000;line-height:16px;}
 .airport-label{font-size:9px;color:#ff8c00;font-family:monospace;white-space:nowrap;text-align:center;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;}
 
+/* ── Default/Driving mode toggle ── */
+#mode-toggle { display:flex; gap:3px; align-items:center; flex-shrink:0; }
+.mode-btn { background:transparent; border:0.5px solid rgba(255,255,255,0.2); color:#ccc; font-size:10px; padding:2px 8px; border-radius:10px; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+.mode-btn.active { background:rgba(0,255,150,0.15); border-color:#00ff96; color:#00ff96; }
+.mode-btn.driving { background:rgba(255,140,0,0.18); border-color:#ff8c00; color:#ff8c00; }
+#mode-toggle-btn { flex-shrink:0; margin-left:4px; }
+@media (max-width: 600px) {
+  #status-station-finder select { flex: 1; min-width: 0; }
+  .mode-btn .mode-text { display:none; }
+  #mode-toggle-btn { padding:5px 8px; min-height:28px; }
+}
+
+
+/* ── Driving mode alert flash ── */
+#driving-mode-flash {
+  display:none; position:fixed; inset:0; z-index:8500; pointer-events:none;
+  background:#fff;
+}
+#driving-mode-flash.active {
+  display:block;
+  animation: drivingFlash 1s ease-in-out infinite;
+}
+@keyframes drivingFlash { 0%,100%{opacity:0.85} 50%{opacity:0.35} }
+
 /* ── WX Popup ── */
 #wx-popup-overlay {
   position:fixed;inset:0;z-index:19000;background:rgba(0,0,0,0.6);
@@ -376,6 +400,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <body>
 <div id="debug-log" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;max-height:40vh;overflow-y:auto;background:rgba(0,0,0,0.92);font-family:monospace;font-size:10px;color:#0f0;padding:4px;pointer-events:auto;"></div>
 <div id="wrap">
+<div id="driving-mode-flash"></div>
 
   <!-- Toolbar -->
   <div id="toolbar">
@@ -684,6 +709,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <div id="status-station-finder">
 <select id="stationSelect"><option value="">Find Station</option></select>
         <select id="zoneZoomSelect"><option value="">Zoom to Zone</option><option value="AB">AB (all zones)</option><option value="__export_png">Export AB png</option></select>
+<button id="mode-toggle-btn" class="mode-btn active" title="Tap to switch to Driving mode"><span class="mode-icon">🌍</span><span class="mode-text"> Default</span></button>
       </div>
 <div class="legend">
       <div class="leg-item"><div class="leg-dot" style="background:#ffffff;box-shadow:0 0 4px #fff;"></div> New</div>
@@ -2589,6 +2615,10 @@ rows.sort((a,b)=>{
 window._lastAbAlertsRows=rows;
   updateTornadoHailCircles(rows);
   updateTornadoHailPolygons();
+  // Tornado/Large Hail Warning or Watch specifically (priority 1-4) — drives the
+  // driving-mode full-screen white flash, independent of every other alert type.
+  _lastTornadoHailActive = rows.some(r=>r.priority<=4);
+  updateDrivingModeFlash();
   window._abAlertsCurrentKey=JSON.stringify(rows.filter(r=>r.priority<=4||r.priority===9).map(r=>({p:r.priority,z:Object.keys(r.zoneStations).sort()})));
 // Priorities 2, 4, 6 (Tornado Watch, Large Hail Watch, Severe T-Storm Watch) are the
 // watch tier; everything else active (1,3,5,7,8) is warning-tier — counted by distinct
@@ -2753,15 +2783,20 @@ listEl.innerHTML=html;
   }
 _abAlertsPriorityActive=priorityActive;
   if(priorityActive){
-    listEl.style.display='block';
-    if(collapseBtn) collapseBtn.textContent='▲';
+    // Driving mode: never force the AB Warnings/Watches panel open or expand its row
+    // details — the driving-mode white flash (see _lastTornadoHailActive above) is
+    // the intended attention-getter instead. Vibrate/notify below still fire either way.
+    if(!drivingMode){
+      listEl.style.display='block';
+      if(collapseBtn) collapseBtn.textContent='▲';
 if(_abAlertsDismissedKey!==window._abAlertsCurrentKey){
-      panel.style.display='block';
-      if(window.innerWidth<=600){
-        panel.classList.add('combo-show');
-        document.getElementById('combo-alert-btn')?.classList.add('active');
-        comboPanelOpen='alerts'; // so the combo button's own click handler knows it's already open and closes it on first tap
-        positionComboPopup(panel); // same spot the combo tab normally opens it at, not the browser default corner
+        panel.style.display='block';
+        if(window.innerWidth<=600){
+          panel.classList.add('combo-show');
+          document.getElementById('combo-alert-btn')?.classList.add('active');
+          comboPanelOpen='alerts'; // so the combo button's own click handler knows it's already open and closes it on first tap
+          positionComboPopup(panel); // same spot the combo tab normally opens it at, not the browser default corner
+        }
       }
     }
 if(window._abAlertsCurrentKey!==_abAlertsLastVibrateKey){
@@ -4018,7 +4053,9 @@ function updateAirportStormPanel(hits){
   const byAirport={};
   (hits||[]).forEach(h=>{ if(!byAirport[h.airport]||h.distKm<byAirport[h.airport].distKm) byAirport[h.airport]=h; });
   const allNames=new Set([...Object.keys(byAirport), ...Object.keys(airportTornadoHailAlerts), ...Object.keys(airportLightningAlerts)]);
-  if(!airportStormPanelEnabled||!allNames.size){
+  // Panel follows the airport toolbar toggle too — no point showing "airports in storm
+  // path" warnings for airports the user has hidden from the map entirely.
+  if(!airportsVisible||!airportStormPanelEnabled||!allNames.size){
     if(el) el.remove();
     return;
   }
@@ -5177,9 +5214,11 @@ document.getElementById('legend-toggle-btn').addEventListener('click',()=>toggle
 
 (function(){
   const savedType=localStorage.getItem('radar_type');
-  const savedOpacity=localStorage.getItem('radar_opacity');
   if(savedType)document.getElementById('radar-type').value=savedType;
-  if(savedOpacity){document.getElementById('radar-opacity').value=savedOpacity;radarOpacity=parseInt(savedOpacity)/100;}
+  // Opacity intentionally always defaults to 80% on load — no longer restored from
+  // localStorage, so a previously-dragged slider position can't silently override it.
+  document.getElementById('radar-opacity').value=80;
+  radarOpacity=0.8;
 })();
 
 document.getElementById('precip-legend')._userHidden=true; // legend hidden by default; user must tap the Legend button to show it
@@ -6519,6 +6558,9 @@ airportCircles.forEach(c=>{
     if(airportsVisible) c.addTo(map); else map.removeLayer(c);
   });
   this.classList.toggle('active', airportsVisible);
+  // Storm-path warning panel is gated on airportsVisible too — refresh immediately
+  // so it disappears/reappears in lockstep with the airport markers themselves.
+  updateAirportStormPanel(radarMaxAirportHits);
 });
 
 // Right-click / long-press on the airport toggle — opens a small popup to turn the
@@ -6575,8 +6617,53 @@ document.getElementById('apst-toggle-row').addEventListener('click', ()=>{
   document.addEventListener('click', function(e){
     if(popup && !popup.contains(e.target) && e.target!==btn) closePopup();
   });
-  map.on('click', closePopup);
+map.on('click', closePopup);
 })();
+
+// ── Default / Driving mode ──────────────────────────────────────
+let drivingMode=false;
+let _lastTornadoHailActive=false;
+let _drivingModePrevAirportPanelEnabled=null;
+
+function updateDrivingModeFlash(){
+  const el=document.getElementById('driving-mode-flash');
+  if(!el) return;
+  el.classList.toggle('active', drivingMode && _lastTornadoHailActive);
+}
+
+function updateModeToggleBtnUI(){
+  const btn=document.getElementById('mode-toggle-btn');
+  if(!btn) return;
+  btn.classList.toggle('active', !drivingMode);
+  btn.classList.toggle('driving', drivingMode);
+  btn.innerHTML = drivingMode
+    ? '<span class="mode-icon">🚗</span><span class="mode-text"> Driving</span>'
+    : '<span class="mode-icon">🌍</span><span class="mode-text"> Default</span>';
+  btn.title = drivingMode ? 'Tap to switch to Default mode' : 'Tap to switch to Driving mode';
+}
+function setDrivingMode(on){
+  drivingMode=on;
+  updateModeToggleBtnUI();
+  if(on){
+    // Airport "in storm path" panel off while driving — remembered so it can be
+    // restored to whatever the user had it set to once back in Default mode.
+    _drivingModePrevAirportPanelEnabled=airportStormPanelEnabled;
+    airportStormPanelEnabled=false;
+    updateAirportStormPanel([]);
+    // Same as pressing "+" (add focus area) but targeted automatically at the
+    // current GPS/last-known/map-center location instead of waiting for a tap.
+    const ref=getRadarMaxReferenceLL();
+    if(ref) runAddViewTrackingAt(ref.lat, ref.lng);
+  } else {
+    airportStormPanelEnabled = (_drivingModePrevAirportPanelEnabled!==null)
+      ? _drivingModePrevAirportPanelEnabled
+      : (localStorage.getItem('airport_storm_panel_enabled')!=='0');
+    _drivingModePrevAirportPanelEnabled=null;
+    updateAirportStormPanel(radarMaxAirportHits);
+  }
+  updateDrivingModeFlash();
+}
+document.getElementById('mode-toggle-btn')?.addEventListener('click', ()=>setDrivingMode(!drivingMode));
 
 (function initCompassMenu(){
   const btn      = document.getElementById('compass-menu-btn');
@@ -7153,7 +7240,7 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
       try{ return typeof a === 'object' ? JSON.stringify(a) : String(a); }catch(e){ return '[obj]'; }
     }).join(' ');
     panel.appendChild(line);
-    // Keep max 80 lines 
+    // Keep max 80 lines
     while(panel.children.length > 80) panel.removeChild(panel.firstChild);
     panel.scrollTop = panel.scrollHeight;
     _origLog(...args);
