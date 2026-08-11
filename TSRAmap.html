@@ -3415,6 +3415,17 @@ function rgbToRgba(rgbStr,alpha){
   if(!m) return rgbStr;
   return 'rgba('+m[0]+','+m[1]+','+m[2]+','+alpha+')';
 }
+// True for the purple/magenta top of RADAR_INTENSITY_STEP_COLORS (rgb(152,51,203) and
+// rgb(102,0,152)) — the highest detected precip-rate tier, treated as hail-capable for
+// the airport storm-path panel's white-flag styling.
+function isHailCapableColor(colorStr){
+  if(!colorStr) return false;
+  const m=colorStr.match(/\d+/g);
+  if(!m) return false;
+  const r=parseInt(m[0]),g=parseInt(m[1]),b=parseInt(m[2]);
+  // Purple/magenta: red and blue both elevated, green notably lower than both.
+  return r>=90 && b>=140 && g<=80;
+}
 function applyRadarMaxActiveColor(){
   const btn=document.getElementById('radar-max-toggle');
   if(!btn) return;
@@ -4207,6 +4218,7 @@ const _apPanelNow=t||Date.now()/1000;
     const h=byAirport[name];
     const th=airportTornadoHailAlerts[name];
     const lt=airportLightningAlerts[name];
+    const isHailCapable = h && isHailCapableColor(h.color);
     let badgesHtml='';
     if(th){
       const label=(th.type==='tornado'?'Tornado':'Large Hail')+' '+(th.tier==='warning'?'Warning':'Watch');
@@ -4217,21 +4229,28 @@ const _apPanelNow=t||Date.now()/1000;
     if(lt){
       badgesHtml += '<div style="margin-top:3px;color:#ff4444;font-weight:800;font-size:11px;">⚡ Lightning Warning ×'+lt.count+'</div>';
     }
+    if(isHailCapable){
+      badgesHtml += '<div style="margin-top:3px;display:inline-block;background:#fff;color:#a020c0;font-weight:800;font-size:11px;border-radius:4px;padding:2px 6px;">🧊 Hail possible</div>';
+    }
 // Storm's own bearing relative to the airport (e.g. "from NW") alongside distance/time.
     const dirLabel = (h && h.bearingDeg!=null && isFinite(h.bearingDeg))
       ? (' · from '+BEARING_DIR_NAMES[Math.round(h.bearingDeg/22.5)%16]+' ('+Math.round(h.bearingDeg)+'°)')
       : '';
-    const distHtml = h ? ('<div style="font-size:11px;color:#ffaa66;">'+h.distKm.toFixed(0)+' km · '+formatMinutesLabel(h.min)+dirLabel+'</div>') : '';
+    const distHtml = h ? ('<div style="font-size:11px;color:'+(isHailCapable?'#a020c0':'#ffaa66')+';">'+h.distKm.toFixed(0)+' km · '+formatMinutesLabel(h.min)+dirLabel+'</div>') : '';
     // White flash for 5s after a new strike is captured for this airport — opacity
     // fades out over the 5s window based on elapsed time since lastCaptureTime.
     const flashElapsed = lt && lt.lastCaptureTime!=null ? (_apPanelNow-lt.lastCaptureTime) : Infinity;
     const isFlashing = flashElapsed<=5;
     const flashOpacity = isFlashing ? Math.max(0,1-flashElapsed/5) : 0;
-    const rowBg = isFlashing ? 'background:rgba(255,255,255,'+flashOpacity.toFixed(2)+');border-radius:6px;padding:4px;' : '';
+    // Hail-capable (purple track) rows get a steady white background with purple text,
+    // taking precedence over the transient lightning-capture flash styling.
+    const rowBg = isHailCapable
+      ? 'background:#fff;border-radius:6px;padding:4px;'
+      : (isFlashing ? 'background:rgba(255,255,255,'+flashOpacity.toFixed(2)+');border-radius:6px;padding:4px;' : '');
     // Row itself is clickable (pointer-events re-enabled per-row) even though the panel
     // container stays pointer-events:none so it never blocks map clicks elsewhere.
     return '<div class="airport-storm-row" data-airport="'+name+'" style="margin-top:4px;padding-top:4px;border-top:0.5px solid rgba(255,140,0,0.2);cursor:pointer;pointer-events:auto;'+rowBg+'">'+
-      '<div style="font-size:12px;font-weight:700;color:#ff8c00;">✈ '+name+'</div>'+
+      '<div style="font-size:12px;font-weight:700;color:'+(isHailCapable?'#a020c0':'#ff8c00')+';">✈ '+name+'</div>'+
       distHtml+badgesHtml+
       '</div>';
   }).join('');
@@ -4564,7 +4583,10 @@ if(!(trackClosestMin===0 && isDeparting) && trackClosestKm<stormClosestKm){
       });
       if(apClosestKm<=AIRPORT_WARNING_KM){
         const bearingDeg = apClosestPos ? bearingTo(ap.lat,ap.lon,apClosestPos[0],apClosestPos[1]).deg : null;
-        airportStormHits.push({airport:ap.name,distKm:apClosestKm,min:apClosestMin,bearingDeg});
+        // Carry this track's own marker color (trColor, from intensityColorForScore)
+        // along with the hit so the airport panel can flag hail-capable intensity —
+        // the purple/magenta top of RADAR_INTENSITY_STEP_COLORS.
+        airportStormHits.push({airport:ap.name,distKm:apClosestKm,min:apClosestMin,bearingDeg,color:trColor});
       }
     });
   });
