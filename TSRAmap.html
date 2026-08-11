@@ -3495,6 +3495,22 @@ function getRadarMaxReferenceLL(){
   return {lat:c.lat, lng:c.lng};
 }
 
+// While driving mode is on and a live GPS heading+speed are available, project the
+// user's own position forward the same way storm tracks are projected — so closest
+// approach reflects relative motion (you closing the gap, or pulling away from a storm
+// behind you) instead of treating the user as parked at their current GPS fix. Falls
+// back to the static reference point in Default mode, or if heading/speed aren't
+// available yet (e.g. just switched to driving mode, no motion detected).
+function projectedUserLL(refLL, minutesAhead){
+  if(!drivingMode) return refLL;
+  const heading=_devLastGpsHeading, speedKmh=_devLastGpsSpeedKmh;
+  if(heading==null || !speedKmh || speedKmh<=0) return refLL;
+  const distKm=speedKmh*(minutesAhead/60);
+  if(distKm<=0) return refLL;
+  const [lat,lon]=_destPoint(refLL.lat, refLL.lng, heading, distKm);
+  return {lat,lng:lon};
+}
+
 // Zooms/pans so the view covers roughly a 100km radius around the reference location.
 // Leaflet requests WMS tiles at native resolution for whatever's on screen, and loads
 // tiles nearest the viewport center first — so centering here on the user's own location
@@ -4389,11 +4405,17 @@ const phalo=L.polyline(projPts,{pane:'radarMax',color:'#ffffff',weight:5,opacity
     const pline=L.polyline(projPts,{pane:'radarMax',color:trColor,weight:2,opacity:0.95,interactive:false}).addTo(map);
     radarMaxProjectionLines.push(pline);
 
-// Check current position (now) and every 5-minute projected point against refLL,
-    // using the same watch/warning radii as the lightning proximity system — minute
+// Check current position (now) and every 5-minute projected point against refLL —
+    // in driving mode, refLL itself is also projected forward using your own GPS
+    // heading/speed at that same time offset, so closest approach reflects relative
+    // motion (you closing the gap or pulling away), not just the storm's own movement.
+    // Uses the same watch/warning radii as the lightning proximity system — minute
     // precision instead of only checking hourly projection points.
 if(refLL){
-      const distByMin=finePts.map(p=>haversineKm(refLL.lat,refLL.lng,p.lat,p.lon));
+      const distByMin=finePts.map(p=>{
+        const userAt=projectedUserLL(refLL,p.min);
+        return haversineKm(userAt.lat,userAt.lng,p.lat,p.lon);
+      });
       // A track whose distance is already increasing at the next fine step is moving
       // away — if its closest point is "now" (min 0), it's not a growing threat, so
       // don't let it trigger a warning/caution.
@@ -4440,7 +4462,12 @@ if(!(trackClosestMin===0 && isDeparting) && trackClosestKm<stormClosestKm){
   else if(bannerData.km<=PROX_WARNING_KM) stormLevel='warning';
   else if(bannerData.km<=PROX_RADIUS_KM) stormLevel='caution';
 let stormBearing=null;
-  if(refLL && bannerData.pos) stormBearing=bearingTo(refLL.lat,refLL.lng,bannerData.pos[0],bannerData.pos[1]);
+  if(refLL && bannerData.pos && bannerData.min!=null){
+    const userAtClosest=projectedUserLL(refLL, bannerData.min);
+    stormBearing=bearingTo(userAtClosest.lat,userAtClosest.lng,bannerData.pos[0],bannerData.pos[1]);
+  } else if(refLL && bannerData.pos){
+    stormBearing=bearingTo(refLL.lat,refLL.lng,bannerData.pos[0],bannerData.pos[1]);
+  }
   updateStormProximityBanner({level:stormLevel, km:bannerData.km, min:bannerData.min, bearing:stormBearing, speedKmh:bannerData.speedKmh});
 
   // Same merge logic for airport hits — union with the running list, per-airport,
