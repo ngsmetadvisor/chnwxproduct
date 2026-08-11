@@ -1172,7 +1172,7 @@ map.on('zoomend', function(){
 });
 // ── Lightning Proximity Warning ───────────────────────────────
 const PROX_RADIUS_KM     = 100  // total watch radius distance in km. 100km in default
-const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
+const PROX_WARNING_PCT   = 1.25;    // fraction of radius that triggers WARNING (vs CAUTION)
 const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
 const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
 
@@ -4007,6 +4007,22 @@ const EDGE_MARGIN_PX=RADAR_MAX_EDGE_MARGIN_PX;
 // (caution) and PROX_WARNING_KM (warning) thresholds, no separate radius setting.
 // A third "severe" tier fires when a track's projected position is inside the warning
 // radius within the next hour (hour index 0 = now, 1 = +1h projection).
+let radarMaxLastKnownLine=null;
+// Draws a dotted line from the user's current position to the storm's actual last
+// radar-detected position (not a projected point) — gives a quick visual sense of
+// where the storm was most recently seen, alongside the projected closest-approach
+// marker. Cleared whenever there's no active storm threat or no last-known fix.
+function updateStormLastKnownLine(status){
+  if(radarMaxLastKnownLine){ map.removeLayer(radarMaxLastKnownLine); radarMaxLastKnownLine=null; }
+  if(!status || status.level==='none' || !status.lastKnownPos || !status.userPos) return;
+  const colorMap={caution:'#a16207',warning:'#cc2200',severe:'#ff0000'};
+  const color=colorMap[status.level]||'#cc2200';
+  radarMaxLastKnownLine=L.polyline(
+    [[status.userPos.lat, status.userPos.lng??status.userPos.lon], status.lastKnownPos],
+    {pane:'radarMax', color, weight:2, opacity:0.75, dashArray:'4 6', interactive:false}
+  ).addTo(map);
+}
+
 // Marks the storm's own projected position at the moment of closest approach (not the
 // user's position) with a pulsing target-style marker, colored to match the current
 // banner severity tier. Cleared whenever there's no active storm threat.
@@ -4064,15 +4080,16 @@ const hourLabel=formatMinutesLabel(status.min);
     ? (' moving '+BEARING_DIR_NAMES[Math.round(status.stormHeadingDeg/22.5)%16]+' ('+Math.round(status.stormHeadingDeg)+'°)')
     : '';
   const speedStr=(status.speedKmh!=null&&isFinite(status.speedKmh))?(' @ '+status.speedKmh.toFixed(0)+' km/h'):'';
-  // While driving mode is on and a live GPS heading+speed is available, the
-  // closest-approach figures above already account for the user's own forward motion
-  // (see projectedUserLL) — surface both the user's speed and their own heading, and
-  // label the line as relative so it's clear this isn't just the storm's motion alone.
-  const userSpeedStr=(status.userSpeedKmh!=null&&isFinite(status.userSpeedKmh)&&status.userSpeedKmh>0)
+  // In driving mode this line always renders (even at 0 km/h — stopped/parked), since
+  // isRelative no longer requires speed>0. "—" is shown for heading only when there's
+  // truly no reliable GPS heading yet (0 km/h reports no bearing).
+  const userSpeedStr=(status.userSpeedKmh!=null&&isFinite(status.userSpeedKmh))
     ? ' @ '+status.userSpeedKmh.toFixed(0)+' km/h'
     : '';
-  const userHeadingStr=(status.userHeadingDeg!=null&&isFinite(status.userHeadingDeg))
-    ? (' you: '+BEARING_DIR_NAMES[Math.round(status.userHeadingDeg/22.5)%16]+' ('+Math.round(status.userHeadingDeg)+'°)')
+  const userHeadingStr=status.isRelative
+    ? (' you: '+((status.userHeadingDeg!=null&&isFinite(status.userHeadingDeg))
+        ? BEARING_DIR_NAMES[Math.round(status.userHeadingDeg/22.5)%16]+' ('+Math.round(status.userHeadingDeg)+'°)'
+        : '—'))
     : '';
   const relativeNote=(status.isRelative)?' (relative)':'';
 el.innerHTML=
@@ -4082,6 +4099,7 @@ el.innerHTML=
     (stormHeadingStr?'<div style="font-size:10px;font-weight:600;margin-top:2px;color:'+c.color+';">Storm:'+stormHeadingStr+speedStr+'</div>':'')+
     (userHeadingStr?'<div style="font-size:10px;font-weight:600;margin-top:1px;color:'+c.color+';">You:'+userHeadingStr+userSpeedStr+'</div>':'')+
     '</div>';
+  updateStormLastKnownLine(status);
   repositionStormBanner();
 }
 
@@ -4161,19 +4179,31 @@ const _apPanelNow=t||Date.now()/1000;
     if(lt){
       badgesHtml += '<div style="margin-top:3px;color:#ff4444;font-weight:800;font-size:11px;">⚡ Lightning Warning ×'+lt.count+'</div>';
     }
-    const distHtml = h ? ('<div style="font-size:11px;color:#ffaa66;">'+h.distKm.toFixed(0)+' km · '+formatMinutesLabel(h.min)+'</div>') : '';
+// Storm's own bearing relative to the airport (e.g. "from NW") alongside distance/time.
+    const dirLabel = (h && h.bearingDeg!=null && isFinite(h.bearingDeg))
+      ? (' · from '+BEARING_DIR_NAMES[Math.round(h.bearingDeg/22.5)%16]+' ('+Math.round(h.bearingDeg)+'°)')
+      : '';
+    const distHtml = h ? ('<div style="font-size:11px;color:#ffaa66;">'+h.distKm.toFixed(0)+' km · '+formatMinutesLabel(h.min)+dirLabel+'</div>') : '';
     // White flash for 5s after a new strike is captured for this airport — opacity
     // fades out over the 5s window based on elapsed time since lastCaptureTime.
     const flashElapsed = lt && lt.lastCaptureTime!=null ? (_apPanelNow-lt.lastCaptureTime) : Infinity;
     const isFlashing = flashElapsed<=5;
     const flashOpacity = isFlashing ? Math.max(0,1-flashElapsed/5) : 0;
     const rowBg = isFlashing ? 'background:rgba(255,255,255,'+flashOpacity.toFixed(2)+');border-radius:6px;padding:4px;' : '';
-    return '<div style="margin-top:4px;padding-top:4px;border-top:0.5px solid rgba(255,140,0,0.2);'+rowBg+'">'+
+    // Row itself is clickable (pointer-events re-enabled per-row) even though the panel
+    // container stays pointer-events:none so it never blocks map clicks elsewhere.
+    return '<div class="airport-storm-row" data-airport="'+name+'" style="margin-top:4px;padding-top:4px;border-top:0.5px solid rgba(255,140,0,0.2);cursor:pointer;pointer-events:auto;'+rowBg+'">'+
       '<div style="font-size:12px;font-weight:700;color:#ff8c00;">✈ '+name+'</div>'+
       distHtml+badgesHtml+
       '</div>';
   }).join('');
   el.innerHTML='<div style="font-size:12px;font-weight:800;color:#ff8c00;letter-spacing:0.05em;">⛈ AIRPORTS IN STORM PATH</div>'+rowsHtml;
+  el.querySelectorAll('.airport-storm-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const ap=AIRPORTS.find(a=>a.name===row.dataset.airport);
+      if(ap) map.flyTo([ap.lat,ap.lon], Math.max(map.getZoom(),9), {animate:true, duration:0.8});
+    });
+  });
 }
 
 function showStormTrackingBanner(current,total){
@@ -4227,6 +4257,7 @@ radarMaxCurrentMarkers.forEach(m=>map.removeLayer(m));
   radarMaxAirportHits=[];
   radarMaxProximityBest=null;
   if(radarMaxClosestApproachMarker){ map.removeLayer(radarMaxClosestApproachMarker); radarMaxClosestApproachMarker=null; }
+  if(radarMaxLastKnownLine){ map.removeLayer(radarMaxLastKnownLine); radarMaxLastKnownLine=null; }
   updateStormProximityBanner({level:'none'});
   updateAirportStormPanel([]);
 }
@@ -4397,7 +4428,7 @@ const activeTracks=tracks.filter(tr=>
     !isDiminishingTrack(tr)
   );
  const projEPSG=L.CRS.EPSG3857;
-let stormClosestKm=Infinity, stormClosestMin=null, stormClosestPos=null, stormClosestSpeedKmh=null, stormClosestHeadingDeg=null;
+let stormClosestKm=Infinity, stormClosestMin=null, stormClosestPos=null, stormClosestSpeedKmh=null, stormClosestHeadingDeg=null, stormClosestLastKnownPos=null;
 let airportStormHits=[];
 activeTracks.forEach(tr=>{
     const t0=tr.points[0].t;
@@ -4475,21 +4506,27 @@ if(!(trackClosestMin===0 && isDeparting) && trackClosestKm<stormClosestKm){
         // point to its next projected (+5min) point along the same regression fit used
         // for the on-map projection line, so this matches the drawn track's own heading.
         stormClosestHeadingDeg = finePts.length>1 ? bearingTo(finePts[0].lat,finePts[0].lon,finePts[1].lat,finePts[1].lon).deg : null;
+        // The storm's actual last-detected radar position (not a projected point) —
+        // used to draw a dotted "last known position" line on the warning banner.
+        stormClosestLastKnownPos = [lastPt.lat, lastPt.lon];
       }
     }
 
-    // Check this track's projected path against every airport's warning radius —
-    // collects {airport,distKm,min} for any airport the track comes within
+// Check this track's projected path against every airport's warning radius —
+    // collects {airport,distKm,min,bearingDeg} for any airport the track comes within
     // PROX_WARNING_KM of, at its closest approach along the projection, checked at
     // 5-minute resolution so the reported time-to-impact isn't rounded to the hour.
+    // bearingDeg is measured FROM the airport TO the storm's closest-approach position,
+    // so the panel can show which direction the storm sits relative to that airport.
     AIRPORTS.forEach(ap=>{
-      let apClosestKm=Infinity, apClosestMin=null;
+      let apClosestKm=Infinity, apClosestMin=null, apClosestPos=null;
       finePts.forEach(p=>{
         const dKm=haversineKm(ap.lat,ap.lon,p.lat,p.lon);
-        if(dKm<apClosestKm){ apClosestKm=dKm; apClosestMin=p.min; }
+        if(dKm<apClosestKm){ apClosestKm=dKm; apClosestMin=p.min; apClosestPos=[p.lat,p.lon]; }
       });
       if(apClosestKm<=PROX_WARNING_KM){
-        airportStormHits.push({airport:ap.name,distKm:apClosestKm,min:apClosestMin});
+        const bearingDeg = apClosestPos ? bearingTo(ap.lat,ap.lon,apClosestPos[0],apClosestPos[1]).deg : null;
+        airportStormHits.push({airport:ap.name,distKm:apClosestKm,min:apClosestMin,bearingDeg});
       }
     });
   });
@@ -4500,12 +4537,12 @@ if(!(trackClosestMin===0 && isDeparting) && trackClosestKm<stormClosestKm){
   // pass's genuine warning.
 if(!additive){
     radarMaxProximityBest = isFinite(stormClosestKm)
-      ? {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg}
+      ? {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg,lastKnownPos:stormClosestLastKnownPos}
       : null;
   } else if(isFinite(stormClosestKm) && (!radarMaxProximityBest || stormClosestKm<radarMaxProximityBest.km)){
-    radarMaxProximityBest = {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg};
+    radarMaxProximityBest = {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg,lastKnownPos:stormClosestLastKnownPos};
   }
-  const bannerData=radarMaxProximityBest||{km:Infinity,min:null,pos:null,speedKmh:null,headingDeg:null};
+  const bannerData=radarMaxProximityBest||{km:Infinity,min:null,pos:null,speedKmh:null,headingDeg:null,lastKnownPos:null};
   let stormLevel='none';
   if(bannerData.km<=PROX_WARNING_KM && bannerData.min<=60) stormLevel='severe';
   else if(bannerData.km<=PROX_WARNING_KM) stormLevel='warning';
@@ -4517,17 +4554,22 @@ let stormBearing=null;
   } else if(refLL && bannerData.pos){
     stormBearing=bearingTo(refLL.lat,refLL.lng,bannerData.pos[0],bannerData.pos[1]);
   }
-const _isRelative = drivingMode && _devLastGpsHeading!=null && _devLastGpsSpeedKmh>0;
+// isRelative now only requires driving mode + a live GPS fix — no longer requires
+  // speed>0, so the box still shows "you: 0 km/h" while stopped rather than omitting
+  // your motion info entirely.
+  const _isRelative = drivingMode && refLL!=null;
   // Storm's own direction of travel (where it's headed TO, not where it's coming
   // from) — derived from the same regression-fit track used for the projection line,
   // via bearingTo() over the track's own start/end points.
   updateStormProximityBanner({
     level:stormLevel, km:bannerData.km, min:bannerData.min, bearing:stormBearing,
     speedKmh:bannerData.speedKmh, stormHeadingDeg:bannerData.headingDeg,
-    userSpeedKmh:_isRelative?_devLastGpsSpeedKmh:null,
+    userSpeedKmh:_isRelative?(_devLastGpsSpeedKmh||0):null,
     userHeadingDeg:_isRelative?_devLastGpsHeading:null,
     isRelative:_isRelative,
-    pos:bannerData.pos
+    pos:bannerData.pos,
+    lastKnownPos:bannerData.lastKnownPos,
+    userPos:refLL
   });
 
   // Same merge logic for airport hits — union with the running list, per-airport,
@@ -5674,7 +5716,7 @@ document.getElementById('gps-btn').classList.remove('searching');
   const bearStr=bear!=null?' '+Math.round(bear)+'°':'';
 
 document.getElementById('gpsStatus').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4)+' '+accStr+spdStr+bearStr;
-  _gpsLastLL={lat,lon};
+_gpsLastLL={lat,lon};
   _devLastGpsHeading=bear;
   _devLastGpsSpeedKmh=(speed!=null&&!isNaN(speed))?speed*3.6:0;
   devTryRecord();
