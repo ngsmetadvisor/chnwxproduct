@@ -6071,10 +6071,21 @@ document.getElementById('gps-btn').addEventListener('contextmenu',function(e){
 // iOS (including Chrome-on-iOS, which is WebKit under the hood) does not reliably fire
 // 'contextmenu' from a touch-and-hold — that's a desktop right-click event. Detect the
 // long-press manually via touch timers instead, mirroring the map's own long-press handler.
-let _gpsBtnTouchTimer=null, _gpsBtnLongPressFired=false;
+// Shared by every button's manual long-press detector — tracks how far the touch has
+// moved from where it started, so ordinary finger tremor during a long press (which
+// fires real touchmove events even without any intended movement) doesn't cancel the
+// long-press before it has a chance to fire. Only a real drag past this threshold does.
+const LONGPRESS_MOVE_THRESHOLD_PX=12;
+function _touchMovedPastThreshold(e, startPt){
+  if(!startPt || !e.touches || !e.touches[0]) return false;
+  const dx=e.touches[0].clientX-startPt.x, dy=e.touches[0].clientY-startPt.y;
+  return Math.hypot(dx,dy) > LONGPRESS_MOVE_THRESHOLD_PX;
+}
+let _gpsBtnTouchTimer=null, _gpsBtnLongPressFired=false, _gpsBtnTouchStart=null;
 const _gpsBtnEl=document.getElementById('gps-btn');
 _gpsBtnEl.addEventListener('touchstart',function(e){
   _gpsBtnLongPressFired=false;
+  _gpsBtnTouchStart=e.touches[0]?{x:e.touches[0].clientX,y:e.touches[0].clientY}:null;
   _gpsBtnTouchTimer=setTimeout(()=>{
     _gpsBtnLongPressFired=true;
     _gpsBtnEnterMockPickMode();
@@ -6090,7 +6101,7 @@ _gpsBtnEl.addEventListener('touchend',function(e){
   }
 },{passive:false});
 _gpsBtnEl.addEventListener('touchmove',function(e){
-  if(_gpsBtnTouchTimer){ clearTimeout(_gpsBtnTouchTimer); _gpsBtnTouchTimer=null; }
+  if(_gpsBtnTouchTimer && _touchMovedPastThreshold(e,_gpsBtnTouchStart)){ clearTimeout(_gpsBtnTouchTimer); _gpsBtnTouchTimer=null; }
 },{passive:true});
 _gpsBtnEl.addEventListener('touchcancel',function(e){
   if(_gpsBtnTouchTimer){ clearTimeout(_gpsBtnTouchTimer); _gpsBtnTouchTimer=null; }
@@ -6826,9 +6837,10 @@ document.getElementById('apst-toggle-row').addEventListener('click', ()=>{
     e.preventDefault();
     if(popup) closePopup(); else openPopup();
   });
-  let touchTimer=null;
-  btn.addEventListener('touchstart', function(){
+let touchTimer=null, airportBtnTouchStart=null;
+  btn.addEventListener('touchstart', function(e){
     _airportBtnLongPressFired=false;
+    airportBtnTouchStart=e.touches[0]?{x:e.touches[0].clientX,y:e.touches[0].clientY}:null;
     touchTimer=setTimeout(()=>{
       _airportBtnLongPressFired=true;
       if(popup) closePopup(); else openPopup();
@@ -6839,7 +6851,7 @@ document.getElementById('apst-toggle-row').addEventListener('click', ()=>{
     if(touchTimer){ clearTimeout(touchTimer); touchTimer=null; }
     if(_airportBtnLongPressFired) e.preventDefault();
   },{passive:false});
-  btn.addEventListener('touchmove', function(){ if(touchTimer){ clearTimeout(touchTimer); touchTimer=null; } },{passive:true});
+  btn.addEventListener('touchmove', function(e){ if(touchTimer && _touchMovedPastThreshold(e,airportBtnTouchStart)){ clearTimeout(touchTimer); touchTimer=null; } },{passive:true});
   btn.addEventListener('touchcancel', function(){ if(touchTimer){ clearTimeout(touchTimer); touchTimer=null; } },{passive:true});
   document.addEventListener('click', function(e){
     if(popup && !popup.contains(e.target) && e.target!==btn) closePopup();
