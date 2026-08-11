@@ -3361,6 +3361,7 @@ let radarMaxLastClosestMin=null;  // minutes (0=now) at which that closest appro
 // by storm #1's own pass — only reset on a genuine fresh (non-additive) start.
 let radarMaxAirportHits=[];
 let radarMaxProximityBest=null;
+let radarMaxClosestApproachMarker=null;
 function stormStatusSuffix(){
   // Storm speed/closest-approach text removed from the status bar — too long on
   // mobile. radarMaxLastSpeedKmh/radarMaxLastClosestKm are still tracked and used
@@ -4006,8 +4007,33 @@ const EDGE_MARGIN_PX=RADAR_MAX_EDGE_MARGIN_PX;
 // (caution) and PROX_WARNING_KM (warning) thresholds, no separate radius setting.
 // A third "severe" tier fires when a track's projected position is inside the warning
 // radius within the next hour (hour index 0 = now, 1 = +1h projection).
+// Marks the storm's own projected position at the moment of closest approach (not the
+// user's position) with a pulsing target-style marker, colored to match the current
+// banner severity tier. Cleared whenever there's no active storm threat.
+function updateClosestApproachMarker(status){
+  if(radarMaxClosestApproachMarker){ map.removeLayer(radarMaxClosestApproachMarker); radarMaxClosestApproachMarker=null; }
+  if(!status || status.level==='none' || !status.pos) return;
+  const colorMap={caution:'#a16207',warning:'#cc2200',severe:'#ff0000'};
+  const color=colorMap[status.level]||'#cc2200';
+  const hourLabel=formatMinutesLabel(status.min);
+  radarMaxClosestApproachMarker=L.marker(status.pos,{
+    pane:'radarMax',interactive:false,
+    icon:L.divIcon({
+      className:'',
+      html:'<div style="display:flex;flex-direction:column;align-items:center;">'+
+        '<div style="width:18px;height:18px;border-radius:50%;border:3px solid '+color+';background:rgba(255,255,255,0.15);box-shadow:0 0 8px '+color+';position:relative;">'+
+          '<div style="position:absolute;top:50%;left:50%;width:4px;height:4px;border-radius:50%;background:'+color+';transform:translate(-50%,-50%);"></div>'+
+        '</div>'+
+        '<div style="margin-top:2px;font-size:10px;font-weight:800;font-family:monospace;color:'+color+';text-shadow:0 0 3px #000,0 0 3px #000,0 0 3px #000;white-space:nowrap;background:rgba(0,0,0,0.35);border-radius:4px;padding:1px 5px;">⊕ '+hourLabel+'</div>'+
+      '</div>',
+      iconSize:[100,44], iconAnchor:[50,9]
+    })
+  }).addTo(map);
+}
+
 function updateStormProximityBanner(status){
   let el=document.getElementById('storm-proximity-warning');
+  updateClosestApproachMarker(status);
   if(!status || status.level==='none'){
     if(el) el.remove();
     return;
@@ -4200,6 +4226,7 @@ radarMaxCurrentMarkers.forEach(m=>map.removeLayer(m));
   radarMaxCurrentMarkers=[];
   radarMaxAirportHits=[];
   radarMaxProximityBest=null;
+  if(radarMaxClosestApproachMarker){ map.removeLayer(radarMaxClosestApproachMarker); radarMaxClosestApproachMarker=null; }
   updateStormProximityBanner({level:'none'});
   updateAirportStormPanel([]);
 }
@@ -4490,7 +4517,7 @@ let stormBearing=null;
   } else if(refLL && bannerData.pos){
     stormBearing=bearingTo(refLL.lat,refLL.lng,bannerData.pos[0],bannerData.pos[1]);
   }
-  const _isRelative = drivingMode && _devLastGpsHeading!=null && _devLastGpsSpeedKmh>0;
+const _isRelative = drivingMode && _devLastGpsHeading!=null && _devLastGpsSpeedKmh>0;
   // Storm's own direction of travel (where it's headed TO, not where it's coming
   // from) — derived from the same regression-fit track used for the projection line,
   // via bearingTo() over the track's own start/end points.
@@ -4499,7 +4526,8 @@ let stormBearing=null;
     speedKmh:bannerData.speedKmh, stormHeadingDeg:bannerData.headingDeg,
     userSpeedKmh:_isRelative?_devLastGpsSpeedKmh:null,
     userHeadingDeg:_isRelative?_devLastGpsHeading:null,
-    isRelative:_isRelative
+    isRelative:_isRelative,
+    pos:bannerData.pos
   });
 
   // Same merge logic for airport hits — union with the running list, per-airport,
