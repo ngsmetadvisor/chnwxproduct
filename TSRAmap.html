@@ -87,12 +87,17 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
 /* ── Radar panel ── */
 #radar-panel {
-  position: absolute; top: 70px; right: 10px; z-index: 1000;
+  position: absolute; top: 70px; right: 10px; z-index: 1500;
   display: flex; flex-direction: column; gap: 6px;
   background: rgba(8,8,18,0.9); border: 0.5px solid rgba(100,180,255,0.25);
   border-radius: 14px; padding: 8px 12px; width: 430px; max-width: calc(100vw - 20px);
   backdrop-filter: blur(6px);
 }
+/* z-index raised above ab-panel/ab-alerts-panel/station-finder/mobile-combo-bar
+   (all z-index:1000) — #radar-panel establishes its own stacking context, so its
+   expanded #radar-controls child (z-index:2000 on mobile) was confined inside that
+   context and couldn't actually out-paint sibling panels tied at the same z-index;
+   only raising the parent's own z-index fixes the paint order. */
 @media (max-width: 600px) {
   #radar-panel { padding: 5px 10px; gap: 4px; left: 10px; right: 10px; width: auto; max-width: none; }
   #radar-top-row { gap: 4px; }
@@ -117,12 +122,10 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 #radar-controls { display: none; flex-direction: column; gap: 6px; }
 #radar-controls.visible { display: flex; }
 @media (max-width: 600px) {
-  #radar-controls.visible {
-    position: absolute; z-index: 2000; width: calc(100vw - 20px); max-width: none;
-    background: rgba(8,8,18,0.97); border: 0.5px solid rgba(100,180,255,0.3);
-    border-radius: 14px; padding: 10px; backdrop-filter: blur(8px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.7);
-  }
+  /* #radar-controls no longer floats as its own popup with a separate background/
+     border/z-index — it now simply expands as an in-flow second line inside
+     #radar-panel's own box (same background/border), so the panel's real height
+     grows when it opens instead of overlaying whatever sits below it. */
   #radar-panel-row { flex-wrap: wrap; }
   #radar-top-row {
     flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
@@ -613,7 +616,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   <!-- Alberta panel -->
   <div id="ab-panel" class="collapsed">
 <div class="title">Alberta Strikes
-      <span id="ab-zones-hide-btn" style="cursor:pointer;font-size:9px;font-weight:700;background:rgba(255,140,0,0.1);border:0.5px solid rgba(255,140,0,0.4);color:#ff8c00;border-radius:8px;padding:1px 6px;margin-left:auto;white-space:nowrap;">Hide zones</span>
+      <span id="ab-zones-hide-btn" style="cursor:pointer;font-size:9px;font-weight:700;background:rgba(255,140,0,0.1);border:0.5px solid rgba(255,140,0,0.4);color:#ff8c00;border-radius:8px;padding:1px 6px;margin-left:auto;white-space:nowrap;">Show zones</span>
       <span id="ab-collapse-btn" style="cursor:pointer;font-size:12px;color:#ff8c00;margin-left:6px;">▼</span>
     </div>
     <div id="ab-total-row">
@@ -1050,10 +1053,53 @@ function updateABCount(){
 }
 
 
+// Same "recent strike" window (10s) as checkLightningProximity — flags an airport as
+// under a lightning warning/caution using the same PROX_WARNING_KM/PROX_RADIUS_KM
+// tiers already used for the GPS-location lightning banner, just centered on each
+// airport instead of the user's own position.
+function checkAirportLightningProximity(){
+  const now=t||Date.now()/1000;
+  AIRPORTS.forEach(ap=>{
+    let tickClosest=Infinity, newStrikes=0;
+    strokes.forEach(m=>{
+      if((now-m._strokeTime)>10) return;
+      const d=haversineKm(ap.lat,ap.lon,m._lat,m._lon);
+      if(d>PROX_WARNING_KM) return;
+      if(d<tickClosest) tickClosest=d;
+      // Unique per airport+strike so the same strike isn't recounted on every 2s tick
+      // while it's still inside the 10s "recent" window.
+      const key=ap.name+'|'+m._lat.toFixed(4)+','+m._lon.toFixed(4)+','+m._strokeTime;
+      if(!airportLightningCountedKeys.has(key)){
+        airportLightningCountedKeys.add(key);
+        newStrikes++;
+      }
+    });
+    if(newStrikes>0){
+      // Never overwritten to nothing — entry persists in the box for the rest of the
+      // session, count keeps accumulating, lastCaptureTime resets the white flash.
+      const existing=airportLightningAlerts[ap.name];
+      airportLightningAlerts[ap.name]={
+        tier:'warning',
+        count:(existing?existing.count:0)+newStrikes,
+        closestKm:tickClosest,
+        lastCaptureTime:now
+      };
+    } else if(isFinite(tickClosest) && airportLightningAlerts[ap.name]){
+      // Still within range but no new (unique) strikes this tick — just refresh the
+      // displayed closest distance, don't touch count or lastCaptureTime.
+      airportLightningAlerts[ap.name].closestKm=tickClosest;
+    }
+  });
+  // Prevent unbounded growth over a long session.
+  if(airportLightningCountedKeys.size>5000) airportLightningCountedKeys.clear();
+  updateAirportStormPanel(radarMaxAirportHits);
+}
+
 setInterval(()=>{
   try{updateColors();}catch(e){console.warn('[updateColors]',e);}
   try{rebuildZoneCounts();}catch(e){console.warn('[rebuildZoneCounts]',e);}
   try{checkLightningProximity();}catch(e){console.warn('[checkLightningProximity]',e);}
+  try{checkAirportLightningProximity();}catch(e){console.warn('[checkAirportLightningProximity]',e);}
   try{repositionStormBanner();}catch(e){console.warn('[repositionStormBanner]',e);}
 },2000);
 
@@ -1068,7 +1114,7 @@ map.on('zoomend', function(){
 });
 // ── Lightning Proximity Warning ───────────────────────────────
 const PROX_RADIUS_KM     = 100  // total watch radius distance in km. 100km in default
-const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
+const PROX_WARNING_PCT   = 1.25;    // fraction of radius that triggers WARNING (vs CAUTION)
 const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
 const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
 
@@ -1435,7 +1481,7 @@ function pip(lat,lon,ll){
 }
 
 // ── Fire Weather Zones ────────────────────────────────────────
-let zoneLayer=null, zonesVisible=true, zoneColorsVisible=true;
+let zoneLayer=null, zonesVisible=true, zoneColorsVisible=false; // zone strike-intensity fill hidden by default
 const zonePolygons=[];
 // Zones (KML) and stations (CSV) load via two independent fetches that can resolve in
 // either order. refreshAbAlertsPanel() needs BOTH to be loaded before it can correctly
@@ -1760,6 +1806,18 @@ let tornadoHailCircleLayer=null, mockTornadoHailCircle=null, gpsTornadoHailCircl
 // can show a Tornado/Large Hail Warning or Watch even for airports with no station
 // or zone match at all.
 let airportTornadoHailAlerts={};
+// airportName -> {tier:'warning'|'caution', count, closestKm, lastCaptureTime} — entries
+// persist for the whole session once an airport gets its first strike (never cleared),
+// count accumulates every uniquely-counted strike, and lastCaptureTime (in strike-time
+// seconds, matching t/_strokeTime) drives the 5-second "just captured" white flash in
+// updateAirportStormPanel(). Rebuilt/updated every 2s (same cadence as
+// checkLightningProximity) from live strike data, using the same PROX_WARNING_KM/
+// PROX_RADIUS_KM tiers as the lightning proximity banner.
+let airportLightningAlerts={};
+// Strike keys already counted toward an airport's lightning count — prevents the same
+// strike (visible for ~10s in checkAirportLightningProximity's window) from being
+// counted multiple times across the 2s-interval ticks it remains "recent" for.
+let airportLightningCountedKeys=new Set();
 let tornadoHailPolygonLayer=null, tornadoHailPolygonGeoms={}; // groupKey ('tornado'/'hail') -> array of {geometry, priority, props}
 let alertPolygonLayer=null;
 let otherAlertCircleLayer=null, otherAlertCircleGroups={}; // yellow circles for non-tornado/hail alerts, shown only while their row is expanded
@@ -3927,7 +3985,7 @@ function updateAirportStormPanel(hits){
   let el=document.getElementById('airport-storm-panel');
   const byAirport={};
   (hits||[]).forEach(h=>{ if(!byAirport[h.airport]||h.distKm<byAirport[h.airport].distKm) byAirport[h.airport]=h; });
-  const allNames=new Set([...Object.keys(byAirport), ...Object.keys(airportTornadoHailAlerts)]);
+  const allNames=new Set([...Object.keys(byAirport), ...Object.keys(airportTornadoHailAlerts), ...Object.keys(airportLightningAlerts)]);
   if(!airportStormPanelEnabled||!allNames.size){
     if(el) el.remove();
     return;
@@ -3935,16 +3993,23 @@ function updateAirportStormPanel(hits){
   if(!el){
     el=document.createElement('div');
     el.id='airport-storm-panel';
-    el.style.cssText='position:fixed;bottom:46px;right:10px;z-index:9050;max-width:260px;background:rgba(8,8,18,0.92);border:2px solid #ff8c00;border-radius:10px;padding:8px 12px;font-family:\'Courier New\',monospace;box-shadow:0 4px 16px rgba(0,0,0,0.6);';
+// pointer-events:none — this panel is display-only (no clickable content), and now
+    // that lightning-warning entries persist for the whole session it stays visible
+    // continuously, which was otherwise permanently blocking map clicks (including
+    // station markers) underneath its bottom-right footprint.
+    el.style.cssText='position:fixed;bottom:46px;right:10px;z-index:9050;max-width:260px;background:rgba(8,8,18,0.92);border:2px solid #ff8c00;border-radius:10px;padding:8px 12px;font-family:\'Courier New\',monospace;box-shadow:0 4px 16px rgba(0,0,0,0.6);pointer-events:none;';
     document.body.appendChild(el);
   }
-  // Sort: Tornado/Large Hail Warning airports first, then Watch, then plain
-  // storm-track-proximity-only airports (closest distance first within each group).
-  const rank=name=>{
-    const al=airportTornadoHailAlerts[name];
-    if(al&&al.tier==='warning') return 0;
-    if(al&&al.tier==='watch') return 1;
-    return 2;
+  // Sort: Tornado/Large Hail Warning first, then Lightning Warning, then any Watch/
+  // Caution tier, then plain storm-track-proximity-only airports (closest distance
+  // first within each group).
+const rank=name=>{
+    const th=airportTornadoHailAlerts[name];
+    const lt=airportLightningAlerts[name];
+    if(th&&th.tier==='warning') return 0;
+    if(lt&&lt.tier==='warning') return 1;
+    if(th&&th.tier==='watch') return 2;
+    return 3;
   };
   const rows=[...allNames].sort((a,b)=>{
     const ra=rank(a), rb=rank(b);
@@ -3953,20 +4018,31 @@ function updateAirportStormPanel(hits){
     const db=byAirport[b]?byAirport[b].distKm:Infinity;
     return da-db;
   });
+const _apPanelNow=t||Date.now()/1000;
   const rowsHtml=rows.map(name=>{
     const h=byAirport[name];
-    const al=airportTornadoHailAlerts[name];
-    let badgeHtml='';
-    if(al){
-      const label=(al.type==='tornado'?'Tornado':'Large Hail')+' '+(al.tier==='warning'?'Warning':'Watch');
-      badgeHtml = al.tier==='warning'
+    const th=airportTornadoHailAlerts[name];
+    const lt=airportLightningAlerts[name];
+    let badgesHtml='';
+    if(th){
+      const label=(th.type==='tornado'?'Tornado':'Large Hail')+' '+(th.tier==='warning'?'Warning':'Watch');
+      badgesHtml += th.tier==='warning'
         ? '<div style="margin-top:3px;display:inline-block;background:#fff;color:#cc00cc;font-weight:800;font-size:11px;border-radius:4px;padding:2px 6px;">'+label+'</div>'
         : '<div style="margin-top:3px;color:#ff5555;font-weight:800;font-size:11px;">'+label+'</div>';
     }
+    if(lt){
+      badgesHtml += '<div style="margin-top:3px;color:#ff4444;font-weight:800;font-size:11px;">⚡ Lightning Warning ×'+lt.count+'</div>';
+    }
     const distHtml = h ? ('<div style="font-size:11px;color:#ffaa66;">'+h.distKm.toFixed(0)+' km · '+formatMinutesLabel(h.min)+'</div>') : '';
-    return '<div style="margin-top:4px;padding-top:4px;border-top:0.5px solid rgba(255,140,0,0.2);">'+
+    // White flash for 5s after a new strike is captured for this airport — opacity
+    // fades out over the 5s window based on elapsed time since lastCaptureTime.
+    const flashElapsed = lt && lt.lastCaptureTime!=null ? (_apPanelNow-lt.lastCaptureTime) : Infinity;
+    const isFlashing = flashElapsed<=5;
+    const flashOpacity = isFlashing ? Math.max(0,1-flashElapsed/5) : 0;
+    const rowBg = isFlashing ? 'background:rgba(255,255,255,'+flashOpacity.toFixed(2)+');border-radius:6px;padding:4px;' : '';
+    return '<div style="margin-top:4px;padding-top:4px;border-top:0.5px solid rgba(255,140,0,0.2);'+rowBg+'">'+
       '<div style="font-size:12px;font-weight:700;color:#ff8c00;">✈ '+name+'</div>'+
-      distHtml+badgeHtml+
+      distHtml+badgesHtml+
       '</div>';
   }).join('');
   el.innerHTML='<div style="font-size:12px;font-weight:800;color:#ff8c00;letter-spacing:0.05em;">⛈ AIRPORTS IN STORM PATH</div>'+rowsHtml;
@@ -4554,12 +4630,10 @@ function startAnim(){
 function stopAnim(){ if(animTimer){clearInterval(animTimer);animTimer=null;} }
 
 function positionRadarControlsPopup(){
-  const btn=document.getElementById('radar-options-btn');
-  const panel=document.getElementById('radar-controls');
-  if(!btn||!panel||window.innerWidth>600) return; // popup mode is mobile-only
-  const r=btn.getBoundingClientRect();
-  panel.style.top=(r.bottom+6)+'px';
-  panel.style.left='8px';
+  // No-op now: #radar-controls is an in-flow second line of #radar-panel on mobile
+  // (same box, no absolute positioning needed) rather than a floating popup. Kept as
+  // a stub since it's still called from the resize listener and the options-btn click
+  // handler below.
 }
 window.addEventListener('resize', positionRadarControlsPopup);
 
