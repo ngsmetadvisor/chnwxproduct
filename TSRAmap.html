@@ -3,7 +3,7 @@
 <head> 
 <meta charset="UTF-8">
   
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,7 +20,7 @@
   -webkit-touch-callout: none;
 }
 html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; font-family: 'Courier New', monospace; }
-#wrap { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+#wrap { position: relative; width: 100vw; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
 #map { flex: 1; width: 100%; touch-action: pan-x pan-y; }
 .leaflet-container.leaflet-grab{cursor:crosshair;}
 .leaflet-container.leaflet-grab.leaflet-dragging{cursor:grabbing;}
@@ -165,8 +165,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
   padding-bottom: calc(5px + env(safe-area-inset-bottom, 0px));
 }
 @media (max-width: 600px) {
-  #status { gap: 6px 10px; }
-  .legend { margin-left: 0; width: 100%; flex-wrap: wrap; gap: 6px 10px; }
+  #status { justify-content: center; }
+  #status > span:not(#status-station-finder) { display: none !important; }
+  .legend { display: none !important; }
 }
 #counter { font-size: 14px; font-weight: 600; color: #ffdd00; letter-spacing: 0.04em; }
 #ab-count { font-size: 13px; font-weight: 600; color: #ff8c00; }
@@ -683,8 +684,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 
 
 <!-- Status bar -->
-  <div id="status">
-    <span>World: <span id="counter">0</span></span>
+<div id="status">
+    <span id="worldCounterWrap">World: <span id="counter">0</span></span>
     <span>AB: <span id="ab-count">0</span></span>
     <span id="connStatus">Connecting…</span>
     <span id="delay"></span>
@@ -1139,7 +1140,7 @@ function checkAirportLightningProximity(){
     strokes.forEach(m=>{
       if((now-m._strokeTime)>10) return;
       const d=haversineKm(ap.lat,ap.lon,m._lat,m._lon);
-      if(d>PROX_WARNING_KM) return;
+      if(d>AIRPORT_WARNING_KM) return;
       if(d<tickClosest) tickClosest=d;
       // Unique per airport+strike so the same strike isn't recounted on every 2s tick
       // while it's still inside the 10s "recent" window.
@@ -1194,7 +1195,9 @@ const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do
 const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
 
 const PROX_FADE_DELAY_MS = 10000;  // ms after last strike before warning clears — must match setTimeout below
-const AIRPORT_WARNING_KM = 50;     // fixed warning radius for airport storm-path circles/proximity checks — independent of the lightning proximity radius (PROX_WARNING_KM)
+const NORMAL_AIRPORT_WARNING_KM = 50; // fixed warning radius for airport storm-path circles/proximity checks — independent of the lightning proximity radius (PROX_WARNING_KM)
+const DEMO_AIRPORT_WARNING_KM = 250;  // extended radius used while a mock GPS location is active (demo mode)
+let AIRPORT_WARNING_KM = NORMAL_AIRPORT_WARNING_KM;
 
 function startProxCountdownFill(){
   const fill=document.getElementById('prox-countdown-fill');
@@ -1356,8 +1359,8 @@ function bearingTo(lat1,lon1,lat2,lon2){
 function formatMinutesLabel(mins){
   if(mins<=0) return 'now';
   const h=Math.floor(mins/60), m=Math.round(mins%60);
-  if(h<=0) return '~'+m+'m';
-  return '~'+h+'h '+m+'m';
+  if(h<=0) return '~'+m+' min';
+  return '~'+h+'h '+m+' min';
 }
 
 function checkLightningProximity(){
@@ -1970,6 +1973,28 @@ function geometryToPolygonsArray(geometry){
   return [];
 }
 
+// Distance in km from a point to a GeoJSON Polygon/MultiPolygon geometry — 0 if the
+// point is inside (or on) the geometry, otherwise the minimum haversine distance from
+// the point to any vertex across all rings. Vertex-distance is an approximation of true
+// point-to-edge distance (same approximation style already used elsewhere in this file,
+// e.g. geometryHasVertexInZone) — close enough for a ~50km airport-proximity check
+// without needing full point-to-segment geometry.
+function minDistanceToGeometryKm(lat,lon,geometry){
+  if(!geometry) return Infinity;
+  if(pointInGeoJSON(lat,lon,geometry)) return 0;
+  const polys=geometryToPolygonsArray(geometry);
+  let best=Infinity;
+  for(const rings of polys){
+    for(const ring of rings){
+      for(const c of ring){
+        const d=haversineKm(lat,lon,c[1],c[0]);
+        if(d<best) best=d;
+      }
+    }
+  }
+  return best;
+}
+
 // Cheap min/max lat/lon bounding box for a GeoJSON Polygon/MultiPolygon geometry.
 function geometryBBox(geometry){
   if(!geometry) return null;
@@ -2539,10 +2564,10 @@ const gKey=cls.priority<=2?'tornado':cls.priority<=4?'hail':cls.priority===9?'wi
         const apType=cls.priority<=2?'tornado':'hail';
         const apTier=(cls.priority===1||cls.priority===3)?'warning':'watch';
         AIRPORTS.forEach(ap=>{
-          if(!pointInGeoJSON(ap.lat,ap.lon,f.geometry)) return;
+          if(minDistanceToGeometryKm(ap.lat,ap.lon,f.geometry)>AIRPORT_WARNING_KM) return;
           const existing=airportTornadoHailAlerts[ap.name];
           if(!existing || (apTier==='warning' && existing.tier==='watch')){
-            airportTornadoHailAlerts[ap.name]={type:apType,tier:apTier};
+            airportTornadoHailAlerts[ap.name]={type:apType,tier:apTier,hailMM:cls.hailMM};
           }
         });
       }
@@ -2608,6 +2633,32 @@ rows.sort((a,b)=>{
 window._lastAbAlertsRows=rows;
   updateTornadoHailCircles(rows);
   updateTornadoHailPolygons();
+// Title bar itself (not just the warn/watch counts) reflects an active Tornado/Large
+  // Hail Warning or Watch — white background with purple (warning) or red (watch) text —
+  // and this applies whether the panel body is expanded or collapsed, since it's set on
+  // the header row directly rather than on anything inside the collapsible list.
+  const hailTornadoWarnActive = rows.some(r=>r.priority===1||r.priority===3);
+  const hailTornadoWatchActive = !hailTornadoWarnActive && rows.some(r=>r.priority===2||r.priority===4);
+  if(titleEl){
+    const titleTextSpan=titleEl.querySelector('span:first-child');
+    const collapseBtnSpan=document.getElementById('ab-alerts-collapse-btn');
+if(hailTornadoWarnActive || hailTornadoWatchActive){
+      const col=hailTornadoWarnActive?'#cc00cc':'#cc2200';
+      titleEl.style.background=col;
+      titleEl.style.borderRadius='6px';
+      titleEl.style.padding='4px 8px';
+      titleEl.style.borderBottom='none';
+      if(titleTextSpan) titleTextSpan.style.color='#fff';
+      if(collapseBtnSpan) collapseBtnSpan.style.color='#fff';
+    } else {
+      titleEl.style.background='';
+      titleEl.style.borderRadius='';
+      titleEl.style.padding='';
+      titleEl.style.borderBottom='0.5px solid rgba(255,80,80,0.25)';
+      if(titleTextSpan) titleTextSpan.style.color='#ff5555';
+      if(collapseBtnSpan) collapseBtnSpan.style.color='#ff5555';
+    }
+  }
   // Tornado/Large Hail Warning or Watch specifically (priority 1-4) — drives the
   // driving-mode full-screen white flash, independent of every other alert type.
   _lastTornadoHailActive = rows.some(r=>r.priority<=4);
@@ -2776,10 +2827,14 @@ listEl.innerHTML=html;
   }
 _abAlertsPriorityActive=priorityActive;
   if(priorityActive){
-    // Driving mode: never force the AB Warnings/Watches panel open or expand its row
-    // details — the driving-mode white flash (see _lastTornadoHailActive above) is
-    // the intended attention-getter instead. Vibrate/notify below still fire either way.
-    if(!drivingMode){
+    // Driving mode: force the AB Warnings/Watches panel (and its row list) collapsed —
+    // the driving-mode white flash (see _lastTornadoHailActive above) is the intended
+    // attention-getter instead, not an expanded panel taking up screen space while
+    // driving. Vibrate/notify below still fire either way.
+    if(drivingMode){
+      listEl.style.display='none';
+      if(collapseBtn) collapseBtn.textContent='▼';
+    } else {
       listEl.style.display='block';
       if(collapseBtn) collapseBtn.textContent='▲';
 if(_abAlertsDismissedKey!==window._abAlertsCurrentKey){
@@ -3995,16 +4050,18 @@ function updateStormProximityBanner(status){
     if(el) el.remove();
     return;
   }
-  if(!document.getElementById('storm-pulse-style')){
+if(!document.getElementById('storm-pulse-style')){
     const st=document.createElement('style');
     st.id='storm-pulse-style';
-    st.textContent='@keyframes stormPulse{0%,100%{opacity:1}50%{opacity:0.45}}';
+    // Border-color pulse only (not a whole-box opacity flash) — the severe tier gets
+    // borderPulse applied directly to its own border below instead of via c.anim.
+    st.textContent='@keyframes borderPulse{0%,100%{border-color:'+"#ff0000"+'}50%{border-color:#ffaaaa}}';
     document.head.appendChild(st);
   }
-  const cfg={
+const cfg={
     caution:{color:'#a16207',label:'⛈ STORM APPROACHING',anim:'none'},
     warning:{color:'#cc2200',label:'⛈ STORM WARNING',anim:'none'},
-    severe:{color:'#ff0000',label:'⛈ SEVERE STORM WARNING',anim:'stormPulse 0.6s ease-in-out infinite'}
+    severe:{color:'#ff0000',label:'⛈ SEVERE STORM WARNING',anim:'none'}
   };
   const c=cfg[status.level];
 if(!el){
@@ -4028,17 +4085,22 @@ const hourLabel=formatMinutesLabel(status.min);
     ? ' @ '+status.userSpeedKmh.toFixed(0)+' km/h'
     : '';
   const userHeadingStr=status.isRelative
-    ? (' you: '+((status.userHeadingDeg!=null&&isFinite(status.userHeadingDeg))
+    ? (' Dir: '+((status.userHeadingDeg!=null&&isFinite(status.userHeadingDeg))
         ? BEARING_DIR_NAMES[Math.round(status.userHeadingDeg/22.5)%16]+' ('+Math.round(status.userHeadingDeg)+'°)'
         : '—'))
     : '';
   const relativeNote=(status.isRelative)?' (relative)':'';
-el.innerHTML=
-    '<div style="border-radius:10px;padding:9px 20px;text-align:center;font-family:\'Courier New\',monospace;border:2px solid '+c.color+';background:#e8e8e8;animation:'+c.anim+';box-sizing:border-box;">'+
+const hailBadgeHtml = status.hailCapable
+    ? '<div style="margin-top:5px;display:inline-block;background:#fff;color:#a020c0;font-weight:800;font-size:10px;border-radius:4px;padding:2px 8px;">🧊 Hail possible</div>'
+    : '';
+  el.innerHTML=
+    '<div style="border-radius:10px;padding:9px 20px;text-align:center;font-family:\'Courier New\',monospace;border:2px solid '+c.color+';background:#e8e8e8;box-sizing:border-box;'+(status.level==='severe'?'animation:borderPulse 0.6s ease-in-out infinite;':'')+'">'+
     '<div style="font-size:14px;font-weight:800;letter-spacing:0.07em;color:'+c.color+';">'+c.label+'</div>'+
-    '<div style="font-size:11px;font-weight:700;margin-top:3px;color:'+c.color+';">Closest approach'+relativeNote+': '+status.km.toFixed(0)+' km, '+hourLabel+dirStr+'</div>'+
+    '<div style="font-size:11px;font-weight:700;margin-top:3px;color:'+c.color+';">Closest approach'+relativeNote+':</div>'+
+    '<div style="font-size:11px;font-weight:700;margin-top:1px;color:'+c.color+';">'+status.km.toFixed(0)+' km, '+hourLabel+dirStr+'</div>'+
     (stormHeadingStr?'<div style="font-size:10px;font-weight:600;margin-top:2px;color:'+c.color+';">Storm:'+stormHeadingStr+speedStr+'</div>':'')+
     (userHeadingStr?'<div style="font-size:10px;font-weight:600;margin-top:1px;color:'+c.color+';">You:'+userHeadingStr+userSpeedStr+'</div>':'')+
+    hailBadgeHtml+
     '</div>';
   updateStormLastKnownLine(status);
   repositionStormBanner();
@@ -4084,7 +4146,7 @@ function updateAirportStormPanel(hits){
     // that lightning-warning entries persist for the whole session it stays visible
     // continuously, which was otherwise permanently blocking map clicks (including
     // station markers) underneath its bottom-right footprint.
-    el.style.cssText='position:fixed;bottom:46px;right:10px;z-index:9050;max-width:260px;background:rgba(8,8,18,0.92);border:2px solid #ff8c00;border-radius:10px;padding:8px 12px;font-family:\'Courier New\',monospace;box-shadow:0 4px 16px rgba(0,0,0,0.6);pointer-events:none;';
+el.style.cssText='position:fixed;bottom:46px;right:10px;z-index:9050;max-width:290px;background:rgba(8,8,18,0.92);border:2px solid #ff8c00;border-radius:10px;padding:8px 12px;font-family:\'Courier New\',monospace;box-shadow:0 4px 16px rgba(0,0,0,0.6);pointer-events:none;';
     document.body.appendChild(el);
   }
   // Sort: Tornado/Large Hail Warning first, then Lightning Warning, then any Watch/
@@ -4112,17 +4174,23 @@ const _apPanelNow=t||Date.now()/1000;
     const lt=airportLightningAlerts[name];
     const isHailCapable = h && isHailCapableColor(h.color);
     let badgesHtml='';
-    if(th){
-      const label=(th.type==='tornado'?'Tornado':'Large Hail')+' '+(th.tier==='warning'?'Warning':'Watch');
-      badgesHtml += th.tier==='warning'
-        ? '<div style="margin-top:3px;display:inline-block;background:#fff;color:#cc00cc;font-weight:800;font-size:11px;border-radius:4px;padding:2px 6px;">'+label+'</div>'
-        : '<div style="margin-top:3px;color:#ff5555;font-weight:800;font-size:11px;">'+label+'</div>';
+if(th){
+      const sizeStr=(th.type==='hail'&&th.hailMM!=null)?(' — '+hailSizeLabelForMM(th.hailMM)):'';
+      const label=(th.type==='tornado'?'Tornado':'Large Hail')+' '+(th.tier==='warning'?'Warning':'Watch')+sizeStr;
+badgesHtml += th.tier==='warning'
+        ? '<div style="margin-top:3px;display:inline-block;background:#fff;color:#cc00cc;font-weight:800;font-size:11px;border-radius:4px;padding:2px 6px;white-space:nowrap;">'+label+'</div>'
+        : '<div style="margin-top:3px;color:#ff5555;font-weight:800;font-size:11px;white-space:nowrap;">'+label+'</div>';
     }
     if(lt){
       badgesHtml += '<div style="margin-top:3px;color:#ff4444;font-weight:800;font-size:11px;">⚡ Lightning Warning ×'+lt.count+'</div>';
     }
-    if(isHailCapable){
-      badgesHtml += '<div style="margin-top:3px;display:inline-block;background:#fff;color:#a020c0;font-weight:800;font-size:11px;border-radius:4px;padding:2px 6px;">🧊 Hail possible</div>';
+if(isHailCapable){
+      // Only show a time label for a genuinely future closest approach (min>0) — at
+      // min=0 the closest projected point is right now, but that's not a confirmation
+      // it's actually hailing at this instant, so omit the parenthetical entirely
+      // rather than showing a misleading "(now)".
+      const hailTimeLabel = (h.min!=null && h.min>0) ? formatMinutesLabel(h.min) : null;
+      badgesHtml += '<div style="margin-top:3px;display:inline-block;background:#fff;color:#a020c0;font-weight:800;font-size:11px;border-radius:4px;padding:2px 6px;white-space:nowrap;">🧊 Hail possible on track'+(hailTimeLabel?' ('+hailTimeLabel+')':'')+'</div>';
     }
 // Storm's own bearing relative to the airport (e.g. "from NW") alongside distance/time.
     const dirLabel = (h && h.bearingDeg!=null && isFinite(h.bearingDeg))
@@ -4377,7 +4445,7 @@ const activeTracks=tracks.filter(tr=>
     !isDiminishingTrack(tr)
   );
  const projEPSG=L.CRS.EPSG3857;
-let stormClosestKm=Infinity, stormClosestMin=null, stormClosestPos=null, stormClosestSpeedKmh=null, stormClosestHeadingDeg=null, stormClosestLastKnownPos=null;
+let stormClosestKm=Infinity, stormClosestMin=null, stormClosestPos=null, stormClosestSpeedKmh=null, stormClosestHeadingDeg=null, stormClosestLastKnownPos=null, stormClosestHailCapable=false;
 let airportStormHits=[];
 activeTracks.forEach(tr=>{
     const t0=tr.points[0].t;
@@ -4410,17 +4478,20 @@ const projPts=[[lastPt.lat,lastPt.lon]];
       const x=regX.a+regX.b*tMin, y=regY.a+regY.b*tMin;
       const ll=projEPSG.unproject(L.point(x,y));
       projPts.push([ll.lat,ll.lng]);
-      const isLast=(h===RADAR_MAX_PROJECT_HOURS);
+const isLast=(h===RADAR_MAX_PROJECT_HOURS);
+      // Larger text for every projection time label while driving — easier to read
+      // at a glance without picking up the phone.
+      const _fsHourLast=drivingMode?15:10, _fsSpeedLast=drivingMode?22:15, _fsHourMid=drivingMode?13:9;
       const labelHtml=isLast
-        ? '<div style="color:'+trColor+';font-size:10px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:2px;white-space:nowrap;">+'+h+'h</div>'+
-          '<div style="color:'+trColor+';font-size:15px;font-family:monospace;font-weight:900;text-shadow:0 0 3px #000,0 0 3px #000,0 0 3px #000;white-space:nowrap;">'+speedLabel+'</div>'
-        : '<div style="color:'+trColor+';font-size:9px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>';
+        ? '<div style="color:'+trColor+';font-size:'+_fsHourLast+'px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:2px;white-space:nowrap;">+'+h+'h</div>'+
+          '<div style="color:'+trColor+';font-size:'+_fsSpeedLast+'px;font-family:monospace;font-weight:900;text-shadow:0 0 3px #000,0 0 3px #000,0 0 3px #000;white-space:nowrap;">'+speedLabel+'</div>'
+        : '<div style="color:'+trColor+';font-size:'+_fsHourMid+'px;font-family:monospace;font-weight:700;text-shadow:0 0 3px #000,0 0 3px #000;margin-top:1px;white-space:nowrap;">+'+h+'h</div>';
 const mk=L.marker([ll.lat,ll.lng],{
         pane:'radarMax',interactive:false,
         icon:L.divIcon({
           className:'',
           html:'<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:6px;height:6px;border-radius:50%;background:'+trColor+';box-shadow:0 0 4px #000;"></div>'+labelHtml+'</div>',
-          iconSize:[90,isLast?46:20], iconAnchor:[45,4]
+          iconSize:[drivingMode?120:90, isLast?(drivingMode?58:46):(drivingMode?26:20)], iconAnchor:[drivingMode?60:45,4]
         })
       }).addTo(map);
       radarMaxProjectionMarkers.push(mk);
@@ -4458,6 +4529,9 @@ if(!(trackClosestMin===0 && isDeparting) && trackClosestKm<stormClosestKm){
         // The storm's actual last-detected radar position (not a projected point) —
         // used to draw a dotted "last known position" line on the warning banner.
         stormClosestLastKnownPos = [lastPt.lat, lastPt.lon];
+        // This track's own intensity color — purple/magenta top tier is treated as
+        // hail-capable (same threshold used by the airport storm-path panel).
+        stormClosestHailCapable = isHailCapableColor(trColor);
       }
     }
 
@@ -4489,12 +4563,12 @@ if(!(trackClosestMin===0 && isDeparting) && trackClosestKm<stormClosestKm){
   // pass's genuine warning.
 if(!additive){
     radarMaxProximityBest = isFinite(stormClosestKm)
-      ? {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg,lastKnownPos:stormClosestLastKnownPos}
+      ? {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg,lastKnownPos:stormClosestLastKnownPos,hailCapable:stormClosestHailCapable}
       : null;
   } else if(isFinite(stormClosestKm) && (!radarMaxProximityBest || stormClosestKm<radarMaxProximityBest.km)){
-    radarMaxProximityBest = {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg,lastKnownPos:stormClosestLastKnownPos};
+    radarMaxProximityBest = {km:stormClosestKm,min:stormClosestMin,pos:stormClosestPos,speedKmh:stormClosestSpeedKmh,headingDeg:stormClosestHeadingDeg,lastKnownPos:stormClosestLastKnownPos,hailCapable:stormClosestHailCapable};
   }
-  const bannerData=radarMaxProximityBest||{km:Infinity,min:null,pos:null,speedKmh:null,headingDeg:null,lastKnownPos:null};
+  const bannerData=radarMaxProximityBest||{km:Infinity,min:null,pos:null,speedKmh:null,headingDeg:null,lastKnownPos:null,hailCapable:false};
   let stormLevel='none';
   if(bannerData.km<=PROX_WARNING_KM && bannerData.min<=60) stormLevel='severe';
   else if(bannerData.km<=PROX_WARNING_KM) stormLevel='warning';
@@ -4513,7 +4587,7 @@ let stormBearing=null;
   // Storm's own direction of travel (where it's headed TO, not where it's coming
   // from) — derived from the same regression-fit track used for the projection line,
   // via bearingTo() over the track's own start/end points.
-  updateStormProximityBanner({
+updateStormProximityBanner({
     level:stormLevel, km:bannerData.km, min:bannerData.min, bearing:stormBearing,
     speedKmh:bannerData.speedKmh, stormHeadingDeg:bannerData.headingDeg,
     userSpeedKmh:_isRelative?(_devLastGpsSpeedKmh||0):null,
@@ -4521,7 +4595,8 @@ let stormBearing=null;
     isRelative:_isRelative,
     pos:bannerData.pos,
     lastKnownPos:bannerData.lastKnownPos,
-    userPos:refLL
+    userPos:refLL,
+    hailCapable:bannerData.hailCapable
   });
 
   // Same merge logic for airport hits — union with the running list, per-airport,
@@ -4947,37 +5022,41 @@ async function runAddViewTrackingAt(lat,lng){
     startBtnCountdown('radar-max-toggle', RADAR_MAX_RECALC_MS, rgbToRgba(radarMaxIntensityColor,0.18));
   }
 
-  // Make sure radar itself is on and has loaded frames before scanning — enable it here
-  // if needed rather than deferring to the full tracking sequence.
-  if(!radarVisible){
-    addBtn.textContent='…';
-    document.getElementById('radarStatus').textContent='⟳ Loading radar…';
-    enableRadar();
-    await waitForRadarFramesLoaded(15000);
-  } else if(!radarFramesLoaded||!radarLayers.length){
-    document.getElementById('radarStatus').textContent='⚠ Radar frames not ready yet';
-    addBtn.textContent='+';
-    return;
-  }
-
+  // Always zoom in to the tapped/reference location FIRST, regardless of whether radar
+  // frames happen to be ready yet at whatever (possibly wide/outer) view is currently
+  // shown — detection must never run at an outer zoom. Radar frames are then (re)loaded
+  // fresh at that zoomed-in view, and only once THAT load completes does scanning start.
+  // This mirrors runDetailScanAtFocus()'s own zoom -> reload -> wait -> scan sequence.
   addBtn.textContent='…';
   showStormTrackingBanner();
   document.getElementById('radarStatus').textContent='⟳ Zooming in for high-res tracking…';
   radarMaxFocusAreas.push({lat,lng});
   zoomToLocationTrackingArea(lat,lng);
-  let _addViewFired=false;
-  const _addViewProceed=()=>{
-    if(_addViewFired) return;
-    _addViewFired=true;
-    document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — tracking current view…';
-    runRadarMaxDetectionFast(true).then(()=>{
-      addBtn.textContent='+';
-      document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames'+stormStatusSuffix();
-      hideStormTrackingBanner();
-    });
-  };
-  map.once('moveend', _addViewProceed);
-  setTimeout(_addViewProceed, 700);
+  await new Promise(resolve=>{
+    let fired=false;
+    const proceed=()=>{ if(fired) return; fired=true; resolve(); };
+    map.once('moveend',proceed);
+    setTimeout(proceed,700);
+  });
+
+  document.getElementById('radarStatus').textContent='⟳ Loading radar for this view…';
+  radarFramesLoaded=false;
+  if(radarVisible) buildRadarAnimLoop(); else enableRadar();
+  await waitForRadarFramesLoaded(15000);
+
+  if(!radarLayers.length){
+    document.getElementById('radarStatus').textContent='⚠ Radar frames unavailable';
+    addBtn.textContent='+';
+    hideStormTrackingBanner();
+    return;
+  }
+
+  document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames — tracking current view…';
+  runRadarMaxDetectionFast(true).then(()=>{
+    addBtn.textContent='+';
+    document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames'+stormStatusSuffix();
+    hideStormTrackingBanner();
+  });
 }
 
 // The tap that fulfills pick mode — disarms it and kicks off tracking at that point.
@@ -5166,6 +5245,16 @@ RADAR_MAX_MIN_CHAIN=4;
 })();
 
 // ── Hail size threshold popup ────────────────────────────────
+// Nearest named hail size (e.g. "Golf ball") for an arbitrary mm value — falls back
+// to a rounded mm figure if no keyword size is close. Shared by the AB alerts panel's
+// threshold label and the airport storm-path panel's per-airport hail size display.
+function hailSizeLabelForMM(mm){
+  if(mm==null||isNaN(mm)) return null;
+  let best=null,bestDiff=Infinity;
+  HAIL_SLIDER_SIZES.forEach(s=>{ const d=Math.abs(s.mm-mm); if(d<bestDiff){bestDiff=d;best=s;} });
+  if(best && bestDiff<=3) return best.label+' ('+Math.round(mm)+'mm)';
+  return Math.round(mm)+'mm';
+}
 function _hailSizeIdxForMM(mm){
   let idx=0,best=Infinity;
   HAIL_SLIDER_SIZES.forEach((s,i)=>{ const d=Math.abs(s.mm-mm); if(d<best){best=d;idx=i;} });
@@ -5733,6 +5822,10 @@ console.log('[toggleGPS] activating, removing fake marker:', !!window._fakeMarke
     if(window._fakeMarker){map.removeLayer(window._fakeMarker);window._fakeMarker=null;}
     if(window._fakeHeadingLine){map.removeLayer(window._fakeHeadingLine);window._fakeHeadingLine=null;}
     if(window._fakeTicks){window._fakeTicks.forEach(tk=>map.removeLayer(tk));window._fakeTicks=[];}
+_demoModeActive=false;
+    AIRPORT_WARNING_KM=NORMAL_AIRPORT_WARNING_KM;
+    updateDemoModeIndicator();
+    updateAirportCircleRadii();
     refreshAbAlertsPanel();
 // Clear stale location-based alert state left over from the mock location — the
 // mock's warning banner/key would otherwise linger (or falsely dedupe against) the
@@ -5802,7 +5895,10 @@ document.getElementById('gps-btn').classList.remove('active','searching');
     document.getElementById('gpsStatus').textContent='';
     document.getElementById('gpsStatus').style.color='#00ff96';
 const fallbackLL={lat:53.5461,lon:-113.4938}; // always default to Edmonton on GPS off, regardless of last real fix
-
+_demoModeActive=false;
+    AIRPORT_WARNING_KM=NORMAL_AIRPORT_WARNING_KM;
+    updateDemoModeIndicator();
+    updateAirportCircleRadii();
 _gpsLastLL=fallbackLL;
     // Force a fresh alert check at the fallback location too — this branch previously
     // never re-ran checkAlertsAtCurrentLocation at all, so the banner just kept showing
@@ -5918,12 +6014,31 @@ document.getElementById('gps-btn').addEventListener('click',function(){
 });
 
 let _mockGpsPicking=false;
+let _demoModeActive=false; // true once a mock GPS position has been set; extends AIRPORT_WARNING_KM and shows a demo-mode indicator
+function updateDemoModeIndicator(){
+  let el=document.getElementById('demo-mode-badge');
+  if(!_demoModeActive){
+    if(el) el.remove();
+    return;
+  }
+  if(!el){
+    el=document.createElement('div');
+    el.id='demo-mode-badge';
+el.style.cssText='position:fixed;bottom:44px;left:50%;transform:translateX(-50%);z-index:8000;background:#ffdd00;color:#221a00;font-family:\'Courier New\',monospace;font-size:11px;font-weight:800;letter-spacing:0.06em;padding:4px 12px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.5);pointer-events:none;text-transform:uppercase;';
+    document.body.appendChild(el);
+  }
+  el.textContent='⚠ Demo Mode — Mock Location ('+AIRPORT_WARNING_KM+'km warning radius)';
+}
 function setMockGPSAt(lat,lon){
   _gpsLastLL={lat,lon};
   renderFakeGpsAt(lat,lon);
   _showCompassRings(lat,lon);
   document.getElementById('gpsStatus').textContent='📍 (mock) '+lat.toFixed(4)+', '+lon.toFixed(4);
   document.getElementById('gpsStatus').style.color='#ffdd00';
+_demoModeActive=true;
+  AIRPORT_WARNING_KM=DEMO_AIRPORT_WARNING_KM;
+  updateDemoModeIndicator();
+  updateAirportCircleRadii();
   // Real warning pipeline: force a fresh fetch for this exact spot (bypassing the
   // locKey dedupe) so the real alert banner + tornado/hail circle reflect the mock
   // position immediately, using the same live ECCC data as a real GPS fix.
@@ -6655,6 +6770,7 @@ const circle = L.circle([a.lat,a.lon],{
       color:'#ff8c00', weight:1, opacity:0.6,
       fill:false, interactive:false
     }).addTo(map);
+    circle._apLat=a.lat; circle._apLon=a.lon;
     airportCircles.push(circle);
 
     const circleLabelLL = _destPoint(a.lat, a.lon, 180, AIRPORT_WARNING_KM);
@@ -6666,10 +6782,26 @@ const circle = L.circle([a.lat,a.lon],{
         iconSize:[0,0], iconAnchor:[5,5]
       })
     }).addTo(map);
+    circleLabel._apLat=a.lat; circleLabel._apLon=a.lon; circleLabel._isRadiusLabel=true;
     airportCircles.push(circleLabel);
   });
 }
 buildAirportMarkers();
+
+// Redraws every airport's warning-radius circle/label at the current AIRPORT_WARNING_KM —
+// called whenever demo mode toggles the radius (50km normal / 250km mock/demo).
+function updateAirportCircleRadii(){
+  airportCircles.forEach(c=>{
+    if(c instanceof L.Circle){
+      c.setRadius(AIRPORT_WARNING_KM*1000);
+    } else if(c._isRadiusLabel){
+      const newLL=_destPoint(c._apLat, c._apLon, 180, AIRPORT_WARNING_KM);
+      c.setLatLng(newLL);
+      const el=c.getElement()?.querySelector('span');
+      if(el) el.textContent=AIRPORT_WARNING_KM+'km';
+    }
+  });
+}
 document.getElementById('airport-toggle').addEventListener('click', function(){
   if(_airportBtnLongPressFired){ _airportBtnLongPressFired=false; return; }
   airportsVisible = !airportsVisible;
@@ -6795,7 +6927,10 @@ airportStormPanelEnabled = (_drivingModePrevAirportPanelEnabled!==null)
   }
   updateDrivingModeFlash();
 }
-document.getElementById('mode-toggle-btn')?.addEventListener('click', ()=>setDrivingMode(!drivingMode));
+document.getElementById('mode-toggle-btn')?.addEventListener('click', ()=>{
+  setDrivingMode(!drivingMode);
+  refreshAbAlertsPanel(); // re-apply collapsed/expanded AB panel state for the new mode immediately
+});
 
 (function initCompassMenu(){
   const btn      = document.getElementById('compass-menu-btn');
