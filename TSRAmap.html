@@ -449,6 +449,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
           <option value="RADAR_1KM_RRAI" selected>Rain</option>
           <option value="RADAR_1KM_RSNO">Snow</option>
           <option value="Radar_1km_SfcPrecipType">Precip Type</option>
+          <option value="RAINVIEWER">RainViewer (Global)</option>
         </select>
         <input id="radar-opacity" type="range" min="10" max="90" value="80" title="Opacity">
 <button id="legend-toggle-btn" title="Toggle precip legend" style="display:none;background:transparent;border:0.5px solid rgba(100,180,255,0.3);color:rgba(136,204,255,0.6);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;white-space:nowrap;">Legend</button>
@@ -1630,7 +1631,7 @@ rebuildZoneCounts();
 // so it's callable from both the zones-loaded handler and the stations-loaded handler,
 // whichever finishes second.
 function assignStationsToZones(){
-  if(!zonePolygons.length || !Object.keys(stations).length) return;
+  if(typeof stations==='undefined' || !zonePolygons.length || !Object.keys(stations).length) return;
   zonePolygons.forEach(z=>{ z.stations=[]; });
   Object.keys(stations).forEach(id=>{
     const s=stations[id];
@@ -3329,6 +3330,16 @@ let radarFramesLoaded=false; // true only once every frame's tiles have finished
 let radarMaxPending=false;   // true if the user asked to track/recalculate before frames were ready —
                               // fires automatically once radarFramesLoaded flips to true
 let animFrame=0, animPlaying=true, animSpeedIdx=0, animTimer=null, radarOpacity=0.8, refreshTimer=null;
+// RainViewer uses ONE reusable tile layer (URL swapped per frame) instead of one layer
+// per frame — loading all 12 GEOMET-style frames at once fired ~9 tile requests per
+// frame simultaneously (100+ requests in one burst), which RainViewer's free tile
+// cache rate-limits (HTTP 429). Swapping a single layer's URL only fetches tiles for
+// whichever frame is actually showing.
+let radarLayersMode='multi'; // 'multi' = GEOMET (one layer per frame), 'single' = RainViewer
+let radarSingleLayer=null;
+const RV_COLOR=1; // RainViewer scheme 1 = Original (green→yellow→red) — scheme 2 is
+                   // actually "Universal Blue," which reads as nearly invisible on a
+                   // dark basemap even when there IS light precipitation present.
 let radarMaxEnabled=false, radarMaxMarkers=[], radarMaxCurrentMarkers=[], radarMaxBusy=false;
 let radarMaxManualSequence=false; // true while sequentially scanning several discrete focus areas one at a time — suppresses buildRadarAnimLoop's own automatic detection trigger so each focus is only detected once, deliberately, not re-triggered every time frames reload for the next focus
 let radarMaxFocusAreas=[]; // {lat,lng} of every location zoomed into for tracking (initial + each "+" add) — Recalculate re-fits to all of them
@@ -3797,7 +3808,77 @@ const RADAR_INTENSITY_LUT=[
   {r:0,  g:152,b:254,v:0.2},
   {r:152,g:203,b:254,v:0.1},
 ];
-let RADAR_LUT_COLOR_TOL=60; // RGB-distance tolerance to a legend swatch — pixels farther than this aren't recognized as a storm color (basemap/text/antialiasing/etc). Raise if real cells are being missed due to slightly-off rendered colors.
+let RADAR_LUT_COLOR_TOL=60; // RGB-distance tolerance to a legend swatch — pixels farther than this aren't recognized as a storm color (basemap/text/antialiasing/etc). Raise if real cells are being missed due to slightly-off rendered colors. Shared by both the GeoMet and RainViewer color-matching below, via the "Color tolerance" slider.
+
+// ── RainViewer storm detection ──
+// RainViewer has no arbitrary-bbox WMS GetMap like GeoMet, so detection composites a
+// 3x3 grid of its own z=6/512px XYZ tiles and scores pixels against real values pulled
+// from RainViewer's official "Original" color-scheme table (rainviewer.com/api/color-schemes.html),
+// sampled every 5 dBZ from 10 (trace) to 75 (extreme/hail-signature).
+const RV_DETECT_Z=6;
+function lonLatToTile(lon,lat,z){
+  const n=Math.pow(2,z);
+  const x=(lon+180)/360*n;
+  const latRad=lat*Math.PI/180;
+  const y=(1-Math.log(Math.tan(latRad)+1/Math.cos(latRad))/Math.PI)/2*n;
+  return {x,y};
+}
+function tileToLonLat(x,y,z){
+  const n=Math.pow(2,z);
+  const lon=x/n*360-180;
+  const latRad=Math.atan(Math.sinh(Math.PI*(1-2*y/n)));
+  return {lat:latRad*180/Math.PI,lon};
+}
+// v = dBZ. Ordered high→low, same convention as the GeoMet LUT above.
+const RAINVIEWER_LUT=[
+  {r:221,g:168,b:255,v:75}, // light purple — extreme / hail signature
+  {r:168,g:76, b:6,  v:70}, // brown — very heavy
+  {r:255,g:152,b:17, v:65}, // orange
+  {r:255,g:235,b:10, v:60}, // yellow/gold
+  {r:194,g:5,  b:17, v:55}, // dark red
+  {r:255,g:63, b:53, v:50}, // red
+  {r:255,g:147,b:163,v:45}, // pink
+  {r:97, g:83, b:193,v:40}, // purple-blue
+  {r:12, g:89, b:255,v:35}, // deep blue
+  {r:71, g:147,b:249,v:30}, // blue
+  {r:71, g:194,b:120,v:25}, // green-teal
+  {r:88, g:255,b:66, v:20}, // green
+  {r:155,g:234,b:143,v:15}, // light green
+  {r:223,g:223,b:223,v:10}, // pale gray — trace/very light
+];
+// Same 14 values as RAINVIEWER_LUT above, reformatted for the min-intensity slider
+// (index0 = Off), mirroring RADAR_INTENSITY_STEPS/STEP_COLORS for GeoMet.
+const RADAR_INTENSITY_STEPS_RV=[0,10,15,20,25,30,35,40,45,50,55,60,65,70,75];
+const RADAR_INTENSITY_STEP_COLORS_RV=[null,
+  'rgb(223,223,223)','rgb(155,234,143)','rgb(88,255,66)','rgb(71,194,120)',
+  'rgb(71,147,249)','rgb(12,89,255)','rgb(97,83,193)','rgb(255,147,163)',
+  'rgb(255,63,53)','rgb(194,5,17)','rgb(255,235,10)','rgb(255,152,17)',
+  'rgb(168,76,6)','rgb(221,168,255)'
+];
+const RADAR_INTENSITY_GRADIENT_RV='linear-gradient(to right, rgba(255,255,255,0.15) 0%, '+RADAR_INTENSITY_STEP_COLORS_RV.slice(1).map((c,i)=>c+' '+Math.round((i+1)/(RADAR_INTENSITY_STEP_COLORS_RV.length-1)*100)+'%').join(', ')+')';
+let radarMaxMinIntensityRV=RADAR_INTENSITY_STEPS_RV[7]; // dBZ threshold — kept in sync with the shared slider index (same index7 default as GeoMet's cm/h threshold)
+
+function radarMaxScorePixelRV(r,g,b,a){
+  if(a<40) return -1;
+  let best=-1, bestDist=Infinity;
+  for(const sw of RAINVIEWER_LUT){
+    const dr=r-sw.r, dg=g-sw.g, db=b-sw.b;
+    const d=dr*dr+dg*dg+db*db;
+    if(d<bestDist){bestDist=d;best=sw.v;}
+  }
+  if(bestDist>RADAR_LUT_COLOR_TOL*RADAR_LUT_COLOR_TOL) return -1;
+  return best;
+}
+// Nearest-step color lookup for a detected dBZ value, mirroring intensityColorForScore()
+// above but against the RainViewer step table instead of the GeoMet one.
+function intensityColorForScoreRV(score){
+  let bestIdx=1,bestDiff=Infinity;
+  for(let i=1;i<RADAR_INTENSITY_STEPS_RV.length;i++){
+    const diff=Math.abs(RADAR_INTENSITY_STEPS_RV[i]-score);
+    if(diff<bestDiff){bestDiff=diff;bestIdx=i;}
+  }
+  return RADAR_INTENSITY_STEP_COLORS_RV[bestIdx];
+}
 
 // Classifies a pixel by nearest-match to the known legend swatches and returns the
 // swatch's real cm/h value, instead of guessing intensity from hue/sat/lightness.
@@ -4005,6 +4086,80 @@ const EDGE_MARGIN_PX=RADAR_MAX_EDGE_MARGIN_PX;
   });
 }
 
+// Composites a 3x3 grid of RainViewer XYZ tiles around refLL for one frame, then finds
+// up to RADAR_MAX_STORMS local intensity maxima via the same iterative non-max
+// suppression the GeoMet path uses — just scored against RAINVIEWER_LUT instead.
+async function detectRadarMaximaForFrameRV(frame,refLL,sepKm){
+  const center=lonLatToTile(refLL.lng,refLL.lat,RV_DETECT_Z);
+  const cx=Math.floor(center.x), cy=Math.floor(center.y);
+  const TS=512, GRID=3, W=TS*GRID, H=TS*GRID;
+  const cnv=document.createElement('canvas');
+  cnv.width=W; cnv.height=H;
+  const cctx=cnv.getContext('2d');
+  const loads=[];
+  for(let dy=-1;dy<=1;dy++){
+    for(let dx=-1;dx<=1;dx++){
+      const tx=cx+dx, ty=cy+dy;
+      const url=frame.host+frame.path+'/512/'+RV_DETECT_Z+'/'+tx+'/'+ty+'/'+RV_COLOR+'/1_1.png';
+      loads.push(new Promise(resolve=>{
+        const img=new Image();
+        img.crossOrigin='anonymous';
+        img.onload=()=>{ try{ cctx.drawImage(img,(dx+1)*TS,(dy+1)*TS,TS,TS); }catch(e){} resolve(); };
+        img.onerror=()=>resolve();
+        img.src=url;
+      }));
+    }
+  }
+  await Promise.all(loads);
+  try{
+    const id=cctx.getImageData(0,0,W,H).data;
+    const scores=new Float32Array(W*H);
+    for(let py=0;py<H;py++){
+      for(let px=0;px<W;px++){
+        const i=(py*W+px)*4;
+        scores[py*W+px]=radarMaxScorePixelRV(id[i],id[i+1],id[i+2],id[i+3]);
+      }
+    }
+    const mpp=(156543.03/Math.pow(2,RV_DETECT_Z))*Math.cos(refLL.lat*Math.PI/180);
+    const sepPx=Math.max(1,Math.round((sepKm*1000)/mpp));
+    const candidates=[];
+    for(let n=0;n<RADAR_MAX_CANDIDATE_POOL;n++){
+      let bestScore=-1,bestX=-1,bestY=-1;
+      for(let py=0;py<H;py++){
+        for(let px=0;px<W;px++){
+          const sc=scores[py*W+px];
+          if(sc>bestScore){bestScore=sc;bestX=px;bestY=py;}
+        }
+      }
+      if(bestScore<=0||bestScore<radarMaxMinIntensityRV) break;
+      const tileFracX=cx-1+bestX/TS, tileFracY=cy-1+bestY/TS;
+      const ll=tileToLonLat(tileFracX,tileFracY,RV_DETECT_Z);
+      candidates.push({lat:ll.lat,lon:ll.lon,score:bestScore});
+      const x0=Math.max(0,bestX-sepPx), x1=Math.min(W-1,bestX+sepPx);
+      const y0=Math.max(0,bestY-sepPx), y1=Math.min(H-1,bestY+sepPx);
+      for(let yy=y0;yy<=y1;yy++){ for(let xx=x0;xx<=x1;xx++){ scores[yy*W+xx]=-1; } }
+    }
+    return candidates
+      .map(c=>({...c,_distKm:haversineKm(refLL.lat,refLL.lng,c.lat,c.lon)}))
+      .sort((a,b)=>a._distKm-b._distKm)
+      .slice(0,RADAR_MAX_STORMS);
+  }catch(e){ console.warn('[radarMax] RainViewer pixel scan failed',e); return []; }
+}
+
+// Dispatches per-frame detection to the right method for the active radar type, and
+// picks the matching color LUT for markers/tracks.
+async function detectStormPointsForFrame(layerName,r,bounds,sepKm,refLL){
+  if(layerName==='RAINVIEWER'){
+    if(!r.host||!r.path) return [];
+    return await detectRadarMaximaForFrameRV({host:r.host,path:r.path},refLL,sepKm);
+  }
+  return await detectRadarMaximaForFrame(layerName,r.time,bounds,sepKm,refLL);
+}
+function colorForDetectedScore(layerName,score){
+  if(layerName==='RAINVIEWER') return intensityColorForScoreRV(score);
+  return intensityColorForScore(score);
+}
+
 // Storm-approach banner — reuses the lightning proximity system's own PROX_RADIUS_KM
 // (caution) and PROX_WARNING_KM (warning) thresholds, no separate radius setting.
 // A third "severe" tier fires when a track's projected position is inside the warning
@@ -4128,7 +4283,7 @@ function repositionStormBanner(){
 // Warning or Watch polygon (from airportTornadoHailAlerts, rebuilt every alerts pass).
 // Hidden entirely when neither condition applies to any airport, or when the user has
 // turned this panel off via long-press/right-click on the airport toolbar button.
-let airportStormPanelEnabled = true;
+var airportStormPanelEnabled = true; // var — see airportsVisible note above; same early-call risk
 // Note: the underlying storm-track data lives in radarMaxAirportHits (see
 // runRadarMaxDetection) and the alert-badge data lives in airportTornadoHailAlerts
 // (see refreshAbAlertsPanel) — this function only controls what's DISPLAYED. Hiding
@@ -4305,7 +4460,7 @@ document.getElementById('radar-max-toggle').textContent='Tracking…';
   const perFrame=[];
   for(let i=0;i<radarLayers.length;i++){
     const r=radarLayers[i];
-    const pts=await detectRadarMaximaForFrame(layerName,r.time,bounds,radarMaxSeparationKm,refLL);
+const pts=await detectStormPointsForFrame(layerName,r,bounds,radarMaxSeparationKm,refLL);
     const t=new Date(r.time).getTime();
     const withTime=pts.map(p=>({...p,t}));
     r._maxPoints = additive ? (r._maxPoints||[]).concat(withTime) : withTime; // additive: merge with first-pass points instead of replacing
@@ -4365,14 +4520,14 @@ pairs.forEach(p=>{
       if(usedTr.has(p.ti)||usedPt.has(p.pi)) return;
       usedTr.add(p.ti); usedPt.add(p.pi);
       const tr=openTracks[p.ti], pt=framePts[p.pi];
-      pt.trackId=tr.id; pt.color=intensityColorForScore(pt.score);
+      pt.trackId=tr.id; pt.color=colorForDetectedScore(layerName,pt.score);
       tr.points.push(pt);
       tr.lastFrameIdx=frameIdx;
     });
-    framePts.forEach((pt,pi)=>{
+framePts.forEach((pt,pi)=>{
       if(usedPt.has(pi)) return;
       const color=RADAR_MAX_PALETTE[nextId%RADAR_MAX_PALETTE.length];
-      pt.trackId=nextId; pt.color=intensityColorForScore(pt.score);
+      pt.trackId=nextId; pt.color=colorForDetectedScore(layerName,pt.score);
       tracks.push({id:nextId,color,points:[pt],lastFrameIdx:frameIdx});
       nextId++;
     });
@@ -4733,8 +4888,106 @@ async function fetchRadarTimesteps(layerName){
   return defaultTime?[defaultTime]:[];
 }
 
+// Computes a Leaflet bounds box roughly radiusKm around the current reference
+// location (GPS fix, last-known position, or map center as fallback) — passed as
+// the tileLayer's own `bounds` option so Leaflet only ever requests tiles that
+// intersect this area, instead of tiles for the whole visible viewport/world.
+// Expands the CURRENT map view's own bounds outward by radiusKm on every side (not a
+// fixed-radius box around a single reference point) — so RainViewer tiles are always
+// bounded relative to whatever the user is actually looking at, regardless of where
+// that is relative to GPS/last-known/map-center. North/south padding uses the view's
+// own center longitude; east/west padding uses the view's own center latitude, since
+// a degree of longitude compresses at higher latitudes.
+function getRadarLimitBoundsFromView(radiusKm){
+  const b=map.getBounds();
+  const north=b.getNorth(), south=b.getSouth(), east=b.getEast(), west=b.getWest();
+  const centerLat=(north+south)/2, centerLon=(east+west)/2;
+  const nPt=_destPoint(north,centerLon,0,radiusKm);
+  const sPt=_destPoint(south,centerLon,180,radiusKm);
+  const ePt=_destPoint(centerLat,east,90,radiusKm);
+  const wPt=_destPoint(centerLat,west,270,radiusKm);
+  return L.latLngBounds([sPt[0],wPt[1]],[nPt[0],ePt[1]]);
+}
+const RADAR_LIMIT_KM=300;
+
+// ── RainViewer (backup radar source) ─────────────────────────
+// Simple play/loop only, no storm tracking. Reuses the existing showFrame/startAnim/
+// stopAnim/updateAnimUI and the scrub/play/speed UI unchanged — they only need each
+// radarLayers entry to have {time (ISO string), layer (anything with setOpacity)}.
+async function fetchRainviewerFrames(){
+  const res=await fetch('https://api.rainviewer.com/public/weather-maps.json',{signal:AbortSignal.timeout(10000)});
+  const data=await res.json();
+  return (data.radar?.past||[]).map(f=>({path:f.path,time:f.time,host:data.host}));
+}
+async function buildRainviewerAnimLoop(){
+  radarOpacity=parseInt(document.getElementById('radar-opacity').value)/100;
+  document.getElementById('radarStatus').textContent='⟳ Loading…';
+  document.getElementById('radarStatus').title='⟳ Loading…';
+  setLoadProgress(5);
+  stopAnim();
+  radarFramesLoaded=false;
+  // Clear out any GEOMET multi-layer frames left over from before switching to RainViewer.
+  radarLayers.forEach(r=>{if(r.layer)map.removeLayer(r.layer);});
+  radarLayers=[];
+  radarLayersMode='single';
+  let frames;
+  try{ frames=await fetchRainviewerFrames(); setLoadProgress(20); }
+  catch(e){ document.getElementById('radarStatus').textContent='⚠ Unavailable'; setLoadProgress(0); return; }
+  if(!frames.length){ document.getElementById('radarStatus').textContent='⚠ No frames'; setLoadProgress(0); return; }
+document.getElementById('anim-scrub').max=frames.length-1;
+  document.getElementById('anim-scrub').value=frames.length-1;
+// One tile layer PER FRAME (bounded to the current view +300km, capped to
+  // RainViewer's real z=6 tile data via maxNativeZoom/zoomOffset) instead of a single
+  // reusable layer with setUrl() swapped every animation tick. setUrl forced a fresh
+  // network fetch on every frame change during animation, which is what caused the
+  // jumping/flashing — this way each frame's tiles load once, then playback just
+  // toggles opacity between already-loaded layers, same as the GeoMet radar path.
+  const limitBounds=getRadarLimitBoundsFromView(RADAR_LIMIT_KM);
+  radarLayersMode='multi';
+  radarLayers=frames.map(f=>{
+    const url=f.host+f.path+'/512/{z}/{x}/{y}/'+RV_COLOR+'/1_1.png';
+    const layer=L.tileLayer(url,{tileSize:512,opacity:0,pane:'radar',interactive:false,
+      maxNativeZoom:6, zoomOffset:-1, bounds:limitBounds,
+      attribution:'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>',
+      updateWhenZooming:false, updateWhenIdle:true, keepBuffer:1
+    }).addTo(map);
+return {time:new Date(f.time*1000).toISOString(), layer, loaded:false, host:f.host, path:f.path};
+  });
+  let rvLoadedCount=0;
+  radarLayers.forEach((r,idx)=>{
+    r.layer.on('load',()=>{
+      r.loaded=true; rvLoadedCount++;
+      setLoadProgress(20+Math.round(rvLoadedCount/radarLayers.length*80));
+      if(rvLoadedCount===radarLayers.length){
+        radarFramesLoaded=true;
+        document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames (RainViewer)';
+        setLoadProgress(100);
+      }
+    });
+    r.layer.on('tileerror',()=>{console.error('[radar] RainViewer tile error frame',idx);});
+    if(idx!==radarLayers.length-1){r.layer.setOpacity(0.001);setTimeout(()=>{if(idx!==animFrame)r.layer.setOpacity(0);},100);}
+  });
+  animFrame=radarLayers.length-1;
+  showFrame(animFrame);
+  document.getElementById('radarStatus').textContent='🌧 '+radarLayers.length+' frames (RainViewer)';
+  setLoadProgress(100);
+  updateAnimUI();
+  if(animPlaying)startAnim();
+  if(refreshTimer)clearInterval(refreshTimer);
+  startBtnCountdown('radar-toggle', 6*60*1000, 'rgba(100,180,255,0.18)');
+  refreshTimer=setInterval(()=>{
+    if(!radarVisible) return;
+    buildRainviewerAnimLoop();
+  },6*60*1000);
+}
+
 async function buildRadarAnimLoop(){
   const layerName=document.getElementById('radar-type').value;
+  if(layerName==='RAINVIEWER'){ await buildRainviewerAnimLoop(); return; }
+  // Switching away from RainViewer — drop its single reusable layer so it doesn't
+  // linger on the map, and switch back to the GEOMET multi-layer mode.
+  if(radarSingleLayer){ map.removeLayer(radarSingleLayer); radarSingleLayer=null; }
+  radarLayersMode='multi';
   radarOpacity=parseInt(document.getElementById('radar-opacity').value)/100;
   document.getElementById('radarStatus').textContent='⟳ Loading…';
 document.getElementById('radarStatus').title='⟳ Loading…';
@@ -4842,7 +5095,15 @@ refreshTimer=setInterval(()=>{
 }
 
 function showFrame(idx){
-  radarLayers.forEach((r,i)=>r.layer.setOpacity(i===idx?radarOpacity:0));
+  if(radarLayersMode==='single'){
+    const r=radarLayers[idx];
+    if(r && radarSingleLayer){
+      radarSingleLayer.setUrl(r.host+r.path+'/512/{z}/{x}/{y}/'+RV_COLOR+'/1_1.png');
+      radarSingleLayer.setOpacity(radarOpacity);
+    }
+  } else {
+    radarLayers.forEach((r,i)=>r.layer.setOpacity(i===idx?radarOpacity:0));
+  }
   animFrame=idx; updateAnimUI();
   updateRadarMaxCurrent();
 }
@@ -4891,7 +5152,9 @@ function disableRadar(){
   stopBtnCountdown('radar-toggle');
   stopAnim();
   if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null;}
-  radarLayers.forEach(r=>{if(r.layer)map.removeLayer(r.layer);}); radarLayers=[];
+radarLayers.forEach(r=>{if(r.layer)map.removeLayer(r.layer);}); radarLayers=[];
+  if(radarSingleLayer){ map.removeLayer(radarSingleLayer); radarSingleLayer=null; }
+  radarLayersMode='multi';
 disableRadarCoverage(); radarVisible=false; updateLegendVisibility();
 radarFramesLoaded=false;
   radarMaxPending=false;
@@ -4907,7 +5170,8 @@ document.getElementById('anim-speed-btn').addEventListener('click',()=>{
   if(animPlaying)startAnim();
 });
 function updateRadarMaxAvailability(){
-  const isSfc=document.getElementById('radar-type').value==='Radar_1km_SfcPrecipType';
+  const radarTypeVal=document.getElementById('radar-type').value;
+const isSfc=radarTypeVal==='Radar_1km_SfcPrecipType'; // storm tracking now supports RainViewer too, via its own color table
   const maxBtn=document.getElementById('radar-max-toggle');
   const settingsBtn=document.getElementById('radar-max-settings-btn');
   const recalcBtn=document.getElementById('radar-max-recalc-btn');
@@ -4931,6 +5195,7 @@ function updateRadarMaxAvailability(){
 document.getElementById('radar-type').addEventListener('change',()=>{
   localStorage.setItem('radar_type',document.getElementById('radar-type').value);
   updateRadarMaxAvailability();
+  updateRadarMaxIntensitySwatch(radarMaxIntensityIdx); // scheme (dBZ vs cm/h) changed even though the slider position didn't
   if(radarVisible)buildRadarAnimLoop();updateLegendVisibility();
 });
 (function(){
@@ -5153,14 +5418,20 @@ document.getElementById('radar-max-opacity-slider').addEventListener('input',fun
 });
 function updateRadarMaxIntensitySwatch(idx){
   const swatch=document.getElementById('radar-max-intensity-swatch');
+  const slider=document.getElementById('radar-max-intensity-slider');
   if(!swatch) return;
+  const isRV=document.getElementById('radar-type').value==='RAINVIEWER';
+  const steps=isRV?RADAR_INTENSITY_STEPS_RV:RADAR_INTENSITY_STEPS;
+  const colors=isRV?RADAR_INTENSITY_STEP_COLORS_RV:RADAR_INTENSITY_STEP_COLORS;
+  const unit=isRV?' dBZ':' cm/h';
+  if(slider) slider.style.background=isRV?RADAR_INTENSITY_GRADIENT_RV:RADAR_INTENSITY_GRADIENT;
   if(idx===0){
     swatch.style.background='rgba(255,255,255,0.12)';
     swatch.title='Off';
   } else {
-    swatch.style.background=RADAR_INTENSITY_STEP_COLORS[idx];
-    swatch.title=RADAR_INTENSITY_STEPS[idx]+' cm/h';
-    radarMaxIntensityColor=RADAR_INTENSITY_STEP_COLORS[idx];
+    swatch.style.background=colors[idx];
+    swatch.title=steps[idx]+unit;
+    radarMaxIntensityColor=colors[idx];
     applyRadarMaxActiveColor();
   }
 }
@@ -5168,9 +5439,10 @@ document.getElementById('radar-max-intensity-slider').addEventListener('input',f
   const idx=parseInt(this.value);
   radarMaxIntensityIdx=idx;
   radarMaxMinIntensity=RADAR_INTENSITY_STEPS[idx];
+  radarMaxMinIntensityRV=RADAR_INTENSITY_STEPS_RV[idx];
   updateRadarMaxIntensitySwatch(idx);
 });
-document.getElementById('radar-max-intensity-slider').style.background=RADAR_INTENSITY_GRADIENT;
+updateRadarMaxIntensitySwatch(radarMaxIntensityIdx); // sets the correct gradient/swatch/title for whichever radar type is active on load
 document.getElementById('radar-max-onlyactive-toggle').addEventListener('change',function(){
   radarMaxOnlyActiveTracks=this.checked;
   saveRadarMaxSettings();
@@ -5186,8 +5458,9 @@ document.getElementById('radar-max-reset-btn').addEventListener('click',()=>{
   RADAR_MAX_PROJECT_HOURS=6;
   RADAR_MAX_STORMS=36;
   RADAR_MAX_SPEED_KMH=80;
-  radarMaxIntensityIdx=7;
+radarMaxIntensityIdx=7;
   radarMaxMinIntensity=RADAR_INTENSITY_STEPS[7];
+  radarMaxMinIntensityRV=RADAR_INTENSITY_STEPS_RV[7];
   RADAR_MAX_CANDIDATE_POOL=100;
   RADAR_LUT_COLOR_TOL=60;
   RADAR_MAX_EDGE_MARGIN_PX=2;
@@ -5310,7 +5583,11 @@ function openHailSizePanel(btn){
 document.getElementById('radar-opacity').addEventListener('input',function(){
   radarOpacity=parseInt(this.value)/100;
   localStorage.setItem('radar_opacity',this.value);
-  if(radarLayers[animFrame])radarLayers[animFrame].layer.setOpacity(radarOpacity);
+  if(radarLayersMode==='single'){
+    if(radarSingleLayer) radarSingleLayer.setOpacity(radarOpacity);
+  } else if(radarLayers[animFrame]){
+    radarLayers[animFrame].layer.setOpacity(radarOpacity);
+  }
 });
 document.getElementById('radar-toggle').addEventListener('click',()=>{if(radarVisible)disableRadar();else enableRadar();});
 document.getElementById('radar-options-btn').addEventListener('click',()=>{
@@ -5344,11 +5621,13 @@ function updateLegendContent(){
 }
 function updateLegendVisibility(){
   const legendBtn=document.getElementById('legend-toggle-btn');
-  // Legend toggle button is now available for any radar type, not just Precip Type
-  if(legendBtn) legendBtn.style.display=radarVisible?'inline-block':'none';
+  const isRainviewer=document.getElementById('radar-type').value==='RAINVIEWER';
+  // Legend toggle button is available for any GEOMET radar type, but not for
+  // RainViewer — GEOMET's GetLegendGraphic doesn't have a matching layer for it.
+  if(legendBtn) legendBtn.style.display=(radarVisible&&!isRainviewer)?'inline-block':'none';
   // Only auto-show legend if it hasn't been manually hidden by the user
   const legend=document.getElementById('precip-legend');
-if(radarVisible){
+if(radarVisible&&!isRainviewer){
     updateLegendContent();
     if(!legend._userHidden) legend.classList.add('visible');
   } else {
@@ -6669,7 +6948,10 @@ function showStationAlertPopup(label, station, labels, isWarning, color){
 }
 
 // ── RAWS Stations ─────────────────────────────────────────────
-const stations = {};
+// var (not const) — assignStationsToZones() can be reached via loadZones()'s fetch
+// callback before this line has executed if the fetch resolves unusually fast; var
+// hoists as undefined (safe to reference/typeof) instead of throwing a TDZ error.
+var stations = {};
 let stationLabelsVisible = true, stationFocusMarker = null;
 
 // ── Station IP lookup (orangecore.net) ─────────────────────────
@@ -6808,7 +7090,11 @@ const AIRPORTS = [
   {name:'Lac La Biche',   lat:54.770167, lon:-112.031667},
   {name:'Fort McMurray',  lat:56.652667, lon:-111.221667}
 ];
-let airportsVisible = true;
+// var (not let) — updateRadarMaxAvailability()/clearRadarMaxMarkers() can call
+// updateAirportStormPanel() during page-load radar init, before this line has run
+// (e.g. when a saved radar_type from localStorage takes the storm-tracking-disabled
+// branch immediately). var hoists as undefined instead of throwing a TDZ error.
+var airportsVisible = true;
 const airportMarkers = [];
 const airportCircles = [];
 function buildAirportMarkers(){
