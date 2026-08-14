@@ -2769,7 +2769,13 @@ matches.forEach(m=>usedRowIdx.add(m.i));
         console.log('[abAlerts-debug] rendering group', c.group, 'as groupId');
         const hasWarning=matches.some(m=>m.r.priority===c.priorities[0]);
         if(hasWarning) priorityWarnActive=true; else priorityWatchActive=true;
-        void 0; // marker: active branch already includes hail gear/threshold via renderActiveRow
+        // Row label must reflect which tier is actually active — warning always
+        // overrides watch when both are present (hasWarning already encodes that),
+        // otherwise show "<Group> Watch". The individual classified label (e.g. with
+        // hail size) already carries this suffix per-row via classifyAbAlert, but the
+        // merged/canonical row (this branch) uses the fixed AB_ALERT_CANONICAL label,
+        // so it needs the suffix appended here instead.
+        const tierLabel=c.label+(hasWarning?' Warning':' Watch');
 const zoneStations={};
         matches.forEach(m=>{
           Object.entries(m.r.zoneStations).forEach(([zId,list])=>{
@@ -2784,7 +2790,7 @@ const zoneStations={};
             infos.forEach(info=>{ if(!stationInfos[sid].includes(info)) stationInfos[sid].push(info); });
           });
         });
-const merged={label:c.label,priorities:c.priorities,zoneStations:Object.fromEntries(Object.entries(zoneStations).map(([zId,set])=>[zId,[...set].sort()])),stationInfos};
+const merged={label:tierLabel,priorities:c.priorities,zoneStations:Object.fromEntries(Object.entries(zoneStations).map(([zId,set])=>[zId,[...set].sort()])),stationInfos};
 html+=renderActiveRow(merged,rIdx++, alertStyleForPriority(hasWarning?c.priorities[0]:c.priorities[1]), true, c.group);
 } else {
         html+=renderGreyRow(c.label,c.group);
@@ -5406,12 +5412,25 @@ let compassHeading=null;
 // ── Compass Deviation Calibration (background) ─────────────────
 const DEV_DIR_NAMES=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const DEV_N_DIRS=16, DEV_DIR_STEP=360/DEV_N_DIRS;
-const DEV_STEADY_SEC=3, DEV_STEADY_TOL=12, DEV_SPEED_MIN=3;
-const DEV_DIR_TOL=5;
+const DEV_STEADY_SEC=3, DEV_STEADY_TOL=3, DEV_SPEED_MIN=3;
+const DEV_DIR_TOL=3;
 const DEV_STORAGE_KEY='compass_deviations_v1'; // match CDMVT's key
 const DEV_REC_THROTTLE_MS=2000;
+// Raw (heading, deviation) point store — separate from the 16-sector deviationTable.
+// Fed by BOTH on-mark background recording and off-mark live correction, so off-mark
+// driving still contributes to future corrections without polluting a sector's
+// average with a reading that wasn't actually taken at that sector's center.
+const DEV_POINTS_STORAGE_KEY='compass_deviation_points_v1';
+const DEV_POINTS_MAX=1000; // cap so storage/compute don't grow unbounded over long-term use
+const DEV_INTERP_WINDOW_DEG=20; // only points within this many degrees of the query heading are considered
+const DEV_INTERP_MIN_POINTS=3; // require at least this many nearby points before trusting the interpolation
+// If a fresh sample disagrees with the existing local calibration by more than this,
+// the old data is treated as stale/wrong (e.g. phone mount moved) and discarded in
+// favor of the new reading, rather than being averaged together with it.
+const DEV_RESET_THRESHOLD_DEG=5;
 
 let deviationTable=Array.from({length:DEV_N_DIRS},()=>[]);
+let deviationPoints=[]; // [{h:heading, d:deviation, t:timestamp}, ...]
 let devManualRaw=false; // true = user forced "Raw" mode, ignore corrections
 let roseBlinkOn=true, roseBlinkTimer=null;
 let _roseActiveRecSector=null;
@@ -5427,7 +5446,62 @@ function devLoadTable(){
     if(Array.isArray(saved)&&saved.length===DEV_N_DIRS) saved.forEach((arr,i)=>{ if(Array.isArray(arr)) deviationTable[i]=arr; });
   }catch(e){}
 }
+function devSavePoints(){ try{ localStorage.setItem(DEV_POINTS_STORAGE_KEY, JSON.stringify(deviationPoints)); }catch(e){} }
+function devLoadPoints(){
+  try{
+    const raw=localStorage.getItem(DEV_POINTS_STORAGE_KEY);
+    if(!raw) return;
+    const saved=JSON.parse(raw);
+    if(Array.isArray(saved)) deviationPoints=saved;
+  }catch(e){}
+}
+// Pushes a new deviation sample into a 16-sector bucket — but first checks it against
+// that sector's existing average. A disagreement beyond DEV_RESET_THRESHOLD_DEG means
+// the old samples are likely stale (mount moved, phone repositioned, etc.), so the
+// bucket is wiped and calibration restarts fresh from this new reading instead of
+// being blended with outdated data.
+function devPushSectorSample(sector,dev){
+  const arr=deviationTable[sector];
+  if(arr.length){
+    const avg=devAvg(arr);
+    if(Math.abs(devAngDiff(dev,avg))>DEV_RESET_THRESHOLD_DEG){
+      deviationTable[sector]=[];
+    }
+  }
+  deviationTable[sector].push(dev);
+  devSaveTable();
+}
+// Records a raw (heading, deviation) sample — called from both the on-mark background
+// recorder and the off-mark live-correction path, so every genuine steady-state
+// reading contributes to future corrections regardless of whether it landed near a
+// cardinal mark. Same staleness check as devPushSectorSample: if this reading
+// disagrees with the current interpolated estimate at this heading by more than
+// DEV_RESET_THRESHOLD_DEG, nearby existing points are discarded first.
+function devAddPoint(heading,dev){
+  const nearbyAvg=devInterpolateAt(heading);
+  if(nearbyAvg!==null && Math.abs(devAngDiff(dev,nearbyAvg))>DEV_RESET_THRESHOLD_DEG){
+    deviationPoints=deviationPoints.filter(p=>Math.abs(devAngDiff(heading,p.h))>DEV_INTERP_WINDOW_DEG);
+  }
+  deviationPoints.push({h:heading,d:dev,t:Date.now()});
+  if(deviationPoints.length>DEV_POINTS_MAX) deviationPoints.shift();
+  devSavePoints();
+}
+// Weighted circular interpolation across nearby raw samples — triangular falloff,
+// full weight at the query heading itself, zero weight at the window edge. Returns
+// null (not enough nearby data to trust) rather than a noisy guess.
+function devInterpolateAt(heading){
+  let wSum=0, wDevSum=0, nearCount=0;
+  deviationPoints.forEach(p=>{
+    const d=Math.abs(devAngDiff(heading,p.h));
+    if(d>DEV_INTERP_WINDOW_DEG) return;
+    const w=1-(d/DEV_INTERP_WINDOW_DEG);
+    wSum+=w; wDevSum+=w*p.d; nearCount++;
+  });
+  if(nearCount<DEV_INTERP_MIN_POINTS || wSum<=0) return null;
+  return wDevSum/wSum;
+}
 devLoadTable();
+devLoadPoints();
 setTimeout(updateRosePanel, 0);
 
 function devAngDiff(a,b){ let d=((a-b)+360)%360; return d>180?d-360:d; }
@@ -5485,8 +5559,8 @@ const diffFromAnchor=devAngDiff(gh,_devSteadyAnchor);
   if(Math.abs(dev)>90) return; // compass vs GPS track disagree by >90° — likely reversing/jitter, don't contaminate
 
 _devLastRecAt=now;
-deviationTable[devSector(gh)].push(dev);
-  devSaveTable();
+devPushSectorSample(devSector(gh),dev);
+  devAddPoint(ch,dev); // also contributes to the raw-point interpolation pool
   updateDevStatus();
   setRoseActiveSector(devSector(gh));
   updateRosePanel();
@@ -5674,34 +5748,36 @@ function getCorrectedHeading(rawHeading){
     return{heading:corrected,corrected:true};
   }
 
-  // Rule: straight-line correction — if driving steady off a cardinal mark, record
-  // a direct sample at this exact heading and apply it immediately.
-  // Requires the same steady/speed conditions as devTryRecord(), checked here via
-  // the live state variables rather than re-running the full accumulator.
+// Rule: straight-line correction — if driving steady off a cardinal mark, correct
+  // the current heading using the live GPS/compass offset, AND record it as a raw
+  // point (not into deviationTable's sector buckets) so it also benefits future
+  // corrections at nearby headings via devInterpolateAt below.
   const gh=_devLastGpsHeading, spd=_devLastGpsSpeedKmh;
   if(gh!==null && spd>=DEV_SPEED_MIN && compassHeading!==null){
     const angDiff=Math.abs(devAngDiff(rawHeading,gh));
     const steadyElapsed=_devSteadyStart!==null?(Date.now()-_devSteadyStart)/1000:0;
     if(angDiff<=DEV_STEADY_TOL && steadyElapsed>=DEV_STEADY_SEC){
-      // We have a confirmed steady run. Record into the nearest sector as a
-      // provisional sample so future interpolation benefits too.
-const sector=devSector(gh);
       const dev=devAngDiff(rawHeading,gh);
-      // Only push if this is genuinely new information (throttled by devTryRecord already
-      // for on-mark cases, so guard here to avoid double-recording).
-      const onMark=devNearestDirDiff(gh)<=DEV_DIR_TOL;
-      if(!onMark && Math.abs(dev)<=90){ // skip if compass/GPS disagree >90° (reversing/jitter)
+      if(Math.abs(dev)<=90){ // skip if compass/GPS disagree >90° (reversing/jitter)
         const now=Date.now();
         if(now-_devLastRecAt>=DEV_REC_THROTTLE_MS){
           _devLastRecAt=now;
-          deviationTable[sector].push(dev);
-          devSaveTable();
-          updateDevStatus();
+          devAddPoint(rawHeading,dev);
         }
       }
       const corrected=((rawHeading-dev)+360)%360;
       return{heading:corrected,corrected:true};
     }
+  }
+
+  // Rule: not currently steady, but historical raw samples exist near this heading —
+  // weighted interpolation across whatever's been recorded nearby (from either the
+  // on-mark or off-mark paths above), so calibration still applies while stopped or
+  // between steady runs, not just live while driving.
+  const interpDev=devInterpolateAt(rawHeading);
+  if(interpDev!==null){
+    const corrected=((rawHeading-interpDev)+360)%360;
+    return{heading:corrected,corrected:true};
   }
 
   // Otherwise: not enough data -> raw heading, uncorrected.
@@ -7009,11 +7085,14 @@ document.getElementById('mode-toggle-btn')?.addEventListener('click', ()=>{
   });
 
   // Reset calibration
-  document.getElementById('cmp-reset-row').addEventListener('click', () => {
+document.getElementById('cmp-reset-row').addEventListener('click', () => {
     closeMenu();
-    if(!confirm('Reset compass deviation calibration? This deletes all '+deviationTable.reduce((s,a)=>s+a.length,0)+' collected samples.')) return;
+    const totalSamples=deviationTable.reduce((s,a)=>s+a.length,0)+deviationPoints.length;
+    if(!confirm('Reset compass deviation calibration? This deletes all '+totalSamples+' collected samples.')) return;
     deviationTable = Array.from({length:DEV_N_DIRS}, ()=>[]);
+    deviationPoints = [];
     devSaveTable();
+    devSavePoints();
     updateDevStatus();
     drawDeviationRose();
   });
