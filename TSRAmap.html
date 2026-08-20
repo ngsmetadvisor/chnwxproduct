@@ -1036,7 +1036,10 @@ L.popup({closeButton:true,className:'strike-popup'})
     .setContent(popupContent)
   .openOn(map);
 });
+
+
 // ── Alberta bbox ──────────────────────────────────────────────
+// This is a Charlie November product
 const AB = { latMin:49, latMax:60, lonMin:-120, lonMax:-110 };
 function inAB(lat,lon){ return lat>=AB.latMin&&lat<=AB.latMax&&lon>=AB.lonMin&&lon<=AB.lonMax; }
 
@@ -1849,6 +1852,7 @@ loadZones();
 map.fitBounds(getABBounds(), {animate:false}); // initial view = Alberta overview, matching the same bounds used everywhere else (zoneZoomSelect "AB", PNG export, storm-tracking overview zoom)
 
 // ── Weather Alerts (Current-Alerts) ─────────────────────────────
+// CN
 const ALERTS_CHECK_MS = 6*60*1000; // alerts check cadence — kept in sync with radar refresh + storm-track recalc
 function startBtnCountdown(id, durationMs, color){
   const btn=document.getElementById(id);
