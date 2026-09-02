@@ -774,34 +774,108 @@ requestWakeLock();
 
 
 let stationLabelMarkers = [];
+
+// ── Vector basemap ───────────────────────────────────────────────────────
+// Replaces the old carto.com "dark_all"/"voyager" raster layers with a
+// self-drawn map built from public-domain Natural Earth boundary data:
+// land/lake fills plus coastline, country, state-province and river
+// borders. No tile host is needed for the "dark"/"white" themes below —
+// only the "sat" option still pulls tiles, from Esri (never carto.com).
+map.createPane('basemapPane');
+map.getPane('basemapPane').style.zIndex = 200;
+const basemapRenderer = L.canvas({ pane:'basemapPane', tolerance:0 });
+
+const VECTOR_THEMES = {
+  dark:  { land:'#0a0a0a', water:'#4d4d4d', coastline:'#7a7a7a', country:'#999999', state:'#5a5a5a', river:'#6e6e6e', lakeFill:'#4d4d4d', lakeBorder:'#7a7a7a' },
+  white: { land:'#ffffff', water:'#aad3f7', coastline:'#3a7bd5', country:'#888888', state:'#bfbfbf', river:'#3a7bd5', lakeFill:'#aad3f7', lakeBorder:'#3a7bd5' }
+};
+const NE_BASE = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/';
+const vectorBasemap = L.layerGroup();
+let vLand=null, vLakes=null, vCoast=null, vCountry=null, vState=null, vRivers=null;
+let vectorBasemapReady=false, vectorBasemapLoading=false, vectorTheme='dark';
+
+function applyVectorTheme(name){
+  vectorTheme = VECTOR_THEMES[name] ? name : 'dark';
+  const t = VECTOR_THEMES[vectorTheme];
+  document.getElementById('map').style.background = t.water;
+  if(vLand)    vLand.setStyle({fillColor:t.land, fillOpacity:1, color:t.land, weight:0});
+  if(vLakes)   vLakes.setStyle({fillColor:t.lakeFill, fillOpacity:1, color:t.lakeBorder, weight:0.6, opacity:0.9});
+  if(vCoast)   vCoast.setStyle({color:t.coastline, weight:0.8, opacity:0.9});
+  if(vCountry) vCountry.setStyle({color:t.country, weight:0.8, opacity:0.8, dashArray:'2,2'});
+  if(vState)   vState.setStyle({color:t.state, weight:0.5, opacity:0.7});
+  if(vRivers)  vRivers.setStyle({color:t.river, weight:0.8, opacity:0.8});
+}
+
+async function loadVectorBasemap(){
+  if(vectorBasemapReady||vectorBasemapLoading) return;
+  vectorBasemapLoading=true;
+  try{
+    const fetchGJ = f => fetch(NE_BASE+f).then(r=>r.json());
+    const [land, lakes, coast, country, state, rivers] = await Promise.all([
+      fetchGJ('ne_50m_land.geojson'),
+      fetchGJ('ne_50m_lakes.geojson'),
+      fetchGJ('ne_50m_coastline.geojson'),
+      fetchGJ('ne_50m_admin_0_boundary_lines_land.geojson'),
+      fetchGJ('ne_50m_admin_1_states_provinces_lines.geojson'),
+      fetchGJ('ne_50m_rivers_lake_centerlines.geojson')
+    ]);
+    const opts = { pane:'basemapPane', renderer:basemapRenderer, interactive:false };
+    vLand    = L.geoJSON(land,    opts);
+    vLakes   = L.geoJSON(lakes,   opts);
+    vCoast   = L.geoJSON(coast,   opts);
+    vCountry = L.geoJSON(country, opts);
+    vState   = L.geoJSON(state,   opts);
+    vRivers  = L.geoJSON(rivers,  opts);
+    // draw order (bottom to top): land -> lakes -> rivers -> state lines -> country lines -> coastline
+    [vLand, vLakes, vRivers, vState, vCountry, vCoast].forEach(l=>vectorBasemap.addLayer(l));
+    vectorBasemapReady=true;
+    applyVectorTheme(vectorTheme);
+  }catch(e){
+    console.warn('[basemap] vector layer load failed', e);
+  }finally{
+    vectorBasemapLoading=false;
+  }
+}
+
 const BASEMAPS = {
-  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
-  }),
   sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution:'Tiles &copy; Esri', maxZoom:19
-  }),
-  street: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
   })
 };
-const BASEMAP_ICONS = {dark:'🌍', sat:'🌍', street:'🌍'};
-const BASEMAP_TEXT = {dark:'Dark', sat:'Sat', street:'Street'};
-const BASEMAP_ORDER = ['dark','sat','street'];
+const BASEMAP_ICONS = {dark:'🌑', white:'☀️', sat:'🛰️'};
+const BASEMAP_TEXT = {dark:'Dark', white:'White', sat:'Sat'};
+const BASEMAP_ORDER = ['dark','white','sat'];
+
+function activateBasemap(name){
+  if(name==='dark'||name==='white'){
+    applyVectorTheme(name);
+    vectorBasemap.addTo(map);
+    if(!vectorBasemapReady) loadVectorBasemap();
+  } else {
+    BASEMAPS[name].addTo(map);
+  }
+}
+function deactivateBasemap(name){
+  if(name==='dark'||name==='white'){
+    map.removeLayer(vectorBasemap);
+  } else {
+    map.removeLayer(BASEMAPS[name]);
+  }
+}
 
 let currentBasemap=localStorage.getItem('basemap')||'dark';
-BASEMAPS[currentBasemap].addTo(map);
+if(!BASEMAP_ORDER.includes(currentBasemap)) currentBasemap='dark';
+activateBasemap(currentBasemap);
 document.getElementById('basemap-btn').innerHTML='<span class="tb-icon">'+BASEMAP_ICONS[currentBasemap]+'</span><span class="tb-text"> '+BASEMAP_TEXT[currentBasemap]+'</span>';
 
 
 function setBasemap(name){
-  if(!BASEMAPS[name]||name===currentBasemap)return;
-  map.removeLayer(BASEMAPS[currentBasemap]);
+  if(!BASEMAP_ORDER.includes(name)||name===currentBasemap)return;
+  deactivateBasemap(currentBasemap);
   currentBasemap=name;
-BASEMAPS[currentBasemap].addTo(map);
+  activateBasemap(currentBasemap);
   document.getElementById('basemap-btn').innerHTML='<span class="tb-icon">'+BASEMAP_ICONS[name]+'</span><span class="tb-text"> '+BASEMAP_TEXT[name]+'</span>';
   // Rebuild station labels with correct shadow
-  const isLight=currentBasemap==='street';
 rebuildStationIcons(); // just updates the CSS rule, no marker DOM changes
 }
 
@@ -1841,7 +1915,7 @@ _stnStyle.id = 'stn-label-style';
 document.head.appendChild(_stnStyle);
 
 function rebuildStationIcons(){
-  const isLight = currentBasemap === 'street';
+  const isLight = currentBasemap === 'white';
   const color = isLight ? '#333' : '#aaa';
   const shadow = isLight ? '#fff' : '#000';
   const fontSize = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-sm').trim() || '11px';
