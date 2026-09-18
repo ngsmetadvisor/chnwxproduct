@@ -36,6 +36,16 @@
   .flash.on{animation:flash .28s ease-out}
   @keyframes flash{0%{opacity:.85}100%{opacity:0}}
 
+  .focusRing{position:absolute;width:76px;height:76px;margin:-38px 0 0 -38px;border:2px solid var(--amber);
+    border-radius:14px;pointer-events:none;opacity:0}
+  .focusRing.fail{border-color:rgba(255,255,255,.55)}
+  .focusRing.on{animation:focusPop 1.5s ease-out forwards}
+  @keyframes focusPop{
+    0%{opacity:0;transform:scale(1.5)}
+    15%{opacity:1;transform:scale(1)}
+    75%{opacity:1;transform:scale(1)}
+    100%{opacity:0;transform:scale(1)}}
+
   .top{position:absolute;left:0;right:0;top:0;
     padding:calc(10px + env(safe-area-inset-top)) 12px 26px calc(12px + env(safe-area-inset-left));
     background:linear-gradient(180deg,rgba(0,0,0,.62),rgba(0,0,0,0));pointer-events:none}
@@ -67,10 +77,11 @@
 
   .status{position:absolute;left:14px;right:14px;bottom:62px;text-align:center;color:var(--amber);font-size:13px;
     text-shadow:0 1px 6px rgba(0,0,0,.8);pointer-events:none}
-  .pills{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;gap:8px}
+  .pills{position:absolute;left:8px;right:8px;bottom:12px;display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
   .pill{background:rgba(30,33,37,.82);border:1px solid rgba(255,255,255,.18);border-radius:99px;padding:8px 16px;font-weight:600;
     backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
   .pill.warn{color:var(--red)}
+  .pill.save{background:var(--amber);color:#1a1300;border-color:var(--amber)}
 
   .msg{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;
     text-align:center;padding:24px;color:var(--dim);background:#000}
@@ -141,7 +152,7 @@
   .review{position:fixed;inset:0;background:#000;z-index:30;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:12px;padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
   .review img{max-width:100%;max-height:70vh;max-height:70dvh;object-fit:contain;-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
-  .reviewBtns{display:flex;gap:10px}
+  .reviewBtns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 
   /* ---------- landscape: controls move to the right ---------- */
   @media (orientation:landscape){
@@ -167,6 +178,7 @@
 
   @media (prefers-reduced-motion:reduce){
     .flash.on,.sheet{animation:none}
+    .focusRing.on{animation:none;opacity:1}
     .needle,.shBtn{transition:none}
   }
 </style>
@@ -177,11 +189,12 @@
     <canvas id="view" width="1280" height="720"></canvas>
     <div class="grid" id="grid" hidden></div>
     <div class="flash" id="flash"></div>
+    <div class="focusRing" id="focusRing"></div>
 
     <div class="top">
       <div class="topRow">
         <button class="chip" id="chipExp" aria-label="Switch between auto and manual exposure"><i class="dot"></i><span id="chipExpTxt">Auto</span></button>
-        <button class="chip" id="chipMode" aria-label="Switch between live and single-shot capture"><span id="chipModeTxt">Live</span></button>
+        <button class="chip" id="chipMode" aria-label="Switch between live and single-shot capture"><span id="chipModeTxt">Single</span></button>
         <button class="chip" id="blendBtn" aria-label="Blend style: smooth or light trails">Smooth</button>
         <span class="grow"></span>
         <button class="icon" id="btnFlip" aria-label="Switch camera">
@@ -201,8 +214,8 @@
 
     <div class="status" id="status"></div>
     <div class="pills">
-      <button class="pill" id="btnLive" hidden>Back to live</button>
-      <button class="pill" id="btnSaveLook" hidden>Save this look</button>
+      <button class="pill save" id="btnPhotos" hidden>Save to Photos</button>
+      <button class="pill" id="btnLive" hidden>Back to live view</button>
       <button class="pill warn" id="btnDiscard" hidden>Discard</button>
     </div>
 
@@ -282,16 +295,29 @@
       </select>
       <p class="note">If the camera can't supply the size you pick, you get the closest one it can. High resolutions slow Live mode, so use Single shot for those.</p>
     </div>
+
+    <div class="row">
+      <div class="lab"><span>Photo format</span></div>
+      <select id="fmt">
+        <option value="jpeg" selected>JPEG (smaller, works everywhere)</option>
+        <option value="png">PNG (lossless, large)</option>
+      </select>
+    </div>
+    <label class="chk"><input type="checkbox" id="autoSave" checked autocomplete="off">
+      <span>Try to send each photo to Photos right after the shot</span></label>
+    <p class="note">Web pages can't write to the camera roll silently. The page opens the share sheet, and one tap on “Save Image” (iPhone) or your gallery app (Android) files it. If the browser blocks the automatic attempt, tap the amber “Save to Photos” button that appears.</p>
+
     <label class="chk"><input type="checkbox" id="gridChk" autocomplete="off"><span>Show rule-of-thirds grid</span></label>
-    <p class="note">Smooth blurs motion like water or crowds. Trails keeps the brightest pixel, good for headlights and stars. Keep the phone on a tripod for long shutter speeds.</p>
+    <p class="note">Tap the picture to focus on that spot (where the camera allows it). Smooth blurs motion like water or crowds. Trails keeps the brightest pixel, good for headlights and stars. Keep the phone on a tripod for long shutter speeds.</p>
   </div>
 </div>
 
 <div class="review" id="review" hidden>
   <img id="reviewImg" alt="Last exposure">
-  <p class="note">Long-press the image to add it to Photos, or use Share.</p>
+  <p class="note">Long-press the image to add it to Photos, or use the buttons.</p>
   <div class="reviewBtns">
-    <button class="btn primary" id="btnShare">Share or save</button>
+    <button class="btn primary" id="btnShare">Save to Photos</button>
+    <button class="btn" id="btnDownload">Download file</button>
     <button class="btn" id="btnReviewClose">Close</button>
   </div>
 </div>
@@ -312,13 +338,18 @@
 
   let stream = null, track = null, caps = {}, w = 0, h = 0, devs = [];
   let acc = null, outImg = null, haveAcc = false;
-  let mode = 'live', blend = 'average', autoExp = true;
+  let mode = 'shot', blend = 'average', autoExp = true;
   let gain = 1, lastNow = 0, fps = 0, tick = 0, loopStarted = false, wakeLock = null;
-  let lastBlob = null, lastUrl = null;
+  let lastBlob = null, lastUrl = null, lastSaved = true;
   const shot = { active: false, start: 0, frames: 0, sum: null, result: false, div: 1 };
 
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const status = t => { $('status').textContent = t || ''; };
+  let noteTimer = null;
+  function note(t, ms) {
+    status(t); clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => { if ($('status').textContent === t) status(''); }, ms || 4500);
+  }
   const shutterT = () => STOPS[stopIdx];
   const fmtVal = t => t < 0.95 ? '1/' + Math.round(1 / t) : String(t);
   const fmtT = t => fmtVal(t) + ' s';
@@ -405,8 +436,8 @@
     $('blendBtn').classList.toggle('on', blend === 'lighten');
     const frozen = mode === 'shot' && shot.result && !shot.active;
     $('btnLive').hidden = !frozen;
-    $('btnSaveLook').hidden = !frozen;
     $('btnDiscard').hidden = !shot.active;
+    $('btnPhotos').hidden = !(lastBlob && !lastSaved);
     $('shWrap').classList.toggle('running', shot.active);
     $('shBtn').setAttribute('aria-label', shot.active ? 'Stop exposure' : 'Take picture');
     hudLive();
@@ -445,7 +476,7 @@
     await fillDevices();
     await applyHW();
     if ($('res').value !== 'max' && Math.max(w, h) < Math.max(dims[0], dims[1]) * 0.95) {
-      status('This camera gave ' + w + '×' + h + ', the closest it could to your choice.');
+      note('This camera gave ' + w + '×' + h + ', the closest it could to your choice.', 6000);
     }
     $('msg').hidden = true;
     updateUI();
@@ -471,7 +502,7 @@
     } catch (e) { /* ignore */ }
   }
   function flipCamera() {
-    if (devs.length < 2) { status('Only one camera found.'); setTimeout(() => status(''), 2500); return; }
+    if (devs.length < 2) { note('Only one camera found.', 2500); return; }
     const cur = track && track.getSettings().deviceId;
     const i = Math.max(0, devs.findIndex(d => d.deviceId === cur));
     startCamera(devs[(i + 1) % devs.length].deviceId);
@@ -496,9 +527,10 @@
       r.step = caps.exposureCompensation.step || 0.1; r.value = 0;
       supported.push('compensation');
     }
+    if (caps.focusMode && caps.focusMode.length) supported.push('focus');
     $('hwNote').textContent = supported.length
       ? 'This camera reports sensor controls: ' + supported.join(', ') + '. The software long exposure works on top of them.'
-      : 'This camera does not expose sensor shutter or ISO to the browser (common on iOS and desktop webcams). The software long exposure still works.';
+      : 'This camera does not expose sensor shutter, ISO or focus to the browser (common on iOS and desktop webcams). The software long exposure still works.';
     sensorLabels();
   }
   function sensorLabels() {
@@ -513,9 +545,11 @@
     const T = shutterT();
     const fast = T < T_FRAME * 0.98;
     const canManual = caps.exposureMode && caps.exposureMode.includes('manual');
-    status(fast && !(canManual && caps.exposureTime)
-      ? 'Shutters faster than 1/30 need sensor control, which this camera does not expose. Showing normal frames.'
-      : '');
+    if (fast && !(canManual && caps.exposureTime)) {
+      status('Shutters faster than 1/30 need sensor control, which this camera does not expose. Showing normal frames.');
+    } else if ($('status').textContent.startsWith('Shutters faster')) {
+      status('');
+    }
     const adv = {};
     if (canManual) adv.exposureMode = (autoExp && !fast) ? 'continuous' : 'manual';
     if (fast && caps.exposureTime) {
@@ -525,7 +559,7 @@
     if (autoExp && caps.exposureCompensation) adv.exposureCompensation = +$('hwEc').value;
     if (!Object.keys(adv).length) return;
     try { await track.applyConstraints({ advanced: [adv] }); }
-    catch (e) { status('The camera did not accept a sensor setting: ' + e.message); }
+    catch (e) { note('The camera did not accept a sensor setting: ' + e.message, 5000); }
   }
 
   /* ---------- frame loop ---------- */
@@ -596,23 +630,64 @@
     if (mode === 'shot' && shot.result) render(shot.sum, shot.div, false, shutterT());
   }
 
-  /* ---------- capture ---------- */
+  /* ---------- capture and save to Photos ---------- */
   function flash() {
     const f = $('flash');
     f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
   }
-  function capture() {
-    if (!w) return;
-    view.toBlob(b => {
-      if (!b) return;
-      lastBlob = b;
-      if (lastUrl) URL.revokeObjectURL(lastUrl);
-      lastUrl = URL.createObjectURL(b);
-      $('thumb').src = lastUrl;
-      $('thumbBtn').classList.add('has');
-    }, 'image/png');
-    flash();
+  function canvasBlob() {
+    const png = $('fmt').value === 'png';
+    return new Promise(res => view.toBlob(res, png ? 'image/png' : 'image/jpeg', 0.95));
   }
+  function stamp() {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+  }
+  function lastFile() {
+    const ext = lastBlob.type === 'image/png' ? 'png' : 'jpg';
+    return new File([lastBlob], 'longexposure_' + stamp() + '.' + ext, { type: lastBlob.type });
+  }
+  async function capture() {
+    if (!w) return;
+    flash();
+    const b = await canvasBlob();
+    if (!b) return;
+    lastBlob = b; lastSaved = false;
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastUrl = URL.createObjectURL(b);
+    $('thumb').src = lastUrl;
+    $('thumbBtn').classList.add('has');
+    updateUI();
+    if ($('autoSave').checked) saveToPhotos(true);
+  }
+  function downloadLast() {
+    if (!lastBlob) return;
+    const f = lastFile();
+    const a = document.createElement('a');
+    a.href = lastUrl; a.download = f.name; a.click();
+  }
+  // The share sheet is the only way a web page can hand a picture to the camera roll.
+  async function saveToPhotos(auto) {
+    if (!lastBlob) return;
+    const file = lastFile();
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        lastSaved = true; updateUI();
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') { updateUI(); return; }
+        // Blocked because the tap that started the shot is too old: wait for a fresh tap.
+      }
+      if (auto) { note('Photo ready. Tap “Save to Photos” to add it to your camera roll.', 8000); updateUI(); return; }
+    }
+    if (!auto) {
+      downloadLast();
+      lastSaved = true; updateUI();
+      note('Sharing is not available here, so the file was downloaded instead.', 6000);
+    }
+  }
+
   async function startShot() {
     if (!w || shot.active) return;
     if (!shot.sum || shot.sum.length !== w * h * 4) shot.sum = new Float32Array(w * h * 4);
@@ -641,23 +716,61 @@
     updateUI();
   }
 
-  /* ---------- review and share ---------- */
+  /* ---------- review ---------- */
   function openReview() {
     if (!lastBlob) return;
     $('reviewImg').src = lastUrl;
     $('review').hidden = false;
   }
-  async function shareLast() {
-    if (!lastBlob) return;
-    const name = 'longexposure_' + Date.now() + '.png';
-    const file = new File([lastBlob], name, { type: 'image/png' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file] }); return; }
-      catch (e) { if (e.name === 'AbortError') return; }
-    }
-    const a = document.createElement('a');
-    a.href = lastUrl; a.download = name; a.click();
+
+  /* ---------- tap to focus ---------- */
+  function contentRect() {
+    // Where the picture actually sits inside the canvas (object-fit: contain)
+    const r = view.getBoundingClientRect();
+    const s = Math.min(r.width / w, r.height / h);
+    const cw = w * s, ch = h * s;
+    return { left: r.left + (r.width - cw) / 2, top: r.top + (r.height - ch) / 2, width: cw, height: ch };
   }
+  let focusBackTimer = null;
+  async function focusAt(nx, ny) {
+    if (!track || !track.applyConstraints) return false;
+    const sup = navigator.mediaDevices.getSupportedConstraints ? navigator.mediaDevices.getSupportedConstraints() : {};
+    const modes = caps.focusMode || [];
+    const canPoi = !!sup.pointsOfInterest;
+    if (!canPoi && !modes.length) return false;
+    const adv = {};
+    if (modes.includes('single-shot')) adv.focusMode = 'single-shot';
+    else if (modes.includes('continuous')) adv.focusMode = 'continuous';
+    if (canPoi) adv.pointsOfInterest = [{ x: nx, y: ny }];
+    if (!Object.keys(adv).length) return false;
+    try {
+      await track.applyConstraints({ advanced: [adv] });
+    } catch (e) {
+      return false;
+    }
+    clearTimeout(focusBackTimer);
+    if (modes.includes('continuous') && adv.focusMode === 'single-shot') {
+      focusBackTimer = setTimeout(() => {
+        if (track) track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+      }, 4000);
+    }
+    return true;
+  }
+  $('stage').addEventListener('click', async e => {
+    if (!w || shot.active) return;
+    if (e.target.closest('button')) return;
+    const cr = contentRect();
+    const nx = (e.clientX - cr.left) / cr.width, ny = (e.clientY - cr.top) / cr.height;
+    if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+    const sr = $('stage').getBoundingClientRect();
+    const ring = $('focusRing');
+    ring.style.left = (e.clientX - sr.left) + 'px';
+    ring.style.top = (e.clientY - sr.top) + 'px';
+    ring.classList.remove('on', 'fail'); void ring.offsetWidth;
+    const ok = await focusAt(nx, ny);
+    if (!ok) { ring.classList.add('fail'); note('This camera does not allow focus control from the browser. Its own autofocus stays on.', 4000); }
+    ring.classList.add('on');
+  });
 
   /* ---------- sheet ---------- */
   function openSheet() { $('sheet').hidden = false; $('sheetBack').hidden = false; }
@@ -678,10 +791,11 @@
   };
   $('btnLive').onclick = clearShot;
   $('btnDiscard').onclick = clearShot;
-  $('btnSaveLook').onclick = () => { capture(); setTimeout(openReview, 250); };
+  $('btnPhotos').onclick = () => saveToPhotos(false);
   $('thumbBtn').onclick = openReview;
   $('btnReviewClose').onclick = () => { $('review').hidden = true; };
-  $('btnShare').onclick = shareLast;
+  $('btnShare').onclick = () => saveToPhotos(false);
+  $('btnDownload').onclick = downloadLast;
   $('btnFlip').onclick = flipCamera;
   $('btnGear').onclick = openSheet;
   $('sheetClose').onclick = closeSheet;
@@ -709,7 +823,7 @@
   $('hwEc').oninput = () => { sensorLabels(); applyHWSoon(); };
   $('hwMax').onclick = () => { $('hwTime').value = 1000; sensorLabels(); applyHW(); };
 
-  // Defaults: Live mode, 1/30 s. Align the dial again after layout, load and rotation.
+  // Defaults: Single mode, 1/30 s. Align the dial again after layout, load and rotation.
   stopIdx = DEFAULT_IDX;
   stopEls.forEach((e, j) => e.classList.toggle('sel', j === stopIdx));
   $('shVal').textContent = fmtVal(shutterT());
