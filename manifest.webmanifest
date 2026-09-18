@@ -1,0 +1,9 @@
+{
+  "name": "Long Exposure Camera",
+  "short_name": "Long Exposure",
+  "start_url": "./camera.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#15181b",
+  "theme_color": "#15181b"
+}
