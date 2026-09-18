@@ -1,9 +1,843 @@
-{
-  "name": "Long Exposure Camera",
-  "short_name": "Long Exposure",
-  "start_url": "./camera.html",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#15181b",
-  "theme_color": "#15181b"
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>O camera</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="O camera">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1113">
+<style>
+  :root{
+    --body:#0f1113; --panel:#1a1d21; --panel2:#24282d; --line:#2d3339;
+    --ink:#f2f0ea; --dim:#8f98a3; --amber:#ffc93c; --red:#ff5a3c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  [hidden]{display:none !important}
+  html,body{height:100%;margin:0;background:#000;color:var(--ink);overflow:hidden;overscroll-behavior:none;
+    font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-user-select:none;user-select:none;touch-action:manipulation}
+  button{font:inherit;color:inherit;cursor:pointer}
+  button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  .cam{position:fixed;inset:0;display:flex;flex-direction:column;max-width:900px;margin:0 auto;background:var(--body)}
+
+  /* ---------- viewfinder ---------- */
+  .stage{position:relative;flex:1;min-height:0;background:#000;overflow:hidden}
+  #view{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+  .grid{position:absolute;inset:0;pointer-events:none;
+    background:
+      linear-gradient(90deg,transparent calc(33.33% - .5px),rgba(255,255,255,.28) calc(33.33% - .5px),rgba(255,255,255,.28) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.28) calc(66.66% - .5px),rgba(255,255,255,.28) calc(66.66% + .5px),transparent calc(66.66% + .5px)),
+      linear-gradient(0deg,transparent calc(33.33% - .5px),rgba(255,255,255,.28) calc(33.33% - .5px),rgba(255,255,255,.28) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.28) calc(66.66% - .5px),rgba(255,255,255,.28) calc(66.66% + .5px),transparent calc(66.66% + .5px))}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  .flash.on{animation:flash .28s ease-out}
+  @keyframes flash{0%{opacity:.85}100%{opacity:0}}
+
+  .focusRing{position:absolute;width:76px;height:76px;margin:-38px 0 0 -38px;border:2px solid var(--amber);
+    border-radius:14px;pointer-events:none;opacity:0}
+  .focusRing.fail{border-color:rgba(255,255,255,.55)}
+  .focusRing.on{animation:focusPop 1.5s ease-out forwards}
+  @keyframes focusPop{
+    0%{opacity:0;transform:scale(1.5)}
+    15%{opacity:1;transform:scale(1)}
+    75%{opacity:1;transform:scale(1)}
+    100%{opacity:0;transform:scale(1)}}
+
+  .top{position:absolute;left:0;right:0;top:0;
+    padding:calc(10px + env(safe-area-inset-top)) 12px 26px calc(12px + env(safe-area-inset-left));
+    background:linear-gradient(180deg,rgba(0,0,0,.62),rgba(0,0,0,0));pointer-events:none}
+  .top > *{pointer-events:auto}
+  .topRow{display:flex;align-items:center;gap:8px}
+  .grow{flex:1}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:rgba(30,33,37,.72);border:1px solid rgba(255,255,255,.14);
+    border-radius:99px;padding:6px 11px;font-size:14px;font-weight:600;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+  .chip.on{color:var(--amber)}
+  .chip.on .dot{background:var(--amber)}
+  .icon{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:rgba(30,33,37,.72);
+    border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:0}
+  .icon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+  .readout{display:grid;justify-items:center;gap:4px;margin-top:10px;pointer-events:none}
+  .shutter{display:flex;align-items:baseline;gap:5px;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+  .shutter b{font-size:46px;line-height:1;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.5px;color:var(--amber)}
+  .shutter small{font-size:18px;color:var(--amber);opacity:.85}
+  .meter{position:relative;width:min(300px,78%);height:30px;margin-top:4px}
+  .meter::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:rgba(255,255,255,.35)}
+  .tick{position:absolute;top:0;width:1px;height:6px;background:rgba(255,255,255,.6)}
+  .tick.zero{height:11px;background:#fff}
+  .tl{position:absolute;top:13px;transform:translateX(-50%);font-size:10px;color:rgba(255,255,255,.7);font-variant-numeric:tabular-nums}
+  .needle{position:absolute;top:-4px;width:3px;height:16px;background:var(--amber);border-radius:2px;
+    transform:translateX(-50%);transition:left .15s ease-out;left:50%}
+  .metaLine{display:flex;gap:14px;font-size:12.5px;color:rgba(255,255,255,.82);font-variant-numeric:tabular-nums;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+  .hint{min-height:18px;font-size:13px;color:#fff;font-variant-numeric:tabular-nums;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+
+  .status{position:absolute;left:14px;right:14px;bottom:62px;text-align:center;color:var(--amber);font-size:13px;
+    text-shadow:0 1px 6px rgba(0,0,0,.8);pointer-events:none}
+  .pills{position:absolute;left:8px;right:8px;bottom:12px;display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
+  .pill{background:rgba(30,33,37,.82);border:1px solid rgba(255,255,255,.18);border-radius:99px;padding:8px 16px;font-weight:600;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .pill.warn{color:var(--red)}
+  .pill.save{background:var(--amber);color:#1a1300;border-color:var(--amber)}
+
+  .msg{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;
+    text-align:center;padding:24px;color:var(--dim);background:#000}
+  .msg p{margin:0;max-width:34ch}
+  .btn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 18px;font-weight:600}
+  .btn.primary{background:var(--amber);color:#1a1300;border-color:var(--amber)}
+
+  /* ---------- camera deck ---------- */
+  .deck{flex:none;background:var(--body);border-top:1px solid #1b1f23;padding:10px 0 calc(12px + env(safe-area-inset-bottom))}
+  .dialWrap{position:relative;margin:4px 0 6px}
+  .dial{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;touch-action:pan-x;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 24%,#000 76%,transparent);
+    mask-image:linear-gradient(90deg,transparent,#000 24%,#000 76%,transparent)}
+  .dial::-webkit-scrollbar{display:none}
+  .sp{flex:none;width:calc(50% - 32px)}
+  .stop{position:relative;flex:none;width:64px;height:42px;display:grid;place-items:center;scroll-snap-align:center;
+    background:none;border:0;padding:0 0 6px;color:var(--dim);font-size:15px;font-variant-numeric:tabular-nums}
+  .stop::after{content:"";position:absolute;bottom:0;left:50%;width:1px;height:6px;background:var(--line)}
+  .stop.sel{color:var(--amber);font-weight:700;font-size:17px}
+  .stop.sel::after{background:var(--amber);width:2px;height:8px}
+  .notch{position:absolute;left:50%;top:-5px;transform:translateX(-50%);width:0;height:0;
+    border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--amber)}
+
+  .evRow{display:flex;align-items:center;gap:10px;padding:0 20px;margin:2px 0 6px}
+  .evLab{color:var(--dim);font-size:13px;min-width:34px}
+  .evRow input[type=range]{flex:1;min-width:0}
+  .evRow b{min-width:58px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--amber);font-size:14px}
+
+  .deckRow{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 20px;margin-top:6px}
+  .thumbBtn{justify-self:start;width:56px;height:56px;border-radius:12px;border:2px solid var(--line);background:var(--panel);
+    padding:0;overflow:hidden}
+  .thumbBtn img{display:none;width:100%;height:100%;object-fit:cover}
+  .thumbBtn.has{border-color:#fff}
+  .thumbBtn.has img{display:block}
+  .resBtn{justify-self:end;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:10px 16px;font-weight:600;min-width:84px}
+
+  .shWrap{position:relative;width:92px;height:92px;display:grid;place-items:center}
+  .ring{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);pointer-events:none}
+  .ring circle{fill:none;stroke-width:4}
+  .ring .bg{stroke:#f2f0ea}
+  .ring .fg{stroke:var(--red);stroke-linecap:round;stroke-dasharray:289.03;stroke-dashoffset:289.03;opacity:0}
+  .shWrap.running .ring .bg{stroke:rgba(255,255,255,.25)}
+  .shWrap.running .ring .fg{opacity:1}
+  .shBtn{width:72px;height:72px;border-radius:50%;border:0;padding:0;background:#f2f0ea;
+    transition:transform .1s,border-radius .15s,background .15s}
+  .shBtn:active{transform:scale(.92)}
+  .shWrap.running .shBtn{background:var(--red);border-radius:20px;transform:scale(.62)}
+
+  /* ---------- settings sheet ---------- */
+  .sheetBack{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20}
+  .sheet{position:fixed;left:0;right:0;bottom:0;max-width:900px;margin:0 auto;max-height:80vh;max-height:80dvh;
+    background:var(--panel);border-radius:18px 18px 0 0;border-top:1px solid var(--line);z-index:21;
+    display:flex;flex-direction:column;animation:up .2s ease-out}
+  @keyframes up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+  .sheetHead{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 4px;font-weight:650;font-size:16px}
+  .sheetBody{overflow:auto;padding:8px 16px calc(22px + env(safe-area-inset-bottom));display:grid;gap:16px;-webkit-user-select:auto;user-select:auto}
+  .row{display:grid;gap:6px}
+  .lab{display:flex;justify-content:space-between;color:var(--dim);font-size:13.5px}
+  .lab b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .note{margin:0;color:var(--dim);font-size:12.5px}
+  input[type=range]{width:100%;accent-color:var(--amber);height:28px;margin:0}
+  select{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit}
+  label.chk{display:flex;gap:9px;align-items:flex-start;color:var(--dim);font-size:13.5px}
+  label.chk input{margin-top:3px;accent-color:var(--amber)}
+  .presets{display:flex;gap:6px;flex-wrap:wrap}
+
+  /* ---------- review ---------- */
+  .review{position:fixed;inset:0;background:#000;z-index:30;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:12px;padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+  .review img{max-width:100%;max-height:70vh;max-height:70dvh;object-fit:contain;-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
+  .reviewBtns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+
+  /* ---------- landscape: controls move to the right ---------- */
+  @media (orientation:landscape){
+    .cam{flex-direction:row;max-width:none;margin:0}
+    .stage{min-width:0}
+    .deck{flex:none;width:calc(228px + env(safe-area-inset-right));display:flex;flex-direction:column;
+      border-top:0;border-left:1px solid #1b1f23;
+      padding:calc(10px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) 12px}
+    .dialWrap{margin:6px 0}
+    .evRow{padding:0;margin:4px 0}
+    .deckRow{flex:1;min-height:0;grid-template-columns:none;justify-items:center;align-content:space-between;padding:0;margin-top:0}
+    .thumbBtn,.resBtn{justify-self:center}
+    .shutter b{font-size:36px}
+    .top{padding-bottom:18px}
+    .status{bottom:56px}
+  }
+  @media (orientation:landscape) and (max-height:430px){
+    .shWrap{width:80px;height:80px}
+    .shBtn{width:62px;height:62px}
+    .thumbBtn{width:44px;height:44px}
+    .resBtn{padding:7px 12px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .flash.on,.sheet{animation:none}
+    .focusRing.on{animation:none;opacity:1}
+    .needle,.shBtn{transition:none}
+  }
+</style>
+</head>
+<body>
+<div class="cam">
+  <div class="stage" id="stage">
+    <canvas id="view" width="1280" height="720"></canvas>
+    <div class="grid" id="grid" hidden></div>
+    <div class="flash" id="flash"></div>
+    <div class="focusRing" id="focusRing"></div>
+
+    <div class="top">
+      <div class="topRow">
+        <button class="chip" id="chipExp" aria-label="Switch between auto and manual exposure"><i class="dot"></i><span id="chipExpTxt">Auto</span></button>
+        <button class="chip" id="chipMode" aria-label="Switch between live and single-shot capture"><span id="chipModeTxt">Single</span></button>
+        <button class="chip" id="blendBtn" aria-label="Blend style: smooth or light trails">Smooth</button>
+        <span class="grow"></span>
+        <button class="icon" id="btnFlip" aria-label="Switch camera">
+          <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.65 4.36A9 9 0 0 0 20.5 15"/></svg>
+        </button>
+        <button class="icon" id="btnGear" aria-label="Settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+      </div>
+      <div class="readout">
+        <div class="shutter"><b id="shVal">1/30</b><small>s</small></div>
+        <div class="meter" id="meter"><i class="needle" id="needle"></i></div>
+        <div class="metaLine"><span id="evVal">Gain +0.0 EV</span><span id="meta">Camera off</span></div>
+        <div class="hint" id="hint"></div>
+      </div>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="pills">
+      <button class="pill save" id="btnPhotos" hidden>Save to Photos</button>
+      <button class="pill" id="btnLive" hidden>Back to live view</button>
+      <button class="pill warn" id="btnDiscard" hidden>Discard</button>
+    </div>
+
+    <div class="msg" id="msg">
+      <button class="btn primary" id="btnStart">Start camera</button>
+      <p>Allow camera access when your browser asks. This page needs https:// or localhost.</p>
+    </div>
+  </div>
+
+  <div class="deck">
+    <div class="dialWrap">
+      <div class="dial" id="dial" aria-label="Shutter speed"></div>
+      <i class="notch"></i>
+    </div>
+    <div class="evRow" id="evRow" hidden>
+      <span class="evLab">Gain</span>
+      <input type="range" id="evMan" min="-12" max="4" step="0.1" value="0" autocomplete="off" aria-label="Brightness gain in EV">
+      <b id="evManVal">0.0 EV</b>
+    </div>
+    <div class="deckRow">
+      <button class="thumbBtn" id="thumbBtn" aria-label="Open last photo"><img id="thumb" alt="Last photo"></button>
+      <div class="shWrap" id="shWrap">
+        <svg class="ring" viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="46"/><circle class="fg" id="ringFg" cx="50" cy="50" r="46"/></svg>
+        <button class="shBtn" id="shBtn" aria-label="Take picture"></button>
+      </div>
+      <button class="resBtn" id="resBtn" aria-label="Change resolution">720p</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheetBack" id="sheetBack" hidden></div>
+<div class="sheet" id="sheet" hidden>
+  <div class="sheetHead"><span>Settings</span><button class="icon" id="sheetClose" aria-label="Close settings">
+    <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheetBody">
+    <div class="row" id="rowEvAuto">
+      <div class="lab"><span>Brightness compensation</span><b id="evAutoVal">0.0 EV</b></div>
+      <input type="range" id="evAuto" min="-3" max="3" step="0.1" value="0" autocomplete="off">
+      <p class="note">Auto keeps the picture evenly exposed at any shutter speed.</p>
+    </div>
+    <div class="row" id="rowEvMan" hidden>
+      <label class="chk"><input type="checkbox" id="scaleT" autocomplete="off">
+        <span>Brighten with shutter time, like a real camera (each doubling of time adds one stop)</span></label>
+      <p class="note">The gain slider for Manual mode is under the shutter dial.</p>
+    </div>
+
+    <div id="sensor" style="display:grid;gap:16px">
+      <div class="row" id="rowHwTime" hidden>
+        <div class="lab"><span>Sensor shutter</span><b id="hwTimeVal"></b></div>
+        <input type="range" id="hwTime" min="0" max="1000" value="0" autocomplete="off">
+        <div class="presets"><button class="btn" id="hwMax">Longest sensor shutter</button></div>
+      </div>
+      <div class="row" id="rowHwIso" hidden>
+        <div class="lab"><span>Sensor ISO</span><b id="hwIsoVal"></b></div>
+        <input type="range" id="hwIso" autocomplete="off">
+      </div>
+      <div class="row" id="rowHwEc" hidden>
+        <div class="lab"><span>Sensor exposure compensation</span><b id="hwEcVal"></b></div>
+        <input type="range" id="hwEc" autocomplete="off">
+      </div>
+      <p class="note" id="hwNote"></p>
+    </div>
+
+    <div class="row">
+      <div class="lab"><span>Camera</span></div>
+      <select id="device"></select>
+    </div>
+    <div class="row">
+      <div class="lab"><span>Resolution</span></div>
+      <select id="res">
+        <option value="480">480p · 640 × 480 (fastest)</option>
+        <option value="720" selected>720p · 1280 × 720</option>
+        <option value="1080">1080p · 1920 × 1080</option>
+        <option value="1440">1440p · 2560 × 1440</option>
+        <option value="2160">4K · 3840 × 2160 (heavy)</option>
+        <option value="max">Max · the camera's largest size (heaviest)</option>
+      </select>
+      <p class="note">If the camera can't supply the size you pick, you get the closest one it can. High resolutions slow Live mode, so use Single shot for those.</p>
+    </div>
+
+    <div class="row">
+      <div class="lab"><span>Photo format</span></div>
+      <select id="fmt">
+        <option value="jpeg" selected>JPEG (smaller, works everywhere)</option>
+        <option value="png">PNG (lossless, large)</option>
+      </select>
+    </div>
+    <label class="chk"><input type="checkbox" id="autoSave" checked autocomplete="off">
+      <span>Try to send each photo to Photos right after the shot</span></label>
+    <p class="note">Web pages can't write to the camera roll silently. The page opens the share sheet, and one tap on “Save Image” (iPhone) or your gallery app (Android) files it. If the browser blocks the automatic attempt, tap the amber “Save to Photos” button that appears.</p>
+
+    <label class="chk"><input type="checkbox" id="gridChk" autocomplete="off"><span>Show rule-of-thirds grid</span></label>
+    <p class="note">Tap the picture to focus on that spot (where the camera allows it). Smooth blurs motion like water or crowds. Trails keeps the brightest pixel, good for headlights and stars. Keep the phone on a tripod for long shutter speeds.</p>
+  </div>
+</div>
+
+<div class="review" id="review" hidden>
+  <img id="reviewImg" alt="Last exposure">
+  <p class="note">Long-press the image to add it to Photos, or use the buttons.</p>
+  <div class="reviewBtns">
+    <button class="btn primary" id="btnShare">Save to Photos</button>
+    <button class="btn" id="btnDownload">Download file</button>
+    <button class="btn" id="btnReviewClose">Close</button>
+  </div>
+</div>
+
+<video id="video" playsinline muted style="display:none"></video>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const video = $('video'), view = $('view'), vctx = view.getContext('2d');
+  const grab = document.createElement('canvas');
+  const gctx = grab.getContext('2d', { willReadFrequently: true });
+
+  // Shutter stops, in seconds. Index 8 is 1/30 s, the default.
+  const STOPS = [1/8000, 1/4000, 1/2000, 1/1000, 1/500, 1/250, 1/125, 1/60, 1/30, 1/15, 1/8, 1/4, 1/2, 1, 2, 4, 8, 15, 30, 60];
+  const T_FRAME = 1 / 30, DEFAULT_IDX = 8, ITEM = 64, RING_C = 2 * Math.PI * 46;
+  let stopIdx = DEFAULT_IDX;
+
+  let stream = null, track = null, caps = {}, w = 0, h = 0, devs = [];
+  let acc = null, outImg = null, haveAcc = false;
+  let mode = 'shot', blend = 'average', autoExp = true;
+  let gain = 1, lastNow = 0, fps = 0, tick = 0, loopStarted = false, wakeLock = null;
+  let lastBlob = null, lastUrl = null, lastSaved = true;
+  const shot = { active: false, start: 0, frames: 0, sum: null, result: false, div: 1 };
+
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const status = t => { $('status').textContent = t || ''; };
+  let noteTimer = null;
+  function note(t, ms) {
+    status(t); clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => { if ($('status').textContent === t) status(''); }, ms || 4500);
+  }
+  const shutterT = () => STOPS[stopIdx];
+  const fmtVal = t => t < 0.95 ? '1/' + Math.round(1 / t) : String(t);
+  const fmtT = t => fmtVal(t) + ' s';
+
+  /* ---------- shutter dial ---------- */
+  const dial = $('dial');
+  const stopEls = [];
+  (function buildDial() {
+    const spL = document.createElement('div'); spL.className = 'sp'; dial.appendChild(spL);
+    STOPS.forEach((t, i) => {
+      const b = document.createElement('button');
+      b.className = 'stop';
+      b.textContent = fmtVal(t) + (t >= 0.95 ? 's' : '');
+      b.onclick = () => dial.scrollTo({ left: i * ITEM, behavior: 'smooth' });
+      dial.appendChild(b); stopEls.push(b);
+    });
+    const spR = document.createElement('div'); spR.className = 'sp'; dial.appendChild(spR);
+  })();
+  let aligning = false;
+  function alignDial() {
+    aligning = true;
+    dial.scrollLeft = stopIdx * ITEM;
+    setTimeout(() => { aligning = false; }, 150);
+  }
+  dial.addEventListener('scroll', () => {
+    if (aligning) return;
+    const i = clamp(Math.round(dial.scrollLeft / ITEM), 0, STOPS.length - 1);
+    if (i !== stopIdx) { stopIdx = i; onShutter(); }
+  }, { passive: true });
+  function onShutter() {
+    stopEls.forEach((e, j) => e.classList.toggle('sel', j === stopIdx));
+    $('shVal').textContent = fmtVal(shutterT());
+    rerender(); hudLive(); applyHWSoon();
+  }
+
+  /* ---------- exposure meter ticks ---------- */
+  (function buildMeter() {
+    const m = $('meter');
+    for (let ev = -4; ev <= 6; ev++) {
+      const pos = ((ev + 4) / 10 * 100) + '%';
+      const t = document.createElement('i');
+      t.className = 'tick' + (ev === 0 ? ' zero' : ''); t.style.left = pos; m.appendChild(t);
+      if (ev % 2 === 0) {
+        const l = document.createElement('span');
+        l.className = 'tl'; l.style.left = pos;
+        l.textContent = (ev > 0 ? '+' : ev < 0 ? '−' : '') + Math.abs(ev);
+        m.appendChild(l);
+      }
+    }
+  })();
+
+  /* ---------- HUD ---------- */
+  function hintText() {
+    if (shot.active) {
+      const left = Math.max(0, shutterT() - (performance.now() - shot.start) / 1000);
+      return left.toFixed(1) + ' s left · ' + shot.frames + ' frames';
+    }
+    if (mode === 'shot' && shot.result) return 'Done · ' + shot.frames + ' frames';
+    if (mode === 'shot') return 'Tap the shutter to expose for ' + fmtT(shutterT());
+    return '';
+  }
+  function hudLive() {
+    const ev = Math.log2(Math.max(gain, 1e-6));
+    $('evVal').textContent = 'Gain ' + (ev >= 0 ? '+' : '−') + Math.abs(ev).toFixed(1) + ' EV';
+    $('needle').style.left = clamp((ev + 4) / 10, 0, 1) * 100 + '%';
+    $('meta').textContent = w ? (w + '×' + h + ' · ' + Math.round(fps) + ' fps') : 'Camera off';
+    $('hint').textContent = hintText();
+  }
+  function updateLabels() {
+    $('evAutoVal').textContent = (+$('evAuto').value).toFixed(1) + ' EV';
+    $('evManVal').textContent = (+$('evMan').value).toFixed(1) + ' EV';
+  }
+  function updateUI() {
+    $('rowEvAuto').hidden = !autoExp;
+    $('rowEvMan').hidden = autoExp;
+    $('evRow').hidden = autoExp;
+    $('rowHwTime').hidden = autoExp || !caps.exposureTime;
+    $('rowHwIso').hidden = autoExp || !caps.iso;
+    $('rowHwEc').hidden = !autoExp || !caps.exposureCompensation;
+    $('chipExpTxt').textContent = autoExp ? 'Auto' : 'Manual';
+    $('chipExp').classList.toggle('on', !autoExp);
+    $('chipModeTxt').textContent = mode === 'live' ? 'Live' : 'Single';
+    $('blendBtn').textContent = blend === 'average' ? 'Smooth' : 'Trails';
+    $('blendBtn').classList.toggle('on', blend === 'lighten');
+    const frozen = mode === 'shot' && shot.result && !shot.active;
+    $('btnLive').hidden = !frozen;
+    $('btnDiscard').hidden = !shot.active;
+    $('btnPhotos').hidden = !(lastBlob && !lastSaved);
+    $('shWrap').classList.toggle('running', shot.active);
+    $('shBtn').setAttribute('aria-label', shot.active ? 'Stop exposure' : 'Take picture');
+    hudLive();
+  }
+
+  /* ---------- camera ---------- */
+  async function startCamera(deviceId) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      status('This browser has no camera API. Open the page over https:// or on localhost.');
+      return;
+    }
+    stopStream();
+    const dims = {
+      480: [640, 480], 720: [1280, 720], 1080: [1920, 1080],
+      1440: [2560, 1440], 2160: [3840, 2160], max: [9999, 9999]
+    }[$('res').value];
+    const vc = { width: { ideal: dims[0] }, height: { ideal: dims[1] } };
+    if (deviceId) vc.deviceId = { exact: deviceId }; else vc.facingMode = { ideal: 'environment' };
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: vc });
+    } catch (e) {
+      status('Camera blocked or unavailable: ' + e.message);
+      return;
+    }
+    video.srcObject = stream;
+    await video.play();
+    track = stream.getVideoTracks()[0];
+    w = video.videoWidth; h = video.videoHeight;
+    view.width = grab.width = w; view.height = grab.height = h;
+    acc = new Float32Array(w * h * 4);
+    shot.sum = null; // allocated when a single shot starts, saves memory at high resolution
+    outImg = vctx.createImageData(w, h);
+    haveAcc = false; shot.active = false; shot.result = false; gain = 1;
+    caps = track.getCapabilities ? track.getCapabilities() : {};
+    buildSensorUI();
+    await fillDevices();
+    await applyHW();
+    if ($('res').value !== 'max' && Math.max(w, h) < Math.max(dims[0], dims[1]) * 0.95) {
+      note('This camera gave ' + w + '×' + h + ', the closest it could to your choice.', 6000);
+    }
+    $('msg').hidden = true;
+    updateUI();
+    alignDial();
+    if (!loopStarted) { loopStarted = true; lastNow = performance.now(); schedule(); }
+  }
+  function stopStream() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null; track = null;
+  }
+  async function fillDevices() {
+    try {
+      devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+      const cur = track && track.getSettings().deviceId;
+      const sel = $('device');
+      sel.innerHTML = '';
+      devs.forEach((d, i) => {
+        const o = document.createElement('option');
+        o.value = d.deviceId; o.textContent = d.label || ('Camera ' + (i + 1));
+        if (d.deviceId === cur) o.selected = true;
+        sel.appendChild(o);
+      });
+    } catch (e) { /* ignore */ }
+  }
+  function flipCamera() {
+    if (devs.length < 2) { note('Only one camera found.', 2500); return; }
+    const cur = track && track.getSettings().deviceId;
+    const i = Math.max(0, devs.findIndex(d => d.deviceId === cur));
+    startCamera(devs[(i + 1) % devs.length].deviceId);
+  }
+
+  /* ---------- sensor (hardware) controls, when the camera exposes them ---------- */
+  function hwTime() {
+    const c = caps.exposureTime;
+    return c.min * Math.pow(c.max / c.min, +$('hwTime').value / 1000);
+  }
+  function buildSensorUI() {
+    const supported = [];
+    if (caps.exposureMode && caps.exposureMode.includes('manual')) supported.push('auto/manual switch');
+    if (caps.exposureTime) { supported.push('shutter'); $('hwTime').value = 500; } // units of 100 µs
+    if (caps.iso) {
+      const r = $('hwIso'); r.min = caps.iso.min; r.max = caps.iso.max; r.step = caps.iso.step || 1;
+      r.value = Math.round((caps.iso.min + caps.iso.max) / 4);
+      supported.push('ISO');
+    }
+    if (caps.exposureCompensation) {
+      const r = $('hwEc'); r.min = caps.exposureCompensation.min; r.max = caps.exposureCompensation.max;
+      r.step = caps.exposureCompensation.step || 0.1; r.value = 0;
+      supported.push('compensation');
+    }
+    if (caps.focusMode && caps.focusMode.length) supported.push('focus');
+    $('hwNote').textContent = supported.length
+      ? 'This camera reports sensor controls: ' + supported.join(', ') + '. The software long exposure works on top of them.'
+      : 'This camera does not expose sensor shutter, ISO or focus to the browser (common on iOS and desktop webcams). The software long exposure still works.';
+    sensorLabels();
+  }
+  function sensorLabels() {
+    if (caps.exposureTime) $('hwTimeVal').textContent = fmtT(hwTime() * 1e-4);
+    if (caps.iso) $('hwIsoVal').textContent = $('hwIso').value;
+    if (caps.exposureCompensation) $('hwEcVal').textContent = (+$('hwEc').value).toFixed(1) + ' EV';
+  }
+  let hwTimer = null;
+  function applyHWSoon() { clearTimeout(hwTimer); hwTimer = setTimeout(applyHW, 150); }
+  async function applyHW() {
+    if (!track || !track.applyConstraints) return;
+    const T = shutterT();
+    const fast = T < T_FRAME * 0.98;
+    const canManual = caps.exposureMode && caps.exposureMode.includes('manual');
+    if (fast && !(canManual && caps.exposureTime)) {
+      status('Shutters faster than 1/30 need sensor control, which this camera does not expose. Showing normal frames.');
+    } else if ($('status').textContent.startsWith('Shutters faster')) {
+      status('');
+    }
+    const adv = {};
+    if (canManual) adv.exposureMode = (autoExp && !fast) ? 'continuous' : 'manual';
+    if (fast && caps.exposureTime) {
+      adv.exposureTime = clamp(T / 1e-4, caps.exposureTime.min, caps.exposureTime.max);
+    } else if (!autoExp && caps.exposureTime) adv.exposureTime = hwTime();
+    if (!autoExp && caps.iso) adv.iso = +$('hwIso').value;
+    if (autoExp && caps.exposureCompensation) adv.exposureCompensation = +$('hwEc').value;
+    if (!Object.keys(adv).length) return;
+    try { await track.applyConstraints({ advanced: [adv] }); }
+    catch (e) { note('The camera did not accept a sensor setting: ' + e.message, 5000); }
+  }
+
+  /* ---------- frame loop ---------- */
+  function schedule() {
+    if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
+    else requestAnimationFrame(onFrame);
+  }
+  function onFrame() {
+    schedule();
+    if (!stream || video.readyState < 2 || !w) return;
+    process(performance.now());
+  }
+
+  function process(now) {
+    gctx.drawImage(video, 0, 0, w, h);
+    const f = gctx.getImageData(0, 0, w, h).data;
+    const dt = Math.min((now - lastNow) / 1000, 1); lastNow = now;
+    if (dt > 0) fps = fps ? fps * 0.9 + (1 / dt) * 0.1 : 1 / dt;
+    const T = shutterT(), n = f.length;
+
+    if (mode === 'live') {
+      if (!haveAcc || T <= T_FRAME * 1.02) {
+        for (let i = 0; i < n; i++) acc[i] = f[i];
+        haveAcc = true;
+      } else if (blend === 'average') {
+        const a = 1 - Math.exp(-dt / T);
+        for (let i = 0; i < n; i++) acc[i] += (f[i] - acc[i]) * a;
+      } else {
+        const d = Math.exp(-dt / T);
+        for (let i = 0; i < n; i++) { const v = acc[i] * d; acc[i] = f[i] > v ? f[i] : v; }
+      }
+      render(acc, 1, true, T);
+    } else if (shot.active) {
+      const el = (now - shot.start) / 1000, s = shot.sum;
+      shot.frames++;
+      if (blend === 'average') for (let i = 0; i < n; i++) s[i] += f[i];
+      else for (let i = 0; i < n; i++) if (f[i] > s[i]) s[i] = f[i];
+      shot.div = blend === 'average' ? shot.frames : 1;
+      render(s, shot.div, false, T);
+      $('ringFg').style.strokeDashoffset = RING_C * (1 - clamp(el / T, 0, 1));
+      if (el >= T) finishShot();
+    } else if (!shot.result) {
+      render(f, 1, true, T); // idle preview before the shot
+    }
+    if ((++tick & 3) === 0) hudLive();
+  }
+
+  function render(src, div, smooth, T) {
+    let g;
+    if (autoExp) {
+      let s = 0, c = 0;
+      for (let i = 0; i < src.length; i += 64) { s += 0.299 * src[i] + 0.587 * src[i + 1] + 0.114 * src[i + 2]; c++; }
+      const mean = s / c / div;
+      const want = clamp(118 * Math.pow(2, +$('evAuto').value) / Math.max(mean, 0.5), 0.1, 64);
+      gain = smooth ? gain + (want - gain) * 0.15 : want;
+      g = gain;
+    } else {
+      g = Math.pow(2, +$('evMan').value) * ($('scaleT').checked ? Math.max(T, T_FRAME) / T_FRAME : 1);
+      gain = g;
+    }
+    const k = g / div, o = outImg.data, n = src.length;
+    for (let i = 0; i < n; i += 4) {
+      o[i] = src[i] * k; o[i + 1] = src[i + 1] * k; o[i + 2] = src[i + 2] * k; o[i + 3] = 255;
+    }
+    vctx.putImageData(outImg, 0, 0);
+  }
+  function rerender() {
+    if (mode === 'shot' && shot.result) render(shot.sum, shot.div, false, shutterT());
+  }
+
+  /* ---------- capture and save to Photos ---------- */
+  function flash() {
+    const f = $('flash');
+    f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+  }
+  function canvasBlob() {
+    const png = $('fmt').value === 'png';
+    return new Promise(res => view.toBlob(res, png ? 'image/png' : 'image/jpeg', 0.95));
+  }
+  function stamp() {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+  }
+  function lastFile() {
+    const ext = lastBlob.type === 'image/png' ? 'png' : 'jpg';
+    return new File([lastBlob], 'longexposure_' + stamp() + '.' + ext, { type: lastBlob.type });
+  }
+  async function capture() {
+    if (!w) return;
+    flash();
+    const b = await canvasBlob();
+    if (!b) return;
+    lastBlob = b; lastSaved = false;
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastUrl = URL.createObjectURL(b);
+    $('thumb').src = lastUrl;
+    $('thumbBtn').classList.add('has');
+    updateUI();
+    if ($('autoSave').checked) saveToPhotos(true);
+  }
+  function downloadLast() {
+    if (!lastBlob) return;
+    const f = lastFile();
+    const a = document.createElement('a');
+    a.href = lastUrl; a.download = f.name; a.click();
+  }
+  // The share sheet is the only way a web page can hand a picture to the camera roll.
+  async function saveToPhotos(auto) {
+    if (!lastBlob) return;
+    const file = lastFile();
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        lastSaved = true; updateUI();
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') { updateUI(); return; }
+        // Blocked because the tap that started the shot is too old: wait for a fresh tap.
+      }
+      if (auto) { note('Photo ready. Tap “Save to Photos” to add it to your camera roll.', 8000); updateUI(); return; }
+    }
+    if (!auto) {
+      downloadLast();
+      lastSaved = true; updateUI();
+      note('Sharing is not available here, so the file was downloaded instead.', 6000);
+    }
+  }
+
+  async function startShot() {
+    if (!w || shot.active) return;
+    if (!shot.sum || shot.sum.length !== w * h * 4) shot.sum = new Float32Array(w * h * 4);
+    else shot.sum.fill(0);
+    shot.frames = 0; shot.div = 1; shot.result = false;
+    shot.start = performance.now(); shot.active = true;
+    $('ringFg').style.strokeDashoffset = RING_C;
+    try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { /* optional */ }
+    updateUI();
+  }
+  function releaseLock() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  function finishShot() {
+    shot.active = false; shot.result = true;
+    $('ringFg').style.strokeDashoffset = 0;
+    setTimeout(() => { if (!shot.active) $('ringFg').style.strokeDashoffset = RING_C; }, 500);
+    releaseLock();
+    capture();
+    updateUI();
+  }
+  function clearShot() {
+    shot.active = false; shot.result = false;
+    $('ringFg').style.strokeDashoffset = RING_C;
+    releaseLock();
+    updateUI();
+  }
+
+  /* ---------- review ---------- */
+  function openReview() {
+    if (!lastBlob) return;
+    $('reviewImg').src = lastUrl;
+    $('review').hidden = false;
+  }
+
+  /* ---------- tap to focus ---------- */
+  function contentRect() {
+    // Where the picture actually sits inside the canvas (object-fit: contain)
+    const r = view.getBoundingClientRect();
+    const s = Math.min(r.width / w, r.height / h);
+    const cw = w * s, ch = h * s;
+    return { left: r.left + (r.width - cw) / 2, top: r.top + (r.height - ch) / 2, width: cw, height: ch };
+  }
+  let focusBackTimer = null;
+  async function focusAt(nx, ny) {
+    if (!track || !track.applyConstraints) return false;
+    const sup = navigator.mediaDevices.getSupportedConstraints ? navigator.mediaDevices.getSupportedConstraints() : {};
+    const modes = caps.focusMode || [];
+    const canPoi = !!sup.pointsOfInterest;
+    if (!canPoi && !modes.length) return false;
+    const adv = {};
+    if (modes.includes('single-shot')) adv.focusMode = 'single-shot';
+    else if (modes.includes('continuous')) adv.focusMode = 'continuous';
+    if (canPoi) adv.pointsOfInterest = [{ x: nx, y: ny }];
+    if (!Object.keys(adv).length) return false;
+    try {
+      await track.applyConstraints({ advanced: [adv] });
+    } catch (e) {
+      return false;
+    }
+    clearTimeout(focusBackTimer);
+    if (modes.includes('continuous') && adv.focusMode === 'single-shot') {
+      focusBackTimer = setTimeout(() => {
+        if (track) track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+      }, 4000);
+    }
+    return true;
+  }
+  $('stage').addEventListener('click', async e => {
+    if (!w || shot.active) return;
+    if (e.target.closest('button')) return;
+    const cr = contentRect();
+    const nx = (e.clientX - cr.left) / cr.width, ny = (e.clientY - cr.top) / cr.height;
+    if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+    const sr = $('stage').getBoundingClientRect();
+    const ring = $('focusRing');
+    ring.style.left = (e.clientX - sr.left) + 'px';
+    ring.style.top = (e.clientY - sr.top) + 'px';
+    ring.classList.remove('on', 'fail'); void ring.offsetWidth;
+    const ok = await focusAt(nx, ny);
+    if (!ok) { ring.classList.add('fail'); note('This camera does not allow focus control from the browser. Its own autofocus stays on.', 4000); }
+    ring.classList.add('on');
+  });
+
+  /* ---------- sheet ---------- */
+  function openSheet() { $('sheet').hidden = false; $('sheetBack').hidden = false; }
+  function closeSheet() { $('sheet').hidden = true; $('sheetBack').hidden = true; }
+
+  /* ---------- wiring ---------- */
+  $('shBtn').onclick = () => {
+    if (!w) { startCamera(); return; }
+    if (mode === 'live') { capture(); return; }
+    if (shot.active) { finishShot(); return; }
+    startShot();
+  };
+  $('chipExp').onclick = () => { autoExp = !autoExp; updateUI(); applyHW(); rerender(); };
+  $('chipMode').onclick = () => { mode = mode === 'live' ? 'shot' : 'live'; clearShot(); haveAcc = false; };
+  $('blendBtn').onclick = () => {
+    blend = blend === 'average' ? 'lighten' : 'average'; haveAcc = false;
+    if (shot.result || shot.active) clearShot(); else updateUI();
+  };
+  $('btnLive').onclick = clearShot;
+  $('btnDiscard').onclick = clearShot;
+  $('btnPhotos').onclick = () => saveToPhotos(false);
+  $('thumbBtn').onclick = openReview;
+  $('btnReviewClose').onclick = () => { $('review').hidden = true; };
+  $('btnShare').onclick = () => saveToPhotos(false);
+  $('btnDownload').onclick = downloadLast;
+  $('btnFlip').onclick = flipCamera;
+  $('btnGear').onclick = openSheet;
+  $('sheetClose').onclick = closeSheet;
+  $('sheetBack').onclick = closeSheet;
+  $('btnStart').onclick = () => startCamera($('device').value || undefined);
+  $('device').onchange = () => startCamera($('device').value);
+  $('gridChk').onchange = e => { $('grid').hidden = !e.target.checked; };
+
+  const RES_ORDER = ['480', '720', '1080', '1440', '2160', 'max'];
+  const RES_LABEL = { 480: '480p', 720: '720p', 1080: '1080p', 1440: '1440p', 2160: '4K', max: 'Max' };
+  const updateResBtn = () => { $('resBtn').textContent = RES_LABEL[$('res').value]; };
+  $('res').onchange = () => { updateResBtn(); if (stream) startCamera($('device').value); };
+  $('resBtn').onclick = () => {
+    $('res').value = RES_ORDER[(RES_ORDER.indexOf($('res').value) + 1) % RES_ORDER.length];
+    updateResBtn();
+    if (stream) startCamera($('device').value);
+  };
+  updateResBtn();
+
+  $('evAuto').oninput = () => { updateLabels(); rerender(); };
+  $('evMan').oninput = () => { updateLabels(); rerender(); };
+  $('scaleT').onchange = rerender;
+  $('hwTime').oninput = () => { sensorLabels(); applyHWSoon(); };
+  $('hwIso').oninput = () => { sensorLabels(); applyHWSoon(); };
+  $('hwEc').oninput = () => { sensorLabels(); applyHWSoon(); };
+  $('hwMax').onclick = () => { $('hwTime').value = 1000; sensorLabels(); applyHW(); };
+
+  // Defaults: Single mode, 1/30 s. Align the dial again after layout, load and rotation.
+  stopIdx = DEFAULT_IDX;
+  stopEls.forEach((e, j) => e.classList.toggle('sel', j === stopIdx));
+  $('shVal').textContent = fmtVal(shutterT());
+  updateLabels(); updateUI();
+  alignDial();
+  window.addEventListener('load', () => { stopIdx = DEFAULT_IDX; onShutter(); alignDial(); });
+  window.addEventListener('resize', alignDial);
+  window.addEventListener('orientationchange', () => setTimeout(alignDial, 200));
+  window.addEventListener('pageshow', e => { if (e.persisted) { stopIdx = DEFAULT_IDX; onShutter(); alignDial(); } });
+  startCamera().catch(e => status(e.message));
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
