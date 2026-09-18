@@ -36,13 +36,14 @@
   .flash.on{animation:flash .28s ease-out}
   @keyframes flash{0%{opacity:.85}100%{opacity:0}}
 
-  .top{position:absolute;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top)) 12px 26px;
+  .top{position:absolute;left:0;right:0;top:0;
+    padding:calc(10px + env(safe-area-inset-top)) 12px 26px calc(12px + env(safe-area-inset-left));
     background:linear-gradient(180deg,rgba(0,0,0,.62),rgba(0,0,0,0));pointer-events:none}
   .top > *{pointer-events:auto}
   .topRow{display:flex;align-items:center;gap:8px}
   .grow{flex:1}
-  .chip{display:inline-flex;align-items:center;gap:7px;background:rgba(30,33,37,.72);border:1px solid rgba(255,255,255,.14);
-    border-radius:99px;padding:6px 13px;font-weight:600;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:rgba(30,33,37,.72);border:1px solid rgba(255,255,255,.14);
+    border-radius:99px;padding:6px 11px;font-size:14px;font-weight:600;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
   .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
   .chip.on{color:var(--amber)}
   .chip.on .dot{background:var(--amber)}
@@ -93,13 +94,18 @@
   .notch{position:absolute;left:50%;top:-5px;transform:translateX(-50%);width:0;height:0;
     border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--amber)}
 
+  .evRow{display:flex;align-items:center;gap:10px;padding:0 20px;margin:2px 0 6px}
+  .evLab{color:var(--dim);font-size:13px;min-width:34px}
+  .evRow input[type=range]{flex:1;min-width:0}
+  .evRow b{min-width:58px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--amber);font-size:14px}
+
   .deckRow{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 20px;margin-top:6px}
   .thumbBtn{justify-self:start;width:56px;height:56px;border-radius:12px;border:2px solid var(--line);background:var(--panel);
     padding:0;overflow:hidden}
   .thumbBtn img{display:none;width:100%;height:100%;object-fit:cover}
   .thumbBtn.has{border-color:#fff}
   .thumbBtn.has img{display:block}
-  .blendBtn{justify-self:end;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:10px 16px;font-weight:600;min-width:84px}
+  .resBtn{justify-self:end;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:10px 16px;font-weight:600;min-width:84px}
 
   .shWrap{position:relative;width:92px;height:92px;display:grid;place-items:center}
   .ring{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);pointer-events:none}
@@ -137,6 +143,28 @@
   .review img{max-width:100%;max-height:70vh;max-height:70dvh;object-fit:contain;-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
   .reviewBtns{display:flex;gap:10px}
 
+  /* ---------- landscape: controls move to the right ---------- */
+  @media (orientation:landscape){
+    .cam{flex-direction:row;max-width:none;margin:0}
+    .stage{min-width:0}
+    .deck{flex:none;width:calc(228px + env(safe-area-inset-right));display:flex;flex-direction:column;
+      border-top:0;border-left:1px solid #1b1f23;
+      padding:calc(10px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) 12px}
+    .dialWrap{margin:6px 0}
+    .evRow{padding:0;margin:4px 0}
+    .deckRow{flex:1;min-height:0;grid-template-columns:none;justify-items:center;align-content:space-between;padding:0;margin-top:0}
+    .thumbBtn,.resBtn{justify-self:center}
+    .shutter b{font-size:36px}
+    .top{padding-bottom:18px}
+    .status{bottom:56px}
+  }
+  @media (orientation:landscape) and (max-height:430px){
+    .shWrap{width:80px;height:80px}
+    .shBtn{width:62px;height:62px}
+    .thumbBtn{width:44px;height:44px}
+    .resBtn{padding:7px 12px}
+  }
+
   @media (prefers-reduced-motion:reduce){
     .flash.on,.sheet{animation:none}
     .needle,.shBtn{transition:none}
@@ -154,9 +182,10 @@
       <div class="topRow">
         <button class="chip" id="chipExp" aria-label="Switch between auto and manual exposure"><i class="dot"></i><span id="chipExpTxt">Auto</span></button>
         <button class="chip" id="chipMode" aria-label="Switch between live and single-shot capture"><span id="chipModeTxt">Live</span></button>
+        <button class="chip" id="blendBtn" aria-label="Blend style: smooth or light trails">Smooth</button>
         <span class="grow"></span>
         <button class="icon" id="btnFlip" aria-label="Switch camera">
-          <svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><path d="M9.5 13.5a2.7 2.7 0 0 1 4.6-1.6M14.5 13.5a2.7 2.7 0 0 1-4.6 1.6"/></svg>
+          <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.65 4.36A9 9 0 0 0 20.5 15"/></svg>
         </button>
         <button class="icon" id="btnGear" aria-label="Settings">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -188,13 +217,18 @@
       <div class="dial" id="dial" aria-label="Shutter speed"></div>
       <i class="notch"></i>
     </div>
+    <div class="evRow" id="evRow" hidden>
+      <span class="evLab">Gain</span>
+      <input type="range" id="evMan" min="-12" max="4" step="0.1" value="0" autocomplete="off" aria-label="Brightness gain in EV">
+      <b id="evManVal">0.0 EV</b>
+    </div>
     <div class="deckRow">
       <button class="thumbBtn" id="thumbBtn" aria-label="Open last photo"><img id="thumb" alt="Last photo"></button>
       <div class="shWrap" id="shWrap">
         <svg class="ring" viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="46"/><circle class="fg" id="ringFg" cx="50" cy="50" r="46"/></svg>
         <button class="shBtn" id="shBtn" aria-label="Take picture"></button>
       </div>
-      <button class="blendBtn" id="blendBtn" aria-label="Blend style">Smooth</button>
+      <button class="resBtn" id="resBtn" aria-label="Change resolution">720p</button>
     </div>
   </div>
 </div>
@@ -210,10 +244,9 @@
       <p class="note">Auto keeps the picture evenly exposed at any shutter speed.</p>
     </div>
     <div class="row" id="rowEvMan" hidden>
-      <div class="lab"><span>Brightness gain</span><b id="evManVal">0.0 EV</b></div>
-      <input type="range" id="evMan" min="-12" max="4" step="0.1" value="0" autocomplete="off">
       <label class="chk"><input type="checkbox" id="scaleT" autocomplete="off">
         <span>Brighten with shutter time, like a real camera (each doubling of time adds one stop)</span></label>
+      <p class="note">The gain slider for Manual mode is under the shutter dial.</p>
     </div>
 
     <div id="sensor" style="display:grid;gap:16px">
@@ -240,10 +273,14 @@
     <div class="row">
       <div class="lab"><span>Resolution</span></div>
       <select id="res">
-        <option value="480">640 × 480 (fastest)</option>
-        <option value="720" selected>1280 × 720</option>
-        <option value="1080">1920 × 1080 (heavy)</option>
+        <option value="480">480p · 640 × 480 (fastest)</option>
+        <option value="720" selected>720p · 1280 × 720</option>
+        <option value="1080">1080p · 1920 × 1080</option>
+        <option value="1440">1440p · 2560 × 1440</option>
+        <option value="2160">4K · 3840 × 2160 (heavy)</option>
+        <option value="max">Max · the camera's largest size (heaviest)</option>
       </select>
+      <p class="note">If the camera can't supply the size you pick, you get the closest one it can. High resolutions slow Live mode, so use Single shot for those.</p>
     </div>
     <label class="chk"><input type="checkbox" id="gridChk" autocomplete="off"><span>Show rule-of-thirds grid</span></label>
     <p class="note">Smooth blurs motion like water or crowds. Trails keeps the brightest pixel, good for headlights and stars. Keep the phone on a tripod for long shutter speeds.</p>
@@ -357,6 +394,7 @@
   function updateUI() {
     $('rowEvAuto').hidden = !autoExp;
     $('rowEvMan').hidden = autoExp;
+    $('evRow').hidden = autoExp;
     $('rowHwTime').hidden = autoExp || !caps.exposureTime;
     $('rowHwIso').hidden = autoExp || !caps.iso;
     $('rowHwEc').hidden = !autoExp || !caps.exposureCompensation;
@@ -364,6 +402,7 @@
     $('chipExp').classList.toggle('on', !autoExp);
     $('chipModeTxt').textContent = mode === 'live' ? 'Live' : 'Single';
     $('blendBtn').textContent = blend === 'average' ? 'Smooth' : 'Trails';
+    $('blendBtn').classList.toggle('on', blend === 'lighten');
     const frozen = mode === 'shot' && shot.result && !shot.active;
     $('btnLive').hidden = !frozen;
     $('btnSaveLook').hidden = !frozen;
@@ -380,7 +419,10 @@
       return;
     }
     stopStream();
-    const dims = { 480: [640, 480], 720: [1280, 720], 1080: [1920, 1080] }[$('res').value];
+    const dims = {
+      480: [640, 480], 720: [1280, 720], 1080: [1920, 1080],
+      1440: [2560, 1440], 2160: [3840, 2160], max: [9999, 9999]
+    }[$('res').value];
     const vc = { width: { ideal: dims[0] }, height: { ideal: dims[1] } };
     if (deviceId) vc.deviceId = { exact: deviceId }; else vc.facingMode = { ideal: 'environment' };
     try {
@@ -395,13 +437,16 @@
     w = video.videoWidth; h = video.videoHeight;
     view.width = grab.width = w; view.height = grab.height = h;
     acc = new Float32Array(w * h * 4);
-    shot.sum = new Float32Array(w * h * 4);
+    shot.sum = null; // allocated when a single shot starts, saves memory at high resolution
     outImg = vctx.createImageData(w, h);
     haveAcc = false; shot.active = false; shot.result = false; gain = 1;
     caps = track.getCapabilities ? track.getCapabilities() : {};
     buildSensorUI();
     await fillDevices();
     await applyHW();
+    if ($('res').value !== 'max' && Math.max(w, h) < Math.max(dims[0], dims[1]) * 0.95) {
+      status('This camera gave ' + w + '×' + h + ', the closest it could to your choice.');
+    }
     $('msg').hidden = true;
     updateUI();
     alignDial();
@@ -570,7 +615,9 @@
   }
   async function startShot() {
     if (!w || shot.active) return;
-    shot.sum.fill(0); shot.frames = 0; shot.div = 1; shot.result = false;
+    if (!shot.sum || shot.sum.length !== w * h * 4) shot.sum = new Float32Array(w * h * 4);
+    else shot.sum.fill(0);
+    shot.frames = 0; shot.div = 1; shot.result = false;
     shot.start = performance.now(); shot.active = true;
     $('ringFg').style.strokeDashoffset = RING_C;
     try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { /* optional */ }
@@ -641,8 +688,18 @@
   $('sheetBack').onclick = closeSheet;
   $('btnStart').onclick = () => startCamera($('device').value || undefined);
   $('device').onchange = () => startCamera($('device').value);
-  $('res').onchange = () => { if (stream) startCamera($('device').value); };
   $('gridChk').onchange = e => { $('grid').hidden = !e.target.checked; };
+
+  const RES_ORDER = ['480', '720', '1080', '1440', '2160', 'max'];
+  const RES_LABEL = { 480: '480p', 720: '720p', 1080: '1080p', 1440: '1440p', 2160: '4K', max: 'Max' };
+  const updateResBtn = () => { $('resBtn').textContent = RES_LABEL[$('res').value]; };
+  $('res').onchange = () => { updateResBtn(); if (stream) startCamera($('device').value); };
+  $('resBtn').onclick = () => {
+    $('res').value = RES_ORDER[(RES_ORDER.indexOf($('res').value) + 1) % RES_ORDER.length];
+    updateResBtn();
+    if (stream) startCamera($('device').value);
+  };
+  updateResBtn();
 
   $('evAuto').oninput = () => { updateLabels(); rerender(); };
   $('evMan').oninput = () => { updateLabels(); rerender(); };
@@ -652,7 +709,7 @@
   $('hwEc').oninput = () => { sensorLabels(); applyHWSoon(); };
   $('hwMax').onclick = () => { $('hwTime').value = 1000; sensorLabels(); applyHW(); };
 
-  // Default shutter is 1/30 s. Align the dial again after layout, load and rotation.
+  // Defaults: Live mode, 1/30 s. Align the dial again after layout, load and rotation.
   stopIdx = DEFAULT_IDX;
   stopEls.forEach((e, j) => e.classList.toggle('sel', j === stopIdx));
   $('shVal').textContent = fmtVal(shutterT());
