@@ -16,6 +16,9 @@
   :root{
     --body:#0f1113; --panel:#1a1d21; --panel2:#24282d; --line:#2d3339;
     --ink:#f2f0ea; --dim:#8f98a3; --amber:#ffc93c; --red:#ff5a3c;
+    --rot:0deg;
+    --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+    --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   [hidden]{display:none !important}
@@ -25,6 +28,8 @@
   button{font:inherit;color:inherit;cursor:pointer}
   button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
+  /* The camera layout is fixed to the phone body. When the phone turns, this box is counter-rotated
+     by script so the viewfinder stays put, and only the buttons and text turn to stay readable. */
   .cam{position:fixed;inset:0;display:flex;flex-direction:column;max-width:900px;margin:0 auto;background:var(--body)}
 
   /* ---------- viewfinder ---------- */
@@ -49,7 +54,7 @@
     100%{opacity:0;transform:scale(1)}}
 
   .top{position:absolute;left:0;right:0;top:0;
-    padding:calc(10px + env(safe-area-inset-top)) 12px 26px calc(12px + env(safe-area-inset-left));
+    padding:calc(10px + var(--sat)) 12px 26px calc(12px + var(--sal));
     background:linear-gradient(180deg,rgba(0,0,0,.62),rgba(0,0,0,0));pointer-events:none}
   .top > *{pointer-events:auto}
   .topRow{display:flex;align-items:center;gap:8px}
@@ -92,18 +97,19 @@
   .btn.primary{background:var(--amber);color:#1a1300;border-color:var(--amber)}
 
   /* ---------- camera deck ---------- */
-  .deck{flex:none;background:var(--body);border-top:1px solid #1b1f23;padding:10px 0 calc(12px + env(safe-area-inset-bottom))}
+  .deck{flex:none;background:var(--body);border-top:1px solid #1b1f23;padding:10px 0 calc(12px + var(--sab))}
   .dialWrap{position:relative;margin:4px 0 6px}
   .dial{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;touch-action:pan-x;
     -webkit-mask-image:linear-gradient(90deg,transparent,#000 24%,#000 76%,transparent);
     mask-image:linear-gradient(90deg,transparent,#000 24%,#000 76%,transparent)}
   .dial::-webkit-scrollbar{display:none}
   .sp{flex:none;width:calc(50% - 32px)}
-  .stop{position:relative;flex:none;width:64px;height:42px;display:grid;place-items:center;scroll-snap-align:center;
+  .stop{position:relative;flex:none;width:64px;height:48px;display:grid;place-items:center;scroll-snap-align:center;
     background:none;border:0;padding:0 0 6px;color:var(--dim);font-size:15px;font-variant-numeric:tabular-nums}
   .stop::after{content:"";position:absolute;bottom:0;left:50%;width:1px;height:6px;background:var(--line)}
   .stop.sel{color:var(--amber);font-weight:700;font-size:17px}
   .stop.sel::after{background:var(--amber);width:2px;height:8px}
+  .lbl{display:inline-block}
   .notch{position:absolute;left:50%;top:-5px;transform:translateX(-50%);width:0;height:0;
     border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--amber)}
 
@@ -132,6 +138,20 @@
   .shBtn:active{transform:scale(.92)}
   .shWrap.running .shBtn{background:var(--red);border-radius:20px;transform:scale(.62)}
 
+  /* ---------- phone turned: only buttons and text rotate to stay readable ---------- */
+  .rot .chip,.rot .pill,.rot .resBtn{transform:rotate(var(--rot))}
+  .rot .icon svg,.rot .thumbBtn img{transform:rotate(var(--rot))}
+  .rot .lbl,.rot .evLab,.rot .evRow b{transform:rotate(var(--rot))}
+  .rot .tl{transform:translateX(-50%) rotate(var(--rot))}
+  .rot .msg > *{transform:rotate(var(--rot))}
+  .rot .top{padding-top:calc(36px + var(--sat))}
+  .rot .readout{position:absolute;left:50%;top:calc(var(--sat) + 236px);width:236px;margin:0;
+    transform:translate(-50%,-50%) rotate(var(--rot))}
+  .rot .status{left:calc(50% + 110px);right:auto;bottom:260px;width:220px;
+    transform:translate(-50%,50%) rotate(var(--rot))}
+  .rot .pills{bottom:52px}
+  .rot .dial{scroll-snap-type:none;touch-action:none}
+
   /* ---------- settings sheet ---------- */
   .sheetBack{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20}
   .sheet{position:fixed;left:0;right:0;bottom:0;max-width:900px;margin:0 auto;max-height:80vh;max-height:80dvh;
@@ -156,28 +176,6 @@
   .review img{max-width:100%;max-height:70vh;max-height:70dvh;object-fit:contain;-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
   .reviewBtns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 
-  /* ---------- landscape: controls move to the right ---------- */
-  @media (orientation:landscape){
-    .cam{flex-direction:row;max-width:none;margin:0}
-    .stage{min-width:0}
-    .deck{flex:none;width:calc(228px + env(safe-area-inset-right));display:flex;flex-direction:column;
-      border-top:0;border-left:1px solid #1b1f23;
-      padding:calc(10px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) 12px}
-    .dialWrap{margin:6px 0}
-    .evRow{padding:0;margin:4px 0}
-    .deckRow{flex:1;min-height:0;grid-template-columns:none;justify-items:center;align-content:space-between;padding:0;margin-top:0}
-    .thumbBtn,.resBtn{justify-self:center}
-    .shutter b{font-size:36px}
-    .top{padding-bottom:18px}
-    .status{bottom:56px}
-  }
-  @media (orientation:landscape) and (max-height:430px){
-    .shWrap{width:80px;height:80px}
-    .shBtn{width:62px;height:62px}
-    .thumbBtn{width:44px;height:44px}
-    .resBtn{padding:7px 12px}
-  }
-
   @media (prefers-reduced-motion:reduce){
     .flash.on,.sheet{animation:none}
     .focusRing.on{animation:none;opacity:1}
@@ -186,9 +184,9 @@
 </style>
 </head>
 <body>
-<div class="cam">
+<div class="cam" id="cam">
   <div class="stage" id="stage">
-    <canvas id="view" width="1280" height="720"></canvas>
+    <canvas id="view" width="720" height="1280"></canvas>
     <div class="grid" id="grid" hidden></div>
     <div class="flash" id="flash"></div>
     <div class="focusRing" id="focusRing"></div>
@@ -324,6 +322,9 @@
   </div>
 </div>
 
+<div id="probe" style="position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)"></div>
+
 <video id="video" playsinline muted style="display:none"></video>
 
 <script>
@@ -332,6 +333,7 @@
   const video = $('video'), view = $('view'), vctx = view.getContext('2d');
   const grab = document.createElement('canvas');
   const gctx = grab.getContext('2d', { willReadFrequently: true });
+  const camEl = $('cam');
 
   // Shutter stops, in seconds. Index 8 is 1/30 s, the default.
   const STOPS = [1/8000, 1/4000, 1/2000, 1/1000, 1/500, 1/250, 1/125, 1/60, 1/30, 1/15, 1/8, 1/4, 1/2, 1, 2, 4, 8, 15, 30, 60];
@@ -343,6 +345,8 @@
   let mode = 'shot', blend = 'average', autoExp = true;
   let gain = 1, lastNow = 0, fps = 0, tick = 0, loopStarted = false, wakeLock = null;
   let lastBlob = null, lastUrl = null, lastSaved = true;
+  let ang = 0;                                              // how far the page is turned from the phone body: 0, 90, 180 or 270
+  let cur = { rotated: false, m: [1, 0, 0, 1, 0, 0] };      // how the delivered video frame maps onto the fixed canvas
   const shot = { active: false, start: 0, frames: 0, sum: null, result: false, div: 1 };
 
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -356,16 +360,93 @@
   const fmtVal = t => t < 0.95 ? '1/' + Math.round(1 / t) : String(t);
   const fmtT = t => fmtVal(t) + ' s';
 
+  /* ---------- phone orientation: keep the viewfinder fixed, turn only buttons and text ---------- */
+  function getAngle() {
+    let a = 0;
+    if (screen.orientation && typeof screen.orientation.angle === 'number') a = screen.orientation.angle;
+    else if (typeof window.orientation === 'number') a = window.orientation;
+    return ((Math.round(a / 90) * 90) % 360 + 360) % 360;
+  }
+  function readInsets() {
+    const cs = getComputedStyle($('probe'));
+    return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0,
+             b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+  }
+  function applyOrientation() {
+    ang = getAngle();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const root = document.documentElement.style;
+    if (ang === 0) {
+      camEl.classList.remove('rot');
+      camEl.removeAttribute('style');
+      root.setProperty('--rot', '0deg');
+      ['--sat', '--sab', '--sal', '--sar'].forEach(p => root.removeProperty(p));
+    } else {
+      const swap = ang === 90 || ang === 270;
+      const W = swap ? vh : vw, H = swap ? vw : vh;
+      Object.assign(camEl.style, {
+        inset: 'auto', right: 'auto', bottom: 'auto',
+        left: ((vw - W) / 2) + 'px', top: ((vh - H) / 2) + 'px',
+        width: W + 'px', height: H + 'px', maxWidth: 'none', margin: '0',
+        transform: 'rotate(' + (-ang) + 'deg)'
+      });
+      camEl.classList.add('rot');
+      root.setProperty('--rot', ang + 'deg');
+      // Screen edges that are near the notch become the "top" or "bottom" of the fixed layout
+      const s = readInsets();
+      let m;
+      if (ang === 90) m = { t: s.l, b: s.r, l: s.b, r: s.t };
+      else if (ang === 270) m = { t: s.r, b: s.l, l: s.t, r: s.b };
+      else m = { t: s.b, b: s.t, l: s.r, r: s.l };
+      root.setProperty('--sat', m.t + 'px'); root.setProperty('--sab', m.b + 'px');
+      root.setProperty('--sal', m.l + 'px'); root.setProperty('--sar', m.r + 'px');
+    }
+    alignDial();
+  }
+  function applyOrientationSoon() { applyOrientation(); setTimeout(applyOrientation, 250); }
+
+  // The browser hands over frames that are already turned upright for the page. The canvas is fixed to the
+  // phone body, so turn each frame back to the phone's own orientation. Then the picture stays put.
+  function frameTransform(vw, vh) {
+    const pageLandscape = window.innerWidth > window.innerHeight;
+    const pageOriented = pageLandscape === (vw > vh);
+    if (pageOriented && ang === 90) return { cw: vh, ch: vw, m: [0, 1, -1, 0, vh, 0], rotated: true };
+    if (pageOriented && ang === 270) return { cw: vh, ch: vw, m: [0, -1, 1, 0, 0, vw], rotated: true };
+    if (pageOriented && ang === 180) return { cw: vw, ch: vh, m: [-1, 0, 0, -1, vw, vh], rotated: true };
+    return { cw: vw, ch: vh, m: [1, 0, 0, 1, 0, 0], rotated: false };
+  }
+  function syncSize() {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return false;
+    const t = frameTransform(vw, vh);
+    cur = t;
+    if (t.cw === w && t.ch === h) return false;
+    const wasBusy = w > 0 && (shot.active || shot.result);
+    w = t.cw; h = t.ch;
+    view.width = grab.width = w; view.height = grab.height = h;
+    acc = new Float32Array(w * h * 4);
+    shot.sum = null;
+    outImg = vctx.createImageData(w, h);
+    haveAcc = false;
+    shot.active = false; shot.result = false;
+    $('ringFg').style.strokeDashoffset = RING_C;
+    releaseLock();
+    if (wasBusy) note('The picture size changed, so the exposure was cancelled.', 4000);
+    updateUI();
+    return true;
+  }
+
   /* ---------- shutter dial ---------- */
   const dial = $('dial');
   const stopEls = [];
+  let justDragged = false;
   (function buildDial() {
     const spL = document.createElement('div'); spL.className = 'sp'; dial.appendChild(spL);
     STOPS.forEach((t, i) => {
       const b = document.createElement('button');
       b.className = 'stop';
-      b.textContent = fmtVal(t) + (t >= 0.95 ? 's' : '');
-      b.onclick = () => dial.scrollTo({ left: i * ITEM, behavior: 'smooth' });
+      b.innerHTML = '<span class="lbl">' + fmtVal(t) + (t >= 0.95 ? 's' : '') + '</span>';
+      b.onclick = () => { if (justDragged) return; dial.scrollTo({ left: i * ITEM, behavior: 'smooth' }); };
       dial.appendChild(b); stopEls.push(b);
     });
     const spR = document.createElement('div'); spR.className = 'sp'; dial.appendChild(spR);
@@ -381,6 +462,32 @@
     const i = clamp(Math.round(dial.scrollLeft / ITEM), 0, STOPS.length - 1);
     if (i !== stopIdx) { stopIdx = i; onShutter(); }
   }, { passive: true });
+
+  // When the layout is turned, a swipe along the screen has to be mapped onto the dial's own direction.
+  let drag = null;
+  dial.addEventListener('pointerdown', e => {
+    if (!camEl.classList.contains('rot')) return;
+    drag = { x: e.clientX, y: e.clientY, left: dial.scrollLeft, moved: false };
+  });
+  dial.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    const d = ang === 90 ? -dy : ang === 270 ? dy : ang === 180 ? -dx : dx;
+    if (Math.abs(d) > 4) drag.moved = true;
+    if (drag.moved) dial.scrollLeft = drag.left - d;
+  });
+  function endDrag() {
+    if (!drag) return;
+    const moved = drag.moved; drag = null;
+    if (moved) {
+      justDragged = true; setTimeout(() => { justDragged = false; }, 80);
+      const i = clamp(Math.round(dial.scrollLeft / ITEM), 0, STOPS.length - 1);
+      dial.scrollTo({ left: i * ITEM, behavior: 'smooth' });
+    }
+  }
+  dial.addEventListener('pointerup', endDrag);
+  dial.addEventListener('pointercancel', endDrag);
+
   function onShutter() {
     stopEls.forEach((e, j) => e.classList.toggle('sel', j === stopIdx));
     $('shVal').textContent = fmtVal(shutterT());
@@ -467,18 +574,16 @@
     video.srcObject = stream;
     await video.play();
     track = stream.getVideoTracks()[0];
-    w = video.videoWidth; h = video.videoHeight;
-    view.width = grab.width = w; view.height = grab.height = h;
-    acc = new Float32Array(w * h * 4);
-    shot.sum = null; // allocated when a single shot starts, saves memory at high resolution
-    outImg = vctx.createImageData(w, h);
+    w = 0; h = 0;
     haveAcc = false; shot.active = false; shot.result = false; gain = 1;
+    syncSize();
     caps = track.getCapabilities ? track.getCapabilities() : {};
     buildSensorUI();
     await fillDevices();
     await applyHW();
-    if ($('res').value !== 'max' && Math.max(w, h) < Math.max(dims[0], dims[1]) * 0.95) {
-      note('This camera gave ' + w + '×' + h + ', the closest it could to your choice.', 6000);
+    const got = Math.max(video.videoWidth, video.videoHeight);
+    if ($('res').value !== 'max' && got < Math.max(dims[0], dims[1]) * 0.95) {
+      note('This camera gave ' + video.videoWidth + '×' + video.videoHeight + ', the closest it could to your choice.', 6000);
     }
     $('msg').hidden = true;
     updateUI();
@@ -492,21 +597,21 @@
   async function fillDevices() {
     try {
       devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
-      const cur = track && track.getSettings().deviceId;
+      const cur2 = track && track.getSettings().deviceId;
       const sel = $('device');
       sel.innerHTML = '';
       devs.forEach((d, i) => {
         const o = document.createElement('option');
         o.value = d.deviceId; o.textContent = d.label || ('Camera ' + (i + 1));
-        if (d.deviceId === cur) o.selected = true;
+        if (d.deviceId === cur2) o.selected = true;
         sel.appendChild(o);
       });
     } catch (e) { /* ignore */ }
   }
   function flipCamera() {
     if (devs.length < 2) { note('Only one camera found.', 2500); return; }
-    const cur = track && track.getSettings().deviceId;
-    const i = Math.max(0, devs.findIndex(d => d.deviceId === cur));
+    const id = track && track.getSettings().deviceId;
+    const i = Math.max(0, devs.findIndex(d => d.deviceId === id));
     startCamera(devs[(i + 1) % devs.length].deviceId);
   }
 
@@ -569,33 +674,19 @@
     if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
     else requestAnimationFrame(onFrame);
   }
-  // Phones swap the video's width and height when rotated. Re-fit the canvas and buffers to match.
-  function syncSize() {
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh || (vw === w && vh === h)) return false;
-    const wasBusy = shot.active || shot.result;
-    w = vw; h = vh;
-    view.width = grab.width = w; view.height = grab.height = h;
-    acc = new Float32Array(w * h * 4);
-    shot.sum = null;
-    outImg = vctx.createImageData(w, h);
-    haveAcc = false;
-    shot.active = false; shot.result = false;
-    $('ringFg').style.strokeDashoffset = RING_C;
-    releaseLock();
-    if (wasBusy) note('Rotating the phone cancelled the exposure.', 4000);
-    updateUI();
-    return true;
-  }
   function onFrame() {
     schedule();
-    if (!stream || video.readyState < 2 || !w) return;
-    if (syncSize()) return;
+    if (!stream || video.readyState < 2) return;
+    syncSize();
+    if (!w) return;
     process(performance.now());
   }
 
   function process(now) {
-    gctx.drawImage(video, 0, 0, w, h);
+    const m = cur.m;
+    gctx.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
+    gctx.drawImage(video, 0, 0);
+    gctx.setTransform(1, 0, 0, 1, 0, 0);
     const f = gctx.getImageData(0, 0, w, h).data;
     const dt = Math.min((now - lastNow) / 1000, 1); lastNow = now;
     if (dt > 0) fps = fps ? fps * 0.9 + (1 / dt) * 0.1 : 1 / dt;
@@ -656,9 +747,28 @@
     const f = $('flash');
     f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
   }
+  // The viewfinder is fixed to the phone body, so the saved picture is turned upright for how the phone was held.
+  function uprightCanvas() {
+    if (ang === 0) return view;
+    const c = document.createElement('canvas');
+    const x = c.getContext('2d');
+    if (ang === 180) {
+      c.width = w; c.height = h;
+      x.setTransform(-1, 0, 0, -1, w, h);
+    } else if (ang === 90) {
+      c.width = h; c.height = w;
+      x.setTransform(0, -1, 1, 0, 0, w);
+    } else {
+      c.width = h; c.height = w;
+      x.setTransform(0, 1, -1, 0, h, 0);
+    }
+    x.drawImage(view, 0, 0);
+    return c;
+  }
   function canvasBlob() {
     const png = $('fmt').value === 'png';
-    return new Promise(res => view.toBlob(res, png ? 'image/png' : 'image/jpeg', 0.95));
+    const src = uprightCanvas();
+    return new Promise(res => src.toBlob(res, png ? 'image/png' : 'image/jpeg', 0.95));
   }
   function stamp() {
     const d = new Date(), p = n => String(n).padStart(2, '0');
@@ -745,13 +855,6 @@
   }
 
   /* ---------- tap to focus ---------- */
-  function contentRect() {
-    // Where the picture actually sits inside the canvas (object-fit: contain)
-    const r = view.getBoundingClientRect();
-    const s = Math.min(r.width / w, r.height / h);
-    const cw = w * s, ch = h * s;
-    return { left: r.left + (r.width - cw) / 2, top: r.top + (r.height - ch) / 2, width: cw, height: ch };
-  }
   let focusBackTimer = null;
   async function focusAt(nx, ny) {
     if (!track || !track.applyConstraints) return false;
@@ -780,15 +883,29 @@
   $('stage').addEventListener('click', async e => {
     if (!w || shot.active) return;
     if (e.target.closest('button')) return;
-    const cr = contentRect();
-    const nx = (e.clientX - cr.left) / cr.width, ny = (e.clientY - cr.top) / cr.height;
-    if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+    // Turn the screen tap back into the stage's own coordinates (the layout may be turned)
     const sr = $('stage').getBoundingClientRect();
+    const swap = ang === 90 || ang === 270;
+    const stW = swap ? sr.height : sr.width, stH = swap ? sr.width : sr.height;
+    const dx = e.clientX - (sr.left + sr.width / 2), dy = e.clientY - (sr.top + sr.height / 2);
+    const rad = ang * Math.PI / 180, cs = Math.cos(rad), sn = Math.sin(rad);
+    const lx = stW / 2 + (dx * cs - dy * sn), ly = stH / 2 + (dx * sn + dy * cs);
+    // Where the picture sits inside the stage (object-fit: contain)
+    const s = Math.min(stW / w, stH / h), cw = w * s, ch = h * s;
+    const nx = (lx - (stW - cw) / 2) / cw, ny = (ly - (stH - ch) / 2) / ch;
+    if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+    // Focus points are in the camera's own frame, which is turned upright for the page
+    let fx = nx, fy = ny;
+    if (cur.rotated) {
+      if (ang === 90) { fx = ny; fy = 1 - nx; }
+      else if (ang === 270) { fx = 1 - ny; fy = nx; }
+      else if (ang === 180) { fx = 1 - nx; fy = 1 - ny; }
+    }
     const ring = $('focusRing');
-    ring.style.left = (e.clientX - sr.left) + 'px';
-    ring.style.top = (e.clientY - sr.top) + 'px';
+    ring.style.left = lx + 'px';
+    ring.style.top = ly + 'px';
     ring.classList.remove('on', 'fail'); void ring.offsetWidth;
-    const ok = await focusAt(nx, ny);
+    const ok = await focusAt(fx, fy);
     if (!ok) { ring.classList.add('fail'); note('This camera does not allow focus control from the browser. Its own autofocus stays on.', 4000); }
     ring.classList.add('on');
   });
@@ -844,16 +961,18 @@
   $('hwEc').oninput = () => { sensorLabels(); applyHWSoon(); };
   $('hwMax').onclick = () => { $('hwTime').value = 1000; sensorLabels(); applyHW(); };
 
-  // Defaults: Single mode, 1/30 s. Align the dial again after layout, load and rotation.
+  // Defaults: Single mode, 1/30 s. Fit the layout to how the phone is held now, and again whenever it turns.
   stopIdx = DEFAULT_IDX;
   stopEls.forEach((e, j) => e.classList.toggle('sel', j === stopIdx));
   $('shVal').textContent = fmtVal(shutterT());
+  applyOrientation();
   updateLabels(); updateUI();
   alignDial();
-  window.addEventListener('load', () => { stopIdx = DEFAULT_IDX; onShutter(); alignDial(); });
-  window.addEventListener('resize', alignDial);
-  window.addEventListener('orientationchange', () => setTimeout(alignDial, 200));
-  window.addEventListener('pageshow', e => { if (e.persisted) { stopIdx = DEFAULT_IDX; onShutter(); alignDial(); } });
+  window.addEventListener('load', () => { stopIdx = DEFAULT_IDX; onShutter(); applyOrientationSoon(); });
+  window.addEventListener('resize', applyOrientationSoon);
+  window.addEventListener('orientationchange', applyOrientationSoon);
+  if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', applyOrientationSoon);
+  window.addEventListener('pageshow', e => { if (e.persisted) { stopIdx = DEFAULT_IDX; onShutter(); applyOrientationSoon(); } });
   startCamera().catch(e => status(e.message));
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
