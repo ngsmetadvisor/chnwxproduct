@@ -569,9 +569,28 @@
     if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
     else requestAnimationFrame(onFrame);
   }
+  // Phones swap the video's width and height when rotated. Re-fit the canvas and buffers to match.
+  function syncSize() {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh || (vw === w && vh === h)) return false;
+    const wasBusy = shot.active || shot.result;
+    w = vw; h = vh;
+    view.width = grab.width = w; view.height = grab.height = h;
+    acc = new Float32Array(w * h * 4);
+    shot.sum = null;
+    outImg = vctx.createImageData(w, h);
+    haveAcc = false;
+    shot.active = false; shot.result = false;
+    $('ringFg').style.strokeDashoffset = RING_C;
+    releaseLock();
+    if (wasBusy) note('Rotating the phone cancelled the exposure.', 4000);
+    updateUI();
+    return true;
+  }
   function onFrame() {
     schedule();
     if (!stream || video.readyState < 2 || !w) return;
+    if (syncSize()) return;
     process(performance.now());
   }
 
