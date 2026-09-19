@@ -1,4 +1,4 @@
-const CACHE = 'longexp-v9';
+const CACHE = 'longexp-v10';
 const FILES = ['./camera.html', './manifest.webmanifest'];
 
 self.addEventListener('install', e => {
