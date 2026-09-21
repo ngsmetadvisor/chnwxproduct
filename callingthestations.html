@@ -1,0 +1,1910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station IP status check</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+  :root {
+    --bg: #f2f4f6;
+    --surface: #ffffff;
+    --ink: #15202b;
+    --muted: #5a6a79;
+    --line: #d7dee5;
+    --accent: #0b5cad;
+    --accent-ink: #ffffff;
+    --ok: #17703f;
+    --ok-bg: #e2f4ea;
+    --bad: #b3261e;
+    --bad-bg: #fbe6e4;
+    --warn: #8a5300;
+    --warn-bg: #fdf0d5;
+    --idle-bg: #e8ecf0;
+    --row-hover: #f6f8fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1318;
+      --surface: #151d25;
+      --ink: #e6edf3;
+      --muted: #93a4b4;
+      --line: #26323d;
+      --accent: #4c9aff;
+      --accent-ink: #061524;
+      --ok: #55d08d;
+      --ok-bg: #12301f;
+      --bad: #ff8078;
+      --bad-bg: #3a1a18;
+      --warn: #f0b429;
+      --warn-bg: #33270b;
+      --idle-bg: #222d37;
+      --row-hover: #1a242e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  main { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 24px; line-height: 1.2; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; margin: 0; }
+  .muted { color: var(--muted); }
+  .top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .top p { margin: 0; font-size: 14px; }
+
+  button, input, select { font: inherit; color: inherit; }
+  .btn {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    min-height: 38px;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--muted); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 10px 20px; font-size: 16px; }
+  .btn.primary:hover:not(:disabled) { filter: brightness(1.08); border-color: var(--accent); }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .banner { border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; border: 1px solid; }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+  .banner.bad { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
+  .banner[hidden] { display: none; }
+
+  .settings { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+  .settings label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--muted); }
+  .settings input[type="number"] { width: 92px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  .settings .spacer { flex: 1; }
+  .settings input[type="file"] { font-size: 13px; max-width: 220px; }
+
+  .progress { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 14px; }
+  .progress[hidden] { display: none; }
+  progress { flex: 1; height: 10px; accent-color: var(--accent); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; border-left-width: 5px; }
+  .stat .n { font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 13px; color: var(--muted); }
+  .stat.ok { border-left-color: var(--ok); }
+  .stat.bad { border-left-color: var(--bad); }
+  .stat.idle { border-left-color: var(--muted); }
+  .stat.total { border-left-color: var(--accent); }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+  .panel > header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .panel > header .count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .split { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .split .panel { margin-bottom: 0; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px; max-height: 260px; overflow: auto; }
+  .chip { font-size: 13px; padding: 3px 9px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+  .chip b { font-weight: 700; margin-right: 4px; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+  .empty { padding: 14px; color: var(--muted); font-size: 14px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .groups td, .groups th { padding: 6px 12px; }
+  .bar { display: flex; height: 8px; min-width: 90px; border-radius: 4px; overflow: hidden; background: var(--idle-bg); }
+  .bar i { display: block; height: 100%; }
+  .bar .b-ok { background: var(--ok); }
+  .bar .b-bad { background: var(--bad); }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .toolbar input[type="search"], .toolbar select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); min-height: 36px; }
+  .toolbar input[type="search"] { width: 240px; max-width: 100%; }
+  .toolbar .count { margin-left: auto; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .scroll { overflow: auto; max-height: 72vh; }
+  #dataTable thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--line); padding: 0; }
+  #dataTable thead th button { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 9px 12px; cursor: pointer; font-weight: 600; }
+  #dataTable thead th button:hover { background: var(--row-hover); }
+  #dataTable thead th button:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+  #dataTable thead th.num button { text-align: right; }
+  #dataTable thead th .arrow { color: var(--muted); font-size: 11px; margin-left: 4px; }
+  #dataTable tbody tr:hover { background: var(--row-hover); }
+  #dataTable td { white-space: nowrap; }
+  #dataTable td.wrap { white-space: normal; min-width: 200px; max-width: 320px; }
+  #dataTable tr.s-online td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+  #dataTable tr.s-offline td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
+  #dataTable a { color: var(--accent); text-decoration: none; }
+  #dataTable a:hover { text-decoration: underline; }
+
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .pill.online { background: var(--ok-bg); color: var(--ok); }
+  .pill.offline { background: var(--bad-bg); color: var(--bad); }
+  .pill.checking { background: var(--warn-bg); color: var(--warn); }
+  .pill.pending, .pill.invalid, .pill.blocked { background: var(--idle-bg); color: var(--muted); }
+  .flag { color: var(--warn); font-size: 13px; display: block; }
+
+  .mapbar { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .seg { display: inline-flex; flex-wrap: nowrap; gap: 3px; flex: none; }
+  .seg button { border: 1px solid var(--line); background: var(--surface); padding: 2px 6px; border-radius: 5px; cursor: pointer; min-height: 26px; font-size: 12px; white-space: nowrap; }
+  .seg button:hover { border-color: var(--muted); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  #map { height: 580px; background: var(--idle-bg); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 8px 14px; font-size: 13px; border-top: 1px solid var(--line); }
+  .legend .sw, .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.35); }
+  .ramp { display: inline-block; height: 10px; width: 220px; border-radius: 5px; border: 1px solid var(--line); }
+  .mapnote { padding: 8px 14px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); }
+  .mapnote:empty { display: none; }
+  .leaflet-marker-icon.stn { background: none; border: 0; }
+  .mk-dot { position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.6); transform: translate(-50%, -50%); }
+  .mk-dot.small { width: 10px; height: 10px; opacity: .85; }
+  .mk-lbl { position: absolute; transform: translate(-50%, -50%); font: 700 12px/1 system-ui, sans-serif; padding: 3px 6px; border-radius: 10px; border: 1px solid rgba(0,0,0,.5); white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  .wk { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+  .wk svg { position: absolute; left: -16px; top: -16px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+  .wk .calm { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #111; background: #fff; }
+  .wk .mk-lbl { left: 0; top: 24px; }
+  .is-stale { opacity: .6; }
+  .pop { color: #15202b; font-size: 13px; line-height: 1.4; }
+  .pop table { border-collapse: collapse; margin: 6px 0; }
+  .pop th { text-align: left; font-weight: 600; padding: 2px 12px 2px 0; color: #44515e; border: 0; }
+  .pop td { padding: 2px 0; border: 0; }
+  .pop svg { vertical-align: middle; margin-left: 4px; }
+  .pop a { color: #0b5cad; }
+
+  .timebar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+  .timebar input[type="range"] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+  .timebar .btn { min-height: 32px; padding: 4px 10px; }
+  #tLabel { font-size: 13px; min-width: 200px; text-align: right; font-variant-numeric: tabular-nums; }
+  .btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .panel[hidden] { display: none; }
+  .availbox { position: relative; padding: 8px 10px 10px; }
+  .availbox svg { display: block; }
+  .availgrid { max-height: 340px; overflow-y: scroll; overflow-x: hidden; border: 1px solid var(--line); border-radius: 4px; }
+  .av-ok { fill: #1f9d55; }
+  .av-no { fill: #d33a2f; fill-opacity: .25; }
+  .av-sel { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+  .mapchart { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 14px; }
+  .mapchart > .panel { margin-bottom: 0; }
+  @media (max-width: 1000px) { .mapchart { grid-template-columns: minmax(0, 1fr); } }
+  .chartbox { position: relative; overflow-x: auto; padding: 8px 8px 4px; }
+  .chartbox svg { display: block; }
+  .ch-text { fill: var(--muted); font: 12px system-ui, sans-serif; }
+  .ch-grid { stroke: var(--line); stroke-width: 1; }
+  .ch-major { stroke: var(--muted); stroke-width: 1; opacity: .55; }
+  .ch-frame { fill: none; stroke: var(--line); }
+  .ch-temp { fill: none; stroke: #d33a2f; stroke-width: 2; }
+  .ch-rh { fill: none; stroke: #2b7bd6; stroke-width: 2; }
+  .ch-wind { fill: none; stroke: #1f8fb0; stroke-width: 2; }
+  .ch-gust { fill: none; stroke: #e8873a; stroke-width: 2; stroke-dasharray: 5 3; }
+  .ch-rain { fill: #4fb3e8; }
+  .ch-arrow { fill: #1f8fb0; }
+  .ch-sel { stroke: var(--accent); stroke-dasharray: 5 4; stroke-width: 1.5; }
+  .ch-hover { stroke: var(--ink); stroke-width: 1; opacity: .5; }
+  .ch-tip { position: absolute; top: 8px; z-index: 5; pointer-events: none; width: 210px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 12px; line-height: 1.5; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+  .ch-tip[hidden] { display: none; }
+  .leaflet-tooltip.stn-name { background: rgba(255,255,255,.88); color: #15202b; border: 0; box-shadow: none; padding: 1px 5px; font: 11px/1.3 system-ui, sans-serif; }
+  .leaflet-tooltip-right.stn-name::before { display: none; }
+  .leaflet-tooltip.zone-name { background: none; border: 0; box-shadow: none; color: #0b3d6b; font: 600 12px/1.2 system-ui, sans-serif; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; white-space: nowrap; }
+  .leaflet-tooltip.zone-name::before { display: none; }
+
+  @media (max-width: 600px) {
+    h1 { font-size: 20px; }
+    #map { height: 440px; }
+    .toolbar .count { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div>
+      <h1>Station IP status check</h1>
+      <p class="muted" id="sourceNote">Loading station list…</p>
+    </div>
+    <div>
+      <button id="csvBtn" class="btn" disabled>Download results (CSV)</button>
+      <span style="display:none">
+        <button id="runBtn" class="btn primary" disabled>Check all stations</button>
+        <button id="stopBtn" class="btn" hidden>Stop</button>
+      </span>
+    </div>
+  </header>
+
+  <div id="httpsWarn" class="banner warn" hidden>
+    This page is open over HTTPS. Browsers block requests from an HTTPS page to http:// station addresses, so every station will show as blocked. Open this file from your computer (double-click the .html file) or from an http:// address to run the check.
+  </div>
+  <div id="loadError" class="banner bad" hidden></div>
+
+  <section class="settings" aria-label="Check settings" style="display:none">
+    <label>Timeout (seconds)
+      <input type="number" id="timeout" value="8" min="1" max="60">
+    </label>
+    <label>Checks at once
+      <input type="number" id="conc" value="10" min="1" max="40">
+    </label>
+    <label>Default web port
+      <input type="number" id="port" value="8000" min="1" max="65535">
+    </label>
+    <label>Data page path
+      <input type="text" id="path" value="/" style="width:110px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)">
+    </label>
+    <label>Stale after (minutes)
+      <input type="number" id="stale" value="90" min="5" max="1440">
+    </label>
+    <label>CORS proxy (to read values)
+      <select id="proxy" style="padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);min-height:36px">
+        <option value="https://api.allorigins.win/raw?url={url}">allorigins.win</option>
+        <option value="https://corsproxy.io/?url={url}">corsproxy.io</option>
+        <option value="https://api.codetabs.com/v1/proxy?quest={url}">codetabs.com</option>
+        <option value="">Off (browser only)</option>
+      </select>
+    </label>
+    <label>Proxy delay (ms)
+      <input type="number" id="gap" value="1500" min="0" max="10000" step="100">
+    </label>
+    <span class="spacer"></span>
+    <label>Use a different CSV file
+      <input type="file" id="file" accept=".csv,text/csv">
+    </label>
+  </section>
+
+  <div class="progress" id="progress" hidden>
+    <progress id="bar" value="0" max="1"></progress>
+    <span id="progText"></span>
+  </div>
+
+  <section class="stats" id="stats" aria-live="polite"></section>
+
+  <div class="mapchart">
+  <section class="panel" id="mapPanel">
+    <header><h2>Map</h2><span class="count" id="mapCount"></span></header>
+    <div class="mapbar">
+      <div class="seg" id="elementSeg" role="group" aria-label="Map element">
+        <button type="button" data-el="avail" aria-pressed="false" title="Data availability">Availability</button>
+        <button type="button" data-el="temp" aria-pressed="true" title="Temperature">Temperature</button>
+        <button type="button" data-el="rh" aria-pressed="false" title="Relative humidity">RH</button>
+        <button type="button" data-el="wind" aria-pressed="false" title="Wind speed and direction">Wind</button>
+        <button type="button" data-el="gust" aria-pressed="false" title="Wind gust and direction">Gust</button>
+        <button type="button" data-el="rain" aria-pressed="false" title="Hourly rainfall">Rain</button>
+        <button type="button" data-el="cross" aria-pressed="false" title="Crossover (Temp − RH)">Crossover</button>
+      </div>
+      <div class="seg" id="mapTools">
+        <button type="button" id="mapContourBtn" aria-pressed="true" title="Contours of the selected element: lines, filled, off">Contour: lines</button>
+        <button type="button" id="namesBtn" aria-pressed="false" title="Show station ID and name on the map">Names: off</button>
+        <button type="button" id="zonesBtn" aria-pressed="true" title="Show the fire weather forecast zones">Zones: on</button>
+      </div>
+    </div>
+    <div class="timebar" id="timebar">
+      <button type="button" class="btn" id="tPrev" title="Earlier" disabled>◀</button>
+      <input type="range" id="tSlider" min="0" max="0" value="0" step="1" disabled aria-label="Time">
+      <button type="button" class="btn" id="tNext" title="Later" disabled>▶</button>
+      <button type="button" class="btn" id="tLatest" disabled>Latest</button>
+      <span id="tLabel" class="muted">Loading history…</span>
+    </div>
+    <div id="map" role="application" aria-label="Station map"></div>
+    <div class="legend" id="legend"></div>
+    <div class="mapnote" id="mapNote"></div>
+  </section>
+
+  <section class="panel" id="chartPanel">
+    <header>
+      <h2 id="chartTitle">Trend</h2>
+      <a id="chartGmap" href="#" target="_blank" rel="noopener" hidden style="font-size:13px;color:var(--accent)">Open in Google Maps</a>
+    </header>
+    <div class="chartbox" id="chartBox"></div>
+  </section>
+  </div>
+
+  <section class="panel" id="availPanel">
+    <header><h2>Data availability timeline</h2><span class="count" id="availCount"></span></header>
+    <div class="availbox" id="availBox"><div class="empty">Loading history…</div></div>
+    <div class="legend"><span><span class="sw" style="background:#1f9d55"></span>Weather values received</span><span><span class="sw" style="background:rgba(211,58,47,.35)"></span>No weather values</span><span>Each column is one workflow run. Click a cell to show that station and run; the bars show how many stations reported.</span></div>
+  </section>
+
+  <section class="split">
+    <div class="panel">
+      <header><h2>Not working</h2><span class="count" id="badCount"></span></header>
+      <div id="badList"></div>
+    </div>
+    <div class="panel">
+      <header><h2>Working</h2><span class="count" id="okCount"></span></header>
+      <div id="okList"></div>
+    </div>
+  </section>
+
+  <section class="split">
+    <div class="panel">
+      <header><h2>By telemetry</h2></header>
+      <div class="scroll" style="max-height:none"><table class="groups" id="telTable"></table></div>
+    </div>
+    <div class="panel">
+      <header><h2>By forecast region</h2></header>
+      <div class="scroll" style="max-height:none"><table class="groups" id="regTable"></table></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <header><h2>All stations</h2></header>
+    <div class="toolbar">
+      <input type="search" id="search" placeholder="Search ID, name, IP, region…" aria-label="Search stations">
+      <select id="statusFilter" aria-label="Filter by status">
+        <option value="all">All statuses</option>
+        <option value="offline">Not working</option>
+        <option value="online">Working</option>
+        <option value="untested">Not checked</option>
+      </select>
+      <span class="count" id="rowCount"></span>
+    </div>
+    <div class="scroll">
+      <table id="dataTable">
+        <thead><tr id="headRow"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+  <footer style="margin-top:18px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)">
+    Source data and code: <a href="https://github.com/ngsmetadvisor/chnwxproduct" target="_blank" rel="noopener" style="color:var(--accent)">github.com/ngsmetadvisor/chnwxproduct</a>
+  </footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var CSV_URL = 'https://raw.githubusercontent.com/ngsmetadvisor/chnwxproduct/refs/heads/main/stationIP.csv';
+  var FEED_URL = 'https://raw.githubusercontent.com/ngsmetadvisor/chnwxproduct/refs/heads/main/station_weather.json';
+  var feedAt = null;
+  var feedMsg = '';
+  var HIST_URL = 'https://raw.githubusercontent.com/ngsmetadvisor/chnwxproduct/refs/heads/main/station_weather_history.json';
+  var hist = null;               // { by: { stationId: [records] }, times: [epoch seconds] }
+  var tsel = -1;                 // time shown on the map: index into hist.times, -1 = latest
+  var curChart = null;           // station shown in the trend chart
+
+  var stations = [];
+  var runId = 0;
+  var running = false;
+  var lastRunAt = null;
+  var sort = { key: 'no', dir: 1 };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var runBtn = $('runBtn'), stopBtn = $('stopBtn'), csvBtn = $('csvBtn');
+
+  var STATUS_LABEL = {
+    online: 'Working', offline: 'Not working', checking: 'Checking…',
+    pending: 'Not checked', blocked: 'Blocked', invalid: 'No valid IP'
+  };
+  var STATUS_ORDER = { offline: 0, online: 1, checking: 2, pending: 3, blocked: 4, invalid: 5 };
+  var UNTESTED = ['pending', 'checking', 'blocked', 'invalid'];
+
+  var AVAIL = {
+    ok:       { label: 'Data OK', color: '#1f9d55' },
+    stale:    { label: 'Data stale', color: '#e0a100' },
+    cors:     { label: 'Responding, values unreadable', color: '#7a5cd6' },
+    noparse:  { label: 'Responding, no weather values', color: '#3b82c4' },
+    down:     { label: 'No response', color: '#d33a2f' },
+    untested: { label: 'Not checked', color: '#8a97a4' }
+  };
+  var AVAIL_ORDER = ['ok', 'stale', 'cors', 'noparse', 'down', 'untested'];
+
+  function availOf(s) {
+    if (s.status === 'offline') return 'down';
+    if (s.status === 'online') return s.dataState || 'noparse';
+    return 'untested';
+  }
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ---------- CSV parsing ---------- */
+  function parseCSV(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    var rows = [], row = [], field = '', inQ = false, i, c;
+    for (i = 0; i < text.length; i++) {
+      c = text[i];
+      if (inQ) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; } else { inQ = false; }
+        } else { field += c; }
+      } else if (c === '"') { inQ = true; }
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); field = ''; rows.push(row); row = [];
+      } else { field += c; }
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  function isValidIp(ip) {
+    var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+    if (!m) return false;
+    for (var i = 1; i <= 4; i++) if (+m[i] > 255) return false;
+    return true;
+  }
+  function ipToNum(ip) {
+    if (!isValidIp(ip)) return Infinity;
+    return ip.split('.').reduce(function (a, o) { return a * 256 + (+o); }, 0);
+  }
+
+  function buildStations(rows) {
+    var header = rows[0].map(function (h) { return h.trim(); });
+    function idx(name, prefix) {
+      for (var i = 0; i < header.length; i++) {
+        if (prefix ? header[i].indexOf(name) === 0 : header[i] === name) return i;
+      }
+      return -1;
+    }
+    var ix = {
+      no: idx('No.'), id: idx('Stn. ID'), name: idx('Station Name'),
+      telemetry: idx('Telemetry'), ip: idx('IP Address'), port: idx('Port'),
+      logger: idx('Logger'), region: idx('Forecast Region'), modem: idx('Modem'),
+      web: idx('Web Access', true), lat: idx('Latitude'), lon: idx('Longitude')
+    };
+    function get(r, k) { return ix[k] >= 0 && r[ix[k]] != null ? r[ix[k]].trim() : ''; }
+
+    var out = [];
+    rows.slice(1).forEach(function (r) {
+      if (!r.some(function (x) { return x.trim() !== ''; })) return;
+      var s = {
+        no: parseInt(get(r, 'no'), 10) || 0,
+        id: get(r, 'id'), name: get(r, 'name'),
+        telemetry: get(r, 'telemetry'), ip: get(r, 'ip'), loggerPort: get(r, 'port'),
+        logger: get(r, 'logger'), region: get(r, 'region'), modem: get(r, 'modem'),
+        webUrl: get(r, 'web')
+      };
+      s.idx = out.length;
+      s.lat = parseFloat(get(r, 'lat'));
+      s.lon = parseFloat(get(r, 'lon'));
+      s.lonFixed = false;
+      if (isFinite(s.lat) && isFinite(s.lon) && s.lon > 0 && s.lat > 48 && s.lat < 61) { s.lon = -s.lon; s.lonFixed = true; }
+      if (!isFinite(s.lat) || !isFinite(s.lon)) { s.lat = null; s.lon = null; }
+      s.dataState = ''; s.data = null; s.hourlyUrl = '';
+      s.valid = isValidIp(s.ip);
+      var m = /(\d{1,3}(?:\.\d{1,3}){3}):(\d+)/.exec(s.webUrl);
+      s.urlIp = m ? m[1] : '';
+      s.urlPort = m ? m[2] : '';
+      s.status = s.valid ? 'pending' : 'invalid';
+      s.detail = s.valid ? '' : 'No valid IP address';
+      s.ms = null; s.checkedAt = null;
+      out.push(s);
+    });
+
+    var byIp = {};
+    out.forEach(function (s) { if (s.valid) (byIp[s.ip] = byIp[s.ip] || []).push(s); });
+    out.forEach(function (s) {
+      s.flags = [];
+      if (!s.ip) s.flags.push('IP missing');
+      else if (!s.valid) s.flags.push('IP not valid');
+      if (s.valid && byIp[s.ip].length > 1) {
+        s.flags.push('Same IP as ' + byIp[s.ip].filter(function (o) { return o !== s; })
+          .map(function (o) { return o.id; }).join(', '));
+      }
+      if (!s.webUrl) s.flags.push('No web URL listed');
+      if (s.valid && s.urlIp && s.urlIp !== s.ip) s.flags.push('Web URL uses ' + s.urlIp);
+      if (s.urlPort && s.urlPort.length < 4) s.flags.push('Web URL port :' + s.urlPort + ' looks wrong');
+      if (!s.region) s.flags.push('Record looks incomplete');
+      if (s.lonFixed) s.flags.push('Longitude was positive — plotted as negative');
+      if (s.lat == null) s.flags.push('No coordinates — not on map');
+      s.searchText = [s.no, s.id, s.name, s.ip, s.telemetry, s.modem, s.logger, s.region].join(' ').toLowerCase();
+    });
+    return out;
+  }
+
+  /* ---------- Probing ---------- */
+  function portFor(s, defPort) {
+    return (s.urlPort && s.urlPort.length >= 4) ? s.urlPort : String(defPort);
+  }
+
+  function webLink(s) {
+    var p = portFor(s, $('port').value || 8000);
+    return 'http://' + s.ip + ':' + p + '/';
+  }
+
+  function probe(s, timeoutMs, defPort) {
+    var url = 'http://' + s.ip + ':' + portFor(s, defPort) + '/';
+    var ctl = new AbortController();
+    var timedOut = false;
+    var timer = setTimeout(function () { timedOut = true; ctl.abort(); }, timeoutMs);
+    var t0 = performance.now();
+    return fetch(url, { mode: 'no-cors', cache: 'no-store', credentials: 'omit', signal: ctl.signal })
+      .then(function () {
+        return { status: 'online', ms: Math.round(performance.now() - t0), detail: 'Responded' };
+      })
+      .catch(function () {
+        var ms = Math.round(performance.now() - t0);
+        if (timedOut) return { status: 'offline', ms: ms, detail: 'No response (timed out)' };
+        if (location.protocol === 'https:' && ms < 40) return { status: 'blocked', ms: ms, detail: 'Blocked by browser (HTTPS page)' };
+        return { status: 'offline', ms: ms, detail: 'Connection failed' };
+      })
+      .then(function (r) { clearTimeout(timer); return r; });
+  }
+
+  function dataUrl(s, defPort) {
+    var path = ($('path').value || '/').trim();
+    if (path.charAt(0) !== '/') path = '/' + path;
+    return 'http://' + s.ip + ':' + portFor(s, defPort) + path;
+  }
+
+  function textFromHtml(html) {
+    return html
+      .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+      .replace(/<br\s*\/?>|<\/(p|div|tr|li|h[1-6]|pre|table)>/gi, '\n')
+      .replace(/<\/t[dh]>/gi, ' ')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ').replace(/&deg;/g, '°').replace(/&amp;/g, '&')
+      .replace(/\r/g, '');
+  }
+
+  function numFrom(re, text) {
+    var m = re.exec(text);
+    if (!m) return null;
+    var v = parseFloat(m[1]);
+    return isFinite(v) ? v : null;
+  }
+
+  function parseWeather(html) {
+    var text = textFromHtml(html);
+    var d = {
+      station: ((/Weather Station:\s*(.+)/i.exec(text) || [])[1] || '').trim(),
+      timeText: '', tz: '', obsMin: null, ageMin: null,
+      dir: numFrom(/Wind Direction:\s*(-?[\d.]+)/i, text),
+      speed: numFrom(/Wind Speed:\s*(-?[\d.]+)/i, text),
+      gust: numFrom(/Wind Gust[^:\n]*:\s*(-?[\d.]+)/i, text),
+      gustDir: numFrom(/Wind Direction of Gust[^:\n]*:\s*(-?[\d.]+)/i, text),
+      temp: numFrom(/Temperature:\s*(-?[\d.]+)/i, text),
+      rh: numFrom(/Relative Humidity:\s*(-?[\d.]+)/i, text),
+      rain: numFrom(/Hourly Rain(?:fall)?:\s*(-?[\d.]+)/i, text)
+    };
+    var found = ['dir', 'speed', 'gust', 'gustDir', 'temp', 'rh'].some(function (k) { return d[k] != null; });
+    if (!found) return null;
+    var t = /Time:\s*(\d{1,2}):(\d{2})\s*([A-Za-z]{2,4})?/i.exec(text);
+    if (t) {
+      d.timeText = t[1] + ':' + t[2];
+      d.tz = (t[3] || '').toUpperCase();
+      d.obsMin = (+t[1]) * 60 + (+t[2]);
+      var now = new Date();
+      var utc = now.getUTCHours() * 60 + now.getUTCMinutes();
+      var off = d.tz === 'MDT' ? 360 : 420;
+      // diff > 0: observation is in the past; diff < 0: it is in the future
+      var diff = ((((utc - off - d.obsMin) % 1440) + 1440 + 720) % 1440) - 720;
+      if (d.tz !== 'MDT' && diff <= -30 && diff >= -85) {
+        d.clockAhead = true;   // 30-85 min in the future: the station clock is probably on MDT but labelled MST
+        diff += 60;
+      }
+      d.ageMin = diff > -30 ? Math.max(0, diff) : diff + 1440;
+    }
+    return d;
+  }
+
+  function fmtAge(min) {
+    return min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + (min % 60) + ' min';
+  }
+
+  // Public proxies rate-limit, so proxy requests go out one at a time with a pause between them.
+  // The pause grows automatically when a request fails (e.g. HTTP 429).
+  var proxyGate = Promise.resolve();
+  var proxyGap = 1500;
+  var lastProxyRun = -1;
+
+  function proxySlot() {
+    proxyGate = proxyGate.then(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, proxyGap); });
+    });
+    return proxyGate;
+  }
+
+  // Reads a station page through the CORS proxy chosen in the settings.
+  // Resolves to { data, hourlyUrl }, or null when there is no proxy, it fails, or the page has no weather values.
+  function proxyFetch(s, defPort, timeoutMs) {
+    var tpl = $('proxy').value;
+    if (!tpl) return Promise.resolve(null);
+    var url = tpl.replace('{url}', encodeURIComponent(dataUrl(s, defPort)));
+    var myRun = runId;
+    if (lastProxyRun !== runId) { lastProxyRun = runId; proxyGap = Math.max(0, +$('gap').value || 0); }
+
+    function attempt(n) {
+      return proxySlot().then(function () {
+        if (myRun !== runId) return null;                    // run was stopped or restarted
+        var ctl = new AbortController();
+        var timer = setTimeout(function () { ctl.abort(); }, timeoutMs * 2);
+        return fetch(url, { cache: 'no-store', credentials: 'omit', signal: ctl.signal })
+          .then(function (resp) { return resp.text(); })
+          .then(function (html) {
+            var d = parseWeather(html);
+            return d ? { data: d, hourlyUrl: hourlyFrom(html, s, defPort) } : null;
+          })
+          .catch(function () {
+            proxyGap = Math.min(10000, Math.round(Math.max(proxyGap, 500) * 1.5));   // back off
+            return n < 2 ? attempt(n + 1) : null;
+          })
+          .then(function (r) { clearTimeout(timer); return r; });
+      });
+    }
+    return attempt(1);
+  }
+
+  function fetchStation(s, timeoutMs, defPort) {
+    var url = dataUrl(s, defPort);
+    var ctl = new AbortController();
+    var timedOut = false;
+    var timer = setTimeout(function () { timedOut = true; ctl.abort(); }, timeoutMs);
+    var t0 = performance.now();
+    return fetch(url, { cache: 'no-store', credentials: 'omit', signal: ctl.signal })
+      .then(function (resp) {
+        return resp.text().then(function (html) {
+          var d = parseWeather(html);
+          var r = {
+            status: 'online', ms: Math.round(performance.now() - t0), data: d,
+            hourlyUrl: hourlyFrom(html, s, defPort)
+          };
+          if (!d) {
+            r.dataState = 'noparse';
+            r.detail = resp.ok ? 'Responded, no weather values found' : 'Responded (HTTP ' + resp.status + '), no weather values';
+          } else {
+            var stale = d.ageMin != null && d.ageMin > (+$('stale').value || 90);
+            r.dataState = stale ? 'stale' : 'ok';
+            r.detail = stale ? 'Last observation ' + fmtAge(d.ageMin) + ' ago' : 'Data received';
+          }
+          return r;
+        });
+      })
+      .catch(function () {
+        if (timedOut) return { status: 'offline', ms: Math.round(performance.now() - t0), detail: 'No response (timed out)' };
+        return probe(s, timeoutMs, defPort).then(function (r) {
+          if (r.status !== 'online') return r;
+          return proxyFetch(s, defPort, timeoutMs).then(function (p) {
+            if (p) {
+              var stale = p.data.ageMin != null && p.data.ageMin > (+$('stale').value || 90);
+              r.data = p.data; r.hourlyUrl = p.hourlyUrl;
+              r.dataState = stale ? 'stale' : 'ok';
+              r.detail = stale ? 'Last observation ' + fmtAge(p.data.ageMin) + ' ago (via proxy)' : 'Data received (via proxy)';
+            } else if (s.feed && s.feed.data) {
+              r.data = s.feed.data; r.hourlyUrl = s.feed.hourly || '';
+              r.dataState = feedState(s); r.detail = 'Answered live; values from the GitHub feed';
+            } else {
+              r.dataState = 'cors'; r.detail = 'Responding, but the browser cannot read the values (CORS)';
+            }
+            return r;
+          });
+        });
+      })
+      .then(function (r) { clearTimeout(timer); return r; });
+  }
+
+  function runAll() {
+    if (running || !stations.length) return;
+    leaveHistory();
+    var myRun = ++runId;
+    running = true;
+    var timeoutMs = Math.max(1, +$('timeout').value || 8) * 1000;
+    var conc = Math.min(40, Math.max(1, +$('conc').value || 10));
+    var defPort = +$('port').value || 8000;
+
+    stations.forEach(function (s) {
+      s.ms = null; s.checkedAt = null;
+      s.data = null; s.dataState = ''; s.hourlyUrl = '';
+      if (s.valid) { s.status = 'pending'; s.detail = ''; }
+    });
+    var queue = stations.filter(function (s) { return s.valid; });
+    var next = 0, done = 0;
+
+    runBtn.hidden = true; stopBtn.hidden = false; csvBtn.disabled = true;
+    $('progress').hidden = false;
+    $('bar').max = queue.length; $('bar').value = 0;
+    $('progText').textContent = '0 of ' + queue.length + ' checked';
+    renderAll();
+
+    function worker() {
+      if (myRun !== runId || next >= queue.length) return Promise.resolve();
+      var s = queue[next++];
+      s.status = 'checking'; scheduleRender();
+      return fetchStation(s, timeoutMs, defPort).then(function (r) {
+        if (myRun !== runId) return;
+        s.status = r.status; s.ms = r.ms; s.detail = r.detail; s.checkedAt = new Date();
+        s.dataState = r.dataState || ''; s.data = r.data || null; s.hourlyUrl = r.hourlyUrl || '';
+        done++;
+        $('bar').value = done;
+        $('progText').textContent = done + ' of ' + queue.length + ' checked';
+        scheduleRender();
+        return worker();
+      });
+    }
+
+    var workers = [];
+    for (var i = 0; i < Math.min(conc, queue.length); i++) workers.push(worker());
+    Promise.all(workers).then(function () {
+      if (myRun !== runId) return;
+      running = false; lastRunAt = new Date();
+      runBtn.hidden = false; stopBtn.hidden = true; csvBtn.disabled = false;
+      $('progText').textContent = 'Finished ' + lastRunAt.toLocaleString() + ' — ' + queue.length + ' addresses checked';
+      renderAll();
+    });
+  }
+
+  function stopRun() {
+    runId++; running = false;
+    stations.forEach(function (s) { if (s.status === 'checking') s.status = 'pending'; });
+    runBtn.hidden = false; stopBtn.hidden = true;
+    csvBtn.disabled = !stations.some(function (s) { return s.checkedAt; });
+    $('progText').textContent = 'Stopped';
+    renderAll();
+  }
+
+  /* ---------- Rendering ---------- */
+  var renderQueued = false;
+  function scheduleRender() {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(function () { renderQueued = false; renderAll(); });
+  }
+
+  function counts(list) {
+    var c = { total: list.length, online: 0, offline: 0, untested: 0 };
+    list.forEach(function (s) {
+      if (s.status === 'online') c.online++;
+      else if (s.status === 'offline') c.offline++;
+      else c.untested++;
+    });
+    return c;
+  }
+
+  function renderStats() {
+    var c = counts(stations);
+    var tested = c.online + c.offline;
+    var pct = tested ? Math.round(c.online / tested * 100) + '% of checked' : '';
+    $('stats').innerHTML =
+      '<div class="stat total"><div class="n">' + c.total + '</div><div class="l">Stations in list</div></div>' +
+      '<div class="stat ok"><div class="n">' + c.online + '</div><div class="l">Working' + (pct ? ' · ' + pct : '') + '</div></div>' +
+      '<div class="stat bad"><div class="n">' + c.offline + '</div><div class="l">Not working</div></div>' +
+      '<div class="stat idle"><div class="n">' + c.untested + '</div><div class="l">Not checked</div></div>' +
+      '<div class="stat ok"><div class="n">' + stations.filter(function (s) { return s.status === 'online' && (s.dataState === 'ok' || s.dataState === 'stale'); }).length + '</div><div class="l">Weather values read</div></div>';
+  }
+
+  function chipHtml(s, cls) {
+    var tip = s.name + ' — ' + s.ip + (s.detail ? ' — ' + s.detail : '');
+    return '<span class="chip ' + cls + '" title="' + esc(tip) + '"><b>' + esc(s.id) + '</b>' + esc(s.name) + '</span>';
+  }
+
+  function renderLists() {
+    var ok = stations.filter(function (s) { return s.status === 'online'; });
+    var bad = stations.filter(function (s) { return s.status === 'offline'; });
+    var any = ok.length || bad.length || stations.some(function (s) { return s.status === 'blocked'; });
+    $('okCount').textContent = ok.length ? ok.length + ' stations' : '';
+    $('badCount').textContent = bad.length ? bad.length + ' stations' : '';
+    var hint = running ? 'Checking…' : (any ? 'None' : 'Run the check to see results.');
+    $('okList').innerHTML = ok.length ? '<div class="chips">' + ok.map(function (s) { return chipHtml(s, 'ok'); }).join('') + '</div>' : '<div class="empty">' + hint + '</div>';
+    $('badList').innerHTML = bad.length ? '<div class="chips">' + bad.map(function (s) { return chipHtml(s, 'bad'); }).join('') + '</div>' : '<div class="empty">' + hint + '</div>';
+  }
+
+  function groupTable(el, keyFn, label) {
+    var g = {};
+    stations.forEach(function (s) {
+      var k = keyFn(s) || '(blank)';
+      (g[k] = g[k] || []).push(s);
+    });
+    var keys = Object.keys(g).sort();
+    var html = '<thead><tr><th>' + label + '</th><th class="num">Working</th><th class="num">Not working</th><th class="num">Not checked</th><th>Share working</th></tr></thead><tbody>';
+    keys.forEach(function (k) {
+      var c = counts(g[k]);
+      var okW = c.total ? c.online / c.total * 100 : 0;
+      var badW = c.total ? c.offline / c.total * 100 : 0;
+      html += '<tr><td>' + esc(k) + '</td><td class="num">' + c.online + '</td><td class="num">' + c.offline + '</td><td class="num">' + c.untested + '</td>' +
+        '<td><div class="bar" role="img" aria-label="' + c.online + ' of ' + c.total + ' working"><i class="b-ok" style="width:' + okW + '%"></i><i class="b-bad" style="width:' + badW + '%"></i></div></td></tr>';
+    });
+    el.innerHTML = html + '</tbody>';
+  }
+
+  // Value of one weather element; 'cross' is calculated as Temperature - RH.
+  function wget(d, k) {
+    if (!d) return null;
+    if (k === 'cross') return d.temp != null && d.rh != null ? Math.round((d.temp - d.rh) * 100) / 100 : null;
+    return d[k] != null ? d[k] : null;
+  }
+
+  function wv(s, k) { var v = wget(s.data, k); return v == null ? '' : v; }
+
+  function wcol(k, label, isDir) {
+    return {
+      key: 'w_' + k, label: label, num: true,
+      val: function (s) { var v = wget(s.data, k); return v == null ? Infinity : v; },
+      cell: function (s) {
+        var v = wv(s, k);
+        if (v === '') return '';
+        return esc(v) + (isDir ? ' ' + arrowSvg(v, 13, 'currentColor', 'currentColor') : '');
+      }
+    };
+  }
+
+  var COLS = [
+    { key: 'no', label: 'No.', num: true, val: function (s) { return s.no; }, cell: function (s) { return esc(s.no); } },
+    { key: 'id', label: 'Stn. ID', val: function (s) { return s.id.toLowerCase(); }, cell: function (s) {
+        var t = '<strong>' + esc(s.id) + '</strong>';
+        return s.lat != null ? '<a href="#mapPanel" data-focus="' + s.idx + '" title="Show on map">' + t + '</a>' : t;
+      } },
+    { key: 'name', label: 'Station name', val: function (s) { return s.name.toLowerCase(); }, cell: function (s) { return esc(s.name); } },
+    { key: 'ip', label: 'IP address', val: function (s) { return ipToNum(s.ip); },
+      cell: function (s) { return s.valid ? '<a href="' + esc(webLink(s)) + '" target="_blank" rel="noopener">' + esc(s.ip) + '</a>' : esc(s.ip); } },
+    { key: 'port', label: 'Web port', num: true, val: function (s) { return +portFor(s, $('port').value || 8000); }, cell: function (s) { return esc(portFor(s, $('port').value || 8000)); } },
+    { key: 'status', label: 'Status', val: function (s) { return STATUS_ORDER[s.status]; },
+      cell: function (s) { return '<span class="pill ' + s.status + '">' + STATUS_LABEL[s.status] + '</span>'; } },
+    { key: 'resp', label: 'Response', val: function (s) { return s.ms == null ? Infinity : s.ms; },
+      cell: function (s) {
+        if (s.status === 'online' && s.ms != null) return esc(s.ms) + ' ms';
+        return esc(s.detail);
+      } },
+    { key: 'avail', label: 'Data', val: function (s) { return AVAIL_ORDER.indexOf(availOf(s)); },
+      cell: function (s) { var a = availOf(s); return '<span class="dot" style="background:' + AVAIL[a].color + '"></span>' + esc(AVAIL[a].label); } },
+    { key: 'obs', label: 'Obs. time', val: function (s) { return s.data && s.data.obsMin != null ? s.data.obsMin : Infinity; },
+      cell: function (s) { return esc(obsDisplay(s.data)); } },
+    wcol('temp', 'Temp (°C)'),
+    wcol('rh', 'RH (%)'),
+    wcol('rain', 'Rain (mm)'),
+    wcol('cross', 'Crossover (T−RH)'),
+    wcol('dir', 'Wind dir (°)', true),
+    wcol('speed', 'Wind (km/h)'),
+    wcol('gust', 'Gust (km/h)'),
+    wcol('gustDir', 'Gust dir (°)', true),
+    { key: 'tel', label: 'Telemetry', val: function (s) { return s.telemetry.toLowerCase(); }, cell: function (s) { return esc(s.telemetry); } },
+    { key: 'modem', label: 'Modem', val: function (s) { return s.modem.toLowerCase(); }, cell: function (s) { return esc(s.modem); } },
+    { key: 'logger', label: 'Logger', val: function (s) { return s.logger.toLowerCase(); }, cell: function (s) { return esc(s.logger); } },
+    { key: 'region', label: 'Forecast region', val: function (s) { return s.region.toLowerCase(); }, cell: function (s) { return esc(s.region); } },
+    { key: 'flags', label: 'Data notes', wrap: true, val: function (s) { return s.flags.length; },
+      cell: function (s) { return s.flags.map(function (f) { return '<span class="flag">' + esc(f) + '</span>'; }).join(''); } }
+  ];
+
+  function renderHead() {
+    $('headRow').innerHTML = COLS.map(function (c) {
+      var active = sort.key === c.key;
+      var arrow = active ? (sort.dir > 0 ? '▲' : '▼') : '';
+      return '<th class="' + (c.num ? 'num' : '') + '" aria-sort="' + (active ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none') + '">' +
+        '<button type="button" data-key="' + c.key + '">' + esc(c.label) + '<span class="arrow">' + arrow + '</span></button></th>';
+    }).join('');
+  }
+
+  function renderTable() {
+    var q = $('search').value.trim().toLowerCase();
+    var f = $('statusFilter').value;
+    var col = COLS.filter(function (c) { return c.key === sort.key; })[0];
+    var list = stations.filter(function (s) {
+      if (f === 'online' && s.status !== 'online') return false;
+      if (f === 'offline' && s.status !== 'offline') return false;
+      if (f === 'untested' && UNTESTED.indexOf(s.status) < 0) return false;
+      if (q && s.searchText.indexOf(q) < 0) return false;
+      return true;
+    });
+    list.sort(function (a, b) {
+      var av = col.val(a), bv = col.val(b);
+      if (av < bv) return -1 * sort.dir;
+      if (av > bv) return 1 * sort.dir;
+      return a.no - b.no;
+    });
+    $('tbody').innerHTML = list.map(function (s) {
+      return '<tr class="s-' + s.status + '">' + COLS.map(function (c) {
+        return '<td class="' + (c.num ? 'num ' : '') + (c.wrap ? 'wrap' : '') + '">' + c.cell(s) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    $('rowCount').textContent = list.length + ' of ' + stations.length + ' stations shown';
+  }
+
+  function renderAll() {
+    renderStats();
+    renderLists();
+    groupTable($('telTable'), function (s) { return s.telemetry; }, 'Telemetry');
+    groupTable($('regTable'), function (s) { return s.region; }, 'Forecast region');
+    renderTable();
+    renderMap();
+  }
+
+  /* ---------- Map ---------- */
+  var map = null, markerLayer = null, markers = {}, markerSet = null, mapEl = 'temp';
+  var contourLayer = null, contourMode = 1, namesMode = 0;       // contourMode: 0 off, 1 lines only, 2 lines + fill;  namesMode: 0 off, 1 ID, 2 ID + name
+  var ZONES_URL = 'https://raw.githubusercontent.com/ngsmetadvisor/chnwxproduct/refs/heads/main/Alberta_Fire_Weather_Forecast_Zones.kml';
+  var zoneLayer = null, zoneMode = 1, zonesLoading = false;      // zoneMode: 0 off, 1 zones, 2 zones with names
+
+  var STOPS = {
+    temp: [[-30, '#5b3fa0'], [-15, '#3b6fd4'], [0, '#4fb3e8'], [10, '#7fd08a'], [20, '#f2d13c'], [30, '#f08a2c'], [40, '#d13a2a']],
+    rh:   [[0, '#b3261e'], [25, '#e8873a'], [40, '#f2d13c'], [60, '#8fd18a'], [80, '#4fb3e8'], [100, '#2b6cd4']],
+    wind: [[0, '#e8eef4'], [10, '#a8d8ea'], [20, '#4fb3e8'], [35, '#f2d13c'], [50, '#e8873a'], [70, '#b3261e']],
+    rain: [[0, '#e8eef4'], [0.5, '#a8d8ea'], [2, '#4fb3e8'], [5, '#2b6cd4'], [10, '#5b3fa0']]
+  };
+  var ELEMENTS = {
+    temp: { label: 'Temperature', unit: '°C', key: 'temp', stops: STOPS.temp, digits: 1 },
+    rh:   { label: 'Relative humidity', unit: '%', key: 'rh', stops: STOPS.rh, digits: 0 },
+    wind: { label: 'Wind speed', unit: 'km/h', key: 'speed', dirKey: 'dir', stops: STOPS.wind, digits: 0 },
+    gust: { label: 'Wind gust (last 10 min)', unit: 'km/h', key: 'gust', dirKey: 'gustDir', stops: STOPS.wind, digits: 0 },
+    rain: { label: 'Hourly rainfall', unit: 'mm', key: 'rain', stops: STOPS.rain, digits: 1 },
+    cross: {
+      label: 'Crossover (Temp − RH)', unit: '', key: 'cross', digits: 0,
+      bins: [[-Infinity, '#dfe5ea', '< 0'], [0, '#f7e34a', '0–5'], [5, '#f5b731', '5–10'], [10, '#ee7d22', '10–15'],
+             [15, '#dc3b28', '15–20'], [20, '#b0245f', '20–25'], [25, '#6b2fa0', '25–30+']]
+    }
+  };
+
+  function hexToRgb(h) { return [1, 3, 5].map(function (i) { return parseInt(h.substr(i, 2), 16); }); }
+
+  function rampColor(stops, v) {
+    if (v <= stops[0][0]) return stops[0][1];
+    for (var i = 1; i < stops.length; i++) {
+      if (v <= stops[i][0]) {
+        var a = stops[i - 1], b = stops[i], t = (v - a[0]) / (b[0] - a[0]);
+        var ca = hexToRgb(a[1]), cb = hexToRgb(b[1]);
+        return 'rgb(' + ca.map(function (x, k) { return Math.round(x + (cb[k] - x) * t); }).join(',') + ')';
+      }
+    }
+    return stops[stops.length - 1][1];
+  }
+
+  function binColor(bins, v) {
+    var c = bins[0][1];
+    bins.forEach(function (b) { if (v >= b[0]) c = b[1]; });
+    return c;
+  }
+
+  function inkFor(color) {
+    var rgb = color.charAt(0) === '#' ? hexToRgb(color) : color.match(/\d+/g).map(Number);
+    return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) > 150 ? '#111' : '#fff';
+  }
+
+  // fromDeg is the meteorological direction (where the wind comes FROM).
+  // The arrow points the way the wind is blowing toward, so it is turned 180°.
+  function arrowSvg(fromDeg, size, fill, stroke) {
+    var rot = (((fromDeg + 180) % 360) + 360) % 360;
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 30 30" style="transform:rotate(' + rot + 'deg);flex:none" aria-hidden="true">' +
+      '<path d="M15 2 L26 27 L15 21 L4 27 Z" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  }
+
+  function fmtNum(v, d) { return v == null ? '—' : v.toFixed(d); }
+
+  function markerIcon(s) {
+    var a = availOf(s), html;
+    var cls = 'stn' + (s.dataState === 'stale' ? ' is-stale' : '');
+    if (mapEl === 'avail') {
+      html = '<div class="mk-dot" style="background:' + AVAIL[a].color + '"></div>';
+    } else {
+      var el = ELEMENTS[mapEl], d = s.data, v = wget(d, el.key);
+      if (v == null) {
+        html = '<div class="mk-dot small" style="background:' + AVAIL[a].color + '"></div>';
+      } else {
+        var color = el.bins ? binColor(el.bins, v) : rampColor(el.stops, v);
+        var lbl = '<span class="mk-lbl" style="background:' + color + ';color:' + inkFor(color) + '">' + fmtNum(v, el.digits) + '</span>';
+        if (el.dirKey) {
+          var dir = d[el.dirKey];
+          html = '<div class="wk">' + (dir == null || v < 0.5 ? '<div class="calm"></div>' : arrowSvg(dir, 32, color, '#111')) + lbl + '</div>';
+        } else {
+          html = lbl;
+        }
+      }
+    }
+    return L.divIcon({ className: cls, html: html, iconSize: [0, 0] });
+  }
+
+  // Opens the station's coordinates in Google Maps, with a pin, in satellite view (!3m1!1e3).
+  function gmapsUrl(s) {
+    var c = s.lat + ',' + s.lon;
+    return 'https://www.google.com/maps/place/' + c + '/@' + c + ',15z/data=!3m1!1e3';
+  }
+
+  function popupHtml(s) {
+    var a = availOf(s), d = s.data;
+    var head = '<strong>' + esc(d && d.station ? d.station : s.name) + '</strong> (' + esc(s.id) + ')<br>' +
+      '<span class="dot" style="background:' + AVAIL[a].color + '"></span>' + esc(AVAIL[a].label) +
+      (s.detail && a !== 'ok' ? ' — ' + esc(s.detail) : '');
+    var rows = '';
+    if (d) {
+      var row = function (k, v) { return '<tr><th>' + k + '</th><td>' + v + '</td></tr>'; };
+      var val = function (v, u) { return v == null ? '—' : esc(v) + (u ? ' ' + u : ''); };
+      var dirv = function (v) { return v == null ? '—' : esc(v) + ' degrees ' + arrowSvg(v, 16, '#4fb3e8', '#111'); };
+      rows = '<table>' +
+        row('Time', d.timeText ? esc(obsDisplay(d)) + (d.clockAhead ? ' (clock looks 1 h ahead)' : '') : '—') +
+        row('Wind direction', dirv(d.dir)) +
+        row('Wind speed', val(d.speed, 'kph')) +
+        row('Wind gust (last 10 min)', val(d.gust, 'kph')) +
+        row('Direction of gust', dirv(d.gustDir)) +
+        row('Temperature', val(d.temp, '°C')) +
+        row('Relative humidity', val(d.rh, '%')) +
+        (d.rain != null ? row('Hourly rainfall', val(d.rain, 'mm')) : '') +
+        row('Crossover (Temp − RH)', val(wget(d, 'cross'), '')) +
+        '</table>';
+    }
+    var links = '';
+    if (s.valid) {
+      var hourly = s.hourlyUrl || 'http://' + s.ip + ':' + portFor(s, $('port').value || 8000) + '/command=TableDisplay&table=Hourly&records=12';
+      links = '<a href="' + esc(webLink(s)) + '" target="_blank" rel="noopener">' + esc(s.ip) + '</a> · ' +
+        '<a href="' + esc(hourly) + '" target="_blank" rel="noopener">Hourly table (12 h)</a>';
+    }
+    if (s.lat != null) links += (links ? ' · ' : '') + '<a href="' + esc(gmapsUrl(s)) + '" target="_blank" rel="noopener">Google Maps</a>';
+    return '<div class="pop">' + head + (rows || '<br>') + links + '</div>';
+  }
+
+  function initMap() {
+    if (map || typeof L === 'undefined') return;
+    map = L.map('map').setView([54.5, -115], 5);
+    // Base maps. The standard OpenStreetMap servers refuse requests that carry no Referer, which is the case for a page
+    // opened from a local file, so a local copy uses the OpenStreetMap France mirror (same OpenStreetMap data).
+    var local = location.protocol === 'file:';
+    var osm = L.tileLayer(local ? 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png' : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      subdomains: 'abc', maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' + (local ? ' &middot; tiles by OpenStreetMap France' : '')
+    });
+    var ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+    var sat = L.layerGroup([
+      L.tileLayer(ESRI + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community' }),
+      L.tileLayer(ESRI + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
+    ]);
+    var topo = L.tileLayer(ESRI + 'World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, USGS, NRCan and others' });
+    osm.addTo(map);
+    L.control.layers({ 'OpenStreetMap': osm, 'Satellite': sat, 'Topography': topo }, null, { position: 'topright' }).addTo(map);
+    markerLayer = L.layerGroup().addTo(map);
+    map.on('moveend', drawContour);
+    map.createPane('zonePane').style.zIndex = 410;      // above the contour image, below the station markers
+    showZones();                                        // zones are on by default
+  }
+
+  function renderLegend() {
+    var html = '';
+    if (mapEl === 'avail') {
+      AVAIL_ORDER.forEach(function (k) {
+        var n = stations.filter(function (s) { return s.lat != null && availOf(s) === k; }).length;
+        html += '<span><span class="sw" style="background:' + AVAIL[k].color + '"></span>' + esc(AVAIL[k].label) + ' (' + n + ')</span>';
+      });
+    } else if (ELEMENTS[mapEl].bins) {
+      var be = ELEMENTS[mapEl];
+      html = '<strong>' + esc(be.label) + '</strong>';
+      be.bins.forEach(function (b) { html += '<span><span class="sw" style="background:' + b[1] + '"></span>' + esc(b[2]) + '</span>'; });
+      html += '<span>Above 0 = temperature (°C) is higher than RH (%). Small dot = no value.</span>';
+    } else {
+      var el = ELEMENTS[mapEl], st = el.stops, lo = st[0][0], hi = st[st.length - 1][0];
+      var grad = st.map(function (p) { return p[1] + ' ' + ((p[0] - lo) / (hi - lo) * 100) + '%'; }).join(',');
+      html = '<strong>' + esc(el.label) + ' (' + esc(el.unit) + ')</strong><span>' + lo + '</span>' +
+        '<span class="ramp" style="background:linear-gradient(90deg,' + grad + ')"></span><span>' + hi + '+</span>';
+      if (el.dirKey) html += '<span>Arrow points the way the wind is blowing; the number is the speed.</span>';
+      html += '<span>Small dot = no value (colour shows why, see Data availability). Faded = stale.</span>';
+    }
+    if (contourMode && mapEl !== 'avail') {
+      html += '<span>Contours every ' + STEPS[mapEl] + (ELEMENTS[mapEl].unit ? ' ' + ELEMENTS[mapEl].unit : '') + ', interpolated between stations and drawn within about 100 km of one.</span>';
+    }
+    $('legend').innerHTML = html;
+  }
+
+  function renderMap() {
+    initMap();
+    if (!map) {
+      $('mapNote').textContent = 'The map library could not be loaded. Check your internet connection and reload.';
+      return;
+    }
+    var plotted = stations.filter(function (s) { return s.lat != null; });
+    $('mapCount').textContent = plotted.length + ' of ' + stations.length + ' stations plotted';
+
+    if (markerSet !== stations) {
+      markerLayer.clearLayers(); markers = {}; markerSet = stations;
+      plotted.forEach(function (s) {
+        var m = L.marker([s.lat, s.lon], { icon: markerIcon(s), title: s.id + ' – ' + s.name });
+        m.bindPopup(function () { return popupHtml(s); }, { maxWidth: 340 });
+        m.on('click', function () { openChart(s); });
+        if (namesMode) bindName(m, s);
+        m.addTo(markerLayer);
+        markers[s.idx] = m;
+      });
+      if (plotted.length) map.fitBounds(L.latLngBounds(plotted.map(function (s) { return [s.lat, s.lon]; })).pad(0.1));
+    } else {
+      plotted.forEach(function (s) { markers[s.idx].setIcon(markerIcon(s)); });
+    }
+
+    renderLegend();
+    var read = stations.filter(function (s) { return s.dataState === 'ok' || s.dataState === 'stale'; }).length;
+    var cors = stations.filter(function (s) { return s.status === 'online' && s.dataState === 'cors'; }).length;
+    var msg = '';
+    if (!stations.some(function (s) { return s.checkedAt; })) msg = 'Loading station values from GitHub… Click a station for its trend chart.';
+    else if (cors) msg = cors + ' stations answered, but the browser was not allowed to read their values (the datalogger does not send CORS headers). Try a different CORS proxy in the settings, or lower “Checks at once” if the proxy is rate-limiting.';
+    else if (!read && stations.some(function (s) { return s.status === 'online'; })) msg = 'Stations answered, but no weather values were found on ' + ($('path').value || '/') + '. Change “Data page path” if the values are on a different page.';
+    if (contourMode && mapEl === 'avail') msg = 'Pick an element above (temperature, RH, wind…) to draw its contours. ' + msg;
+    $('mapNote').textContent = (feedMsg ? feedMsg + ' ' : '') + msg;
+    drawContour();
+  }
+
+  $('elementSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-el]');
+    if (!b) return;
+    mapEl = b.getAttribute('data-el');
+    Array.prototype.forEach.call($('elementSeg').querySelectorAll('button'), function (x) {
+      x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+    });
+    renderMap();
+  });
+
+  $('tbody').addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-focus]');
+    if (!a || !map) return;
+    e.preventDefault();
+    var s = stations[+a.getAttribute('data-focus')];
+    var m = s && markers[s.idx];
+    if (!m) return;
+    $('mapPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    map.setView([s.lat, s.lon], Math.max(map.getZoom(), 9));
+    m.openPopup();
+    openChart(s);
+  });
+
+  /* ---------- Map contours and station names ---------- */
+  var STEPS = { temp: 2, rh: 10, wind: 5, gust: 5, rain: 0.5, cross: 5 };   // contour interval per element
+
+  // Filled contours of the selected element, interpolated between stations (inverse-distance weighting)
+  // and drawn as an image over the current map view.
+  function drawContour() {
+    if (!map) return;
+    var el = ELEMENTS[mapEl];
+    function hide() { if (contourLayer && map.hasLayer(contourLayer)) map.removeLayer(contourLayer); }
+    if (!contourMode || !el) { hide(); return; }
+    var size = map.getSize();
+    if (size.x < 50 || size.y < 50) return;
+
+    var pts = [];
+    stations.forEach(function (s) {
+      var v = s.lat != null ? wget(s.data, el.key) : null;
+      if (v == null) return;
+      var p = map.latLngToContainerPoint([s.lat, s.lon]);
+      pts.push({ x: p.x, y: p.y, v: v });
+    });
+    if (pts.length < 3) { hide(); return; }
+
+    var PAD = 0.25, ox = -size.x * PAD, oy = -size.y * PAD, pw = size.x * (1 + 2 * PAD), ph = size.y * (1 + 2 * PAD);
+    var GX = 48, GY = 40, val = [], dmin = [];
+    for (var gy = 0; gy <= GY; gy++) {
+      for (var gx = 0; gx <= GX; gx++) {
+        var px = ox + gx / GX * pw, py = oy + gy / GY * ph, sw = 0, sv = 0, dm = Infinity, k, d2, wgt;
+        for (k = 0; k < pts.length; k++) {
+          d2 = (pts[k].x - px) * (pts[k].x - px) + (pts[k].y - py) * (pts[k].y - py);
+          if (d2 < dm) dm = d2;
+          wgt = 1 / (d2 + 25);
+          sw += wgt; sv += wgt * pts[k].v;
+        }
+        val.push(sv / sw); dmin.push(Math.sqrt(dm));
+      }
+    }
+
+    // only draw within about 100 km of a station
+    var mpp = 40075016.686 * Math.cos(map.getCenter().lat * Math.PI / 180) / (256 * Math.pow(2, map.getZoom()));
+    var R = 100000 / mpp;
+    var cw = Math.ceil(pw / 2), ch = Math.ceil(ph / 2);
+    var cv = document.createElement('canvas');
+    cv.width = cw; cv.height = ch;
+    var ctx = cv.getContext('2d');
+    if (!ctx) return;
+    var img = ctx.createImageData(cw, ch), data = img.data, step = STEPS[mapEl];
+    var band = new Array(cw * ch), mask = new Array(cw * ch), colors = {};
+
+    function bil(arr, u, v) {
+      var ix = Math.min(GX - 1, Math.floor(u)), iy = Math.min(GY - 1, Math.floor(v)), fx = u - ix, fy = v - iy, i0 = iy * (GX + 1) + ix;
+      return (arr[i0] * (1 - fx) + arr[i0 + 1] * fx) * (1 - fy) + (arr[i0 + GX + 1] * (1 - fx) + arr[i0 + GX + 2] * fx) * fy;
+    }
+    function rgbOf(q) {
+      if (!colors[q]) {
+        var c = el.bins ? binColor(el.bins, q * step) : rampColor(el.stops, (q + 0.5) * step);
+        colors[q] = c.charAt(0) === '#' ? hexToRgb(c) : c.match(/\d+/g).map(Number);
+      }
+      return colors[q];
+    }
+    var i, j, idx, q, m, c;
+    for (j = 0; j < ch; j++) {
+      for (i = 0; i < cw; i++) {
+        idx = j * cw + i;
+        var u = (i + 0.5) / cw * GX, v = (j + 0.5) / ch * GY;
+        q = Math.floor(bil(val, u, v) / step);
+        m = Math.max(0, Math.min(1, (1.3 * R - bil(dmin, u, v)) / (0.3 * R)));
+        band[idx] = q; mask[idx] = m;
+        if (m <= 0 || contourMode !== 2) continue;          // fill colours only in the filled mode
+        c = rgbOf(q);
+        data[idx * 4] = c[0]; data[idx * 4 + 1] = c[1]; data[idx * 4 + 2] = c[2]; data[idx * 4 + 3] = Math.round(150 * m);
+      }
+    }
+    // contour lines where the band changes
+    for (j = 0; j < ch - 1; j++) {
+      for (i = 0; i < cw - 1; i++) {
+        idx = j * cw + i;
+        if (mask[idx] > 0 && (band[idx] !== band[idx + 1] || band[idx] !== band[idx + cw])) {
+          data[idx * 4] = 30; data[idx * 4 + 1] = 30; data[idx * 4 + 2] = 30; data[idx * 4 + 3] = Math.round(190 * mask[idx]);
+        }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    var bounds = L.latLngBounds(map.containerPointToLatLng([ox, oy]), map.containerPointToLatLng([ox + pw, oy + ph]));
+    var url = cv.toDataURL();
+    if (!contourLayer) contourLayer = L.imageOverlay(url, bounds, { interactive: false });
+    else { contourLayer.setUrl(url); contourLayer.setBounds(bounds); }
+    if (!map.hasLayer(contourLayer)) contourLayer.addTo(map);
+  }
+
+  function bindName(m, s) {
+    var txt = '<b>' + esc(s.id) + '</b>' + (namesMode === 2 ? '<br>' + esc(s.name) : '');
+    m.bindTooltip(txt, { permanent: true, direction: 'right', offset: [18, 0], className: 'stn-name' });
+  }
+
+  // Click cycles: contour lines only -> lines with fill -> off -> lines only
+  var CONTOUR_LABELS = ['Contour: off', 'Contour: lines', 'Contour: filled'];
+  $('mapContourBtn').addEventListener('click', function () {
+    contourMode = (contourMode + 1) % 3;
+    this.setAttribute('aria-pressed', contourMode ? 'true' : 'false');
+    this.textContent = CONTOUR_LABELS[contourMode];
+    renderMap();
+  });
+
+  // Click cycles: off -> station ID -> ID with name underneath -> off
+  var NAME_LABELS = ['Names: off', 'Names: ID', 'Names: ID + name'];
+  $('namesBtn').addEventListener('click', function () {
+    namesMode = (namesMode + 1) % 3;
+    this.setAttribute('aria-pressed', namesMode ? 'true' : 'false');
+    this.textContent = NAME_LABELS[namesMode];
+    Object.keys(markers).forEach(function (key) {
+      markers[key].unbindTooltip();
+      if (namesMode) bindName(markers[key], stations[key]);
+    });
+  });
+
+  /* ---------- Fire weather forecast zones (KML from the repo) ---------- */
+  var ZONE_LABELS = ['Zones: off', 'Zones: on', 'Zones: with names'];
+
+  function kmlRing(el) {
+    var c = el && el.getElementsByTagName('coordinates')[0];
+    if (!c) return [];
+    return c.textContent.trim().split(/\s+/).map(function (p) {
+      var a = p.split(',');
+      return [parseFloat(a[1]), parseFloat(a[0])];          // KML order is lon,lat
+    }).filter(function (p) { return isFinite(p[0]) && isFinite(p[1]); });
+  }
+
+  function loadZones() {
+    if (zonesLoading) return;
+    zonesLoading = true;
+    $('zonesBtn').textContent = ZONE_LABELS[zoneMode] + ' …';
+    fetch(ZONES_URL)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function (txt) {
+        txt = txt.replace(/^\uFEFF/, '').replace(/<xmlns>[^<]*<\/xmlns>/, '');   // this file has a stray <xmlns> element
+        var doc = new DOMParser().parseFromString(txt, 'text/xml');
+        if (doc.getElementsByTagName('parsererror').length) throw new Error('the KML could not be read');
+        var polys = [];
+        Array.prototype.forEach.call(doc.getElementsByTagName('Placemark'), function (pm) {
+          var name = '';
+          Array.prototype.forEach.call(pm.getElementsByTagName('SimpleData'), function (sd) {
+            if (sd.getAttribute('name') === 'NAME') name = sd.textContent.trim();
+          });
+          if (!name) { var n = pm.getElementsByTagName('name')[0]; name = n ? n.textContent.trim() : ''; }
+          var first = true;
+          Array.prototype.forEach.call(pm.getElementsByTagName('Polygon'), function (pg) {
+            var rings = [kmlRing(pg.getElementsByTagName('outerBoundaryIs')[0])];
+            Array.prototype.forEach.call(pg.getElementsByTagName('innerBoundaryIs'), function (ib) { rings.push(kmlRing(ib)); });
+            var p = L.polygon(rings, { pane: 'zonePane', color: '#2f7fd0', weight: 1.6, dashArray: '6 4', fillColor: '#2f7fd0', fillOpacity: 0.04, interactive: false });
+            p._zoneName = first ? name : '';                // label each zone once
+            first = false;
+            polys.push(p);
+          });
+        });
+        if (!polys.length) throw new Error('no zones found in the KML');
+        zoneLayer = L.featureGroup(polys);
+      })
+      .catch(function (e) {
+        zoneMode = 0;
+        $('zonesBtn').setAttribute('aria-pressed', 'false');
+        $('zonesBtn').textContent = 'Zones: could not load';
+        $('zonesBtn').title = 'Could not load the zone file: ' + e.message;
+      })
+      .then(function () {
+        zonesLoading = false;
+        if (zoneLayer) { $('zonesBtn').textContent = ZONE_LABELS[zoneMode]; showZones(); }
+      });
+  }
+
+  function showZones() {
+    if (!map) return;
+    if (zoneMode === 0) {
+      if (zoneLayer && map.hasLayer(zoneLayer)) map.removeLayer(zoneLayer);
+      return;
+    }
+    if (!zoneLayer) { loadZones(); return; }
+    if (!map.hasLayer(zoneLayer)) zoneLayer.addTo(map);
+    zoneLayer.eachLayer(function (p) {
+      p.unbindTooltip();
+      if (zoneMode === 2 && p._zoneName) p.bindTooltip(esc(p._zoneName), { permanent: true, direction: 'center', className: 'zone-name' });
+    });
+  }
+
+  // Click cycles: off -> zones on -> zones with names -> off
+  $('zonesBtn').addEventListener('click', function () {
+    zoneMode = (zoneMode + 1) % 3;
+    this.setAttribute('aria-pressed', zoneMode ? 'true' : 'false');
+    this.textContent = ZONE_LABELS[zoneMode];
+    this.title = 'Show the fire weather forecast zones';
+    showZones();
+  });
+
+  /* ---------- Export ---------- */
+  function csvCell(v) {
+    v = v == null ? '' : String(v);
+    return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+  function downloadResults() {
+    var head = ['No.', 'Stn. ID', 'Station name', 'IP address', 'Web port', 'Telemetry', 'Modem', 'Logger', 'Forecast region', 'Status', 'Response', 'Checked at', 'Data notes',
+      'Data availability', 'Obs. time', 'Temp (C)', 'RH (%)', 'Wind dir (deg)', 'Wind speed (km/h)', 'Gust (km/h)', 'Gust dir (deg)', 'Hourly rain (mm)', 'Crossover (Temp-RH)'];
+    var lines = [head.map(csvCell).join(',')];
+    stations.slice().sort(function (a, b) { return a.no - b.no; }).forEach(function (s) {
+      lines.push([
+        s.no, s.id, s.name, s.ip, portFor(s, $('port').value || 8000), s.telemetry, s.modem, s.logger, s.region,
+        STATUS_LABEL[s.status], s.status === 'online' ? s.ms + ' ms' : s.detail,
+        s.checkedAt ? s.checkedAt.toISOString() : '', s.flags.join('; '),
+        AVAIL[availOf(s)].label, obsDisplay(s.data),
+        wv(s, 'temp'), wv(s, 'rh'), wv(s, 'dir'), wv(s, 'speed'), wv(s, 'gust'), wv(s, 'gustDir'), wv(s, 'rain'), wv(s, 'cross')
+      ].map(csvCell).join(','));
+    });
+    var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'station-ip-check-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  /* ---------- Loading ---------- */
+  function loadText(text, label) {
+    var rows = parseCSV(text);
+    if (rows.length < 2) throw new Error('The file has no station rows.');
+    stations = buildStations(rows);
+    if (!stations.length) throw new Error('No stations found in the file.');
+    runId++; running = false; lastRunAt = null;
+    runBtn.hidden = false; stopBtn.hidden = true; csvBtn.disabled = true;
+    $('progress').hidden = true;
+    var withIp = stations.filter(function (s) { return s.valid; }).length;
+    $('sourceNote').textContent = stations.length + ' stations loaded from ' + label + ' · ' + withIp + ' with a valid IP address';
+    $('loadError').hidden = true;
+    runBtn.disabled = false;
+    renderAll();
+    loadFeed();
+    loadHistory();
+  }
+
+  function showError(msg) {
+    $('loadError').textContent = msg;
+    $('loadError').hidden = false;
+    $('sourceNote').textContent = 'Station list not loaded.';
+  }
+
+  function hourlyFrom(html, s, defPort) {
+    var m = /href\s*=\s*["']([^"']*TableDisplay[^"']*)["']/i.exec(html);
+    if (!m) return '';
+    if (/^https?:/i.test(m[1])) return m[1];
+    return 'http://' + s.ip + ':' + portFor(s, defPort) + '/' + m[1].replace(/^\//, '');
+  }
+
+  // Feed data is judged by how old the observation was when the feed was written (the feed time is shown under the map).
+  function feedState(s) {
+    var d = s.feed && s.feed.data;
+    if (!d) return 'noparse';
+    return d.ageMin != null && d.ageMin > (+$('stale').value || 90) ? 'stale' : 'ok';
+  }
+
+  function applyFeed(feed) {
+    feedAt = new Date(feed.fetched_at);
+    var recs = feed.stations || {};
+    var found = 0;
+    stations.forEach(function (s) {
+      var r = recs[s.id];
+      s.feed = r || null;
+      if (!r || !s.valid || running) return;
+      found++;
+      s.checkedAt = feedAt; s.ms = r.ms; s.hourlyUrl = r.hourly || '';
+      if (r.ok) {
+        s.status = 'online'; s.data = r.data || null; s.dataState = feedState(s);
+        s.detail = s.dataState === 'ok' ? 'Data received (GitHub feed)'
+          : s.dataState === 'stale' ? 'Feed data is stale' : 'Answered, no weather values found';
+      } else {
+        s.status = 'offline'; s.data = null; s.dataState = '';
+        s.detail = 'No response from GitHub (' + (r.error || 'failed') + ')';
+      }
+    });
+    if (found) csvBtn.disabled = false;
+    feedMsg = 'Weather values from the GitHub feed, updated ' + feedAt.toLocaleString() + ' (' + found + ' stations).';
+  }
+
+  function loadFeed() {
+    fetch(FEED_URL + '?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (feed) { applyFeed(feed); renderAll(); })
+      .catch(function () {
+        feedMsg = 'No GitHub weather feed found yet. Run the “Station weather feed” workflow once, then reload this page.';
+        renderAll();
+      });
+  }
+
+  /* ---------- History: time slider ---------- */
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+  // Times are shown in Alberta local time (MDT in summer, MST in winter).
+  var tzFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Edmonton', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hourCycle: 'h23', timeZoneName: 'short' });
+
+  function localParts(t) {
+    var o = {};
+    tzFmt.formatToParts(new Date(t * 1000)).forEach(function (p) { o[p.type] = p.value; });
+    return { y: +o.year, mo: +o.month, d: +o.day, h: +o.hour % 24, mi: +o.minute, tz: o.timeZoneName };
+  }
+
+  function tzAbbr(t) { return localParts(t).tz; }
+
+  // Seconds to add to a UTC time to get Alberta wall-clock time (-21600 in summer, -25200 in winter).
+  function tzOffsetSec(t) {
+    var p = localParts(t);
+    return Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi, 0) / 1000 - (t - t % 60);
+  }
+
+  // A Date whose UTC fields read as Alberta local time.
+  function localDate(t) { return new Date((t + tzOffsetSec(t)) * 1000); }
+
+  function fmtLocal(t) {
+    var d = localDate(t);
+    return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()) + ' ' +
+      pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ' ' + tzAbbr(t);
+  }
+
+  // A station's "Time: 17:59 MST" shown in Alberta local time.
+  function obsDisplay(d) {
+    if (!d || !d.timeText) return '';
+    if (d.localTime) return d.timeText + ' ' + d.tz;                 // history rows are already local time
+    var now = Math.floor(Date.now() / 1000);
+    var from = d.tz === 'MDT' ? -360 : -420;                          // the station's clock, in minutes from UTC
+    var shift = d.clockAhead ? 0 : tzOffsetSec(now) / 60 - from;
+    var m = ((d.obsMin + shift) % 1440 + 1440) % 1440;
+    return pad2(Math.floor(m / 60)) + ':' + pad2(m % 60) + ' ' + tzAbbr(now);
+  }
+
+  function loadHistory() {
+    fetch(HIST_URL + '?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(setHistory)
+      .catch(function () {
+        $('tLabel').textContent = 'No history file yet (created by the GitHub workflow)';
+      });
+  }
+
+  function setHistory(h) {
+    var fields = (h.fields || ['t', 'temp', 'rh', 'rain', 'speed', 'dir', 'gust', 'gustDir']).slice(1);
+    var seen = {}, by = {};
+    Object.keys(h.stations || {}).forEach(function (id) {
+      by[id] = h.stations[id].map(function (row) {
+        var d = localDate(row[0]);
+        var o = { t: row[0], tz: tzAbbr(row[0]), localTime: true, timeText: pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()), obsMin: d.getUTCHours() * 60 + d.getUTCMinutes() };
+        fields.forEach(function (f, i) { o[f] = row[i + 1]; });
+        seen[row[0]] = true;
+        return o;
+      }).sort(function (a, b) { return a.t - b.t; });
+    });
+    var times = Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
+    if (!times.length) { $('tLabel').textContent = 'History file is empty'; return; }
+    hist = { by: by, times: times };
+    var sl = $('tSlider');
+    sl.max = times.length - 1; sl.value = sl.max;
+    var off = times.length < 2;
+    sl.disabled = off; $('tPrev').disabled = off; $('tNext').disabled = off; $('tLatest').disabled = off;
+    tsel = -1;
+    timeLabel();
+    if (!curChart) curChart = stations.filter(function (s) { return by[s.id]; })[0] || null;   // show a chart by default
+    drawChart();
+    drawAvail();
+  }
+
+  function timeLabel() {
+    if (!hist) return;
+    var i = tsel < 0 ? hist.times.length - 1 : tsel;
+    $('tLabel').textContent = fmtLocal(hist.times[i]) + (tsel < 0 ? ' · latest' : '') + ' · ' + (i + 1) + ' of ' + hist.times.length;
+  }
+
+  // Put every station back to its live state.
+  function leaveHistory() {
+    stations.forEach(function (s) {
+      if (!s._live) return;
+      s.status = s._live.status; s.data = s._live.data; s.dataState = s._live.dataState;
+      s.detail = s._live.detail; s.ms = s._live.ms; s.checkedAt = s._live.checkedAt; s.hourlyUrl = s._live.hourlyUrl;
+      delete s._live;
+    });
+    tsel = -1;
+  }
+
+  // idx = index into hist.times; -1 (or the last one) = latest / live.
+  function showHistory(idx) {
+    if (!hist) return;
+    var last = hist.times.length - 1;
+    if (idx < 0 || idx >= last) idx = -1;
+    if (idx !== tsel) {
+      if (idx < 0) {
+        leaveHistory();
+      } else {
+        var t = hist.times[idx];
+        stations.forEach(function (s) {
+          if (!s._live) s._live = { status: s.status, data: s.data, dataState: s.dataState, detail: s.detail, ms: s.ms, checkedAt: s.checkedAt, hourlyUrl: s.hourlyUrl };
+          var rec = (hist.by[s.id] || []).filter(function (r) { return r.t === t; })[0];
+          s.ms = null; s.hourlyUrl = '';
+          if (rec) {
+            s.status = 'online'; s.data = rec; s.dataState = 'ok'; s.detail = 'Snapshot ' + fmtLocal(t);
+          } else if (s.valid) {
+            s.status = 'offline'; s.data = null; s.dataState = ''; s.detail = 'No record at this time';
+          }
+        });
+        tsel = idx;
+      }
+      renderAll();
+    }
+    $('tSlider').value = tsel < 0 ? last : tsel;
+    timeLabel();
+    if (curChart) drawChart();
+    updateAvailSel();
+  }
+
+  function curIdx() { return tsel < 0 ? hist.times.length - 1 : tsel; }
+
+  $('tSlider').addEventListener('input', function () { showHistory(+this.value); });
+  $('tPrev').addEventListener('click', function () { if (hist) showHistory(Math.max(0, curIdx() - 1)); });
+  $('tNext').addEventListener('click', function () { if (hist) showHistory(curIdx() + 1); });
+  $('tLatest').addEventListener('click', function () { showHistory(-1); });
+
+  /* ---------- Data availability timeline (which stations reported at each run) ---------- */
+  var availGeo = null;
+
+  function drawAvail() {
+    var box = $('availBox');
+    if (!hist) {
+      box.innerHTML = '<div class="empty">No history yet. The history file is created by the GitHub workflow.</div>';
+      $('availCount').textContent = '';
+      availGeo = null;
+      return;
+    }
+    var times = hist.times, nT = times.length;
+    var list = stations.filter(function (s) { return s.valid; }).sort(function (a, b) {
+      return (a.region || '').localeCompare(b.region || '') || a.id.localeCompare(b.id);
+    });
+    var nS = list.length, mL = 64, mR = 8, RH = 11, SH = 70;
+    var W = Math.max(480, box.clientWidth - 36), cw = (W - mL - mR) / nT, H = nS * RH;
+    var counts = [], rowIdx = {}, g = '', top = '', i, r;
+    for (i = 0; i < nT; i++) counts.push(0);
+
+    // grid: one row per station, one column per run
+    for (r = 0; r < nS; r++) {
+      var s = list[r], have = {};
+      rowIdx[s.id] = r;
+      (hist.by[s.id] || []).forEach(function (rec) { have[rec.t] = true; });
+      for (i = 0; i < nT; i++) {
+        var ok = have[times[i]] === true;
+        if (ok) counts[i]++;
+        g += '<rect class="' + (ok ? 'av-ok' : 'av-no') + '" x="' + (mL + i * cw + 0.5).toFixed(1) + '" y="' + (r * RH + 0.5) + '" width="' + Math.max(0.5, cw - 1).toFixed(1) + '" height="' + (RH - 1) + '"/>';
+      }
+      g += '<text class="ch-text" x="' + (mL - 5) + '" y="' + (r * RH + RH - 2) + '" text-anchor="end" style="font-size:9px">' + esc(s.id) + '</text>';
+    }
+
+    // summary bars (stations reporting per run) with hour and date labels
+    top += '<rect class="ch-frame" x="' + mL + '" y="4" width="' + (W - mL - mR) + '" height="38"/>';
+    top += '<text class="ch-text" x="' + (mL - 5) + '" y="14" text-anchor="end" style="font-size:10px">' + nS + '</text>';
+    top += '<text class="ch-text" x="' + (mL - 5) + '" y="42" text-anchor="end" style="font-size:10px">0</text>';
+    var prevDay = null;
+    for (i = 0; i < nT; i++) {
+      var d = localDate(times[i]), day = d.getUTCFullYear() + '-' + d.getUTCMonth() + '-' + d.getUTCDate(), x = mL + i * cw;
+      if (day !== prevDay) {
+        top += '<line class="ch-major" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="4" y2="' + SH + '"/>';
+        top += '<text class="ch-text" x="' + (x + 2).toFixed(1) + '" y="' + (SH - 4) + '">' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + '</text>';
+        g += '<line class="ch-major" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="0" y2="' + H + '"/>';
+        prevDay = day;
+      }
+      if (cw >= 22) top += '<text class="ch-text" x="' + (x + cw / 2).toFixed(1) + '" y="' + (SH - 18) + '" text-anchor="middle" style="font-size:10px">' + pad2(d.getUTCHours()) + '</text>';
+      var bh = nS ? counts[i] / nS * 38 : 0;
+      top += '<rect class="av-ok" x="' + (x + 0.5).toFixed(1) + '" y="' + (42 - bh).toFixed(1) + '" width="' + Math.max(0.5, cw - 1).toFixed(1) + '" height="' + bh.toFixed(1) + '"/>';
+    }
+
+    box.innerHTML =
+      '<svg id="avTop" width="' + W + '" height="' + SH + '" viewBox="0 0 ' + W + ' ' + SH + '">' + top +
+        '<rect id="avSelColS" class="av-sel" y="4" width="' + cw.toFixed(1) + '" height="' + (SH - 4) + '"/></svg>' +
+      '<div class="availgrid"><svg id="avGrid" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' + g +
+        '<rect id="avSelColG" class="av-sel" y="0" width="' + cw.toFixed(1) + '" height="' + H + '"/>' +
+        '<rect id="avSelRow" class="av-sel" x="' + mL + '" width="' + (W - mL - mR) + '" height="' + RH + '" style="display:none"/></svg></div>' +
+      '<div class="ch-tip" id="avTip" hidden></div>';
+    $('availCount').textContent = 'Latest run ' + fmtLocal(times[nT - 1]) + ': ' + counts[nT - 1] + ' of ' + nS + ' stations';
+    availGeo = { mL: mL, cw: cw, RH: RH, rowIdx: rowIdx, nT: nT };
+    updateAvailSel();
+
+    var tip = $('avTip'), grid = $('avGrid'), topSvg = $('avTop');
+    function pos(e, svg) {
+      var b = svg.getBoundingClientRect();
+      return { x: (e.clientX - b.left) * (W / b.width), y: e.clientY - b.top };
+    }
+    function colOf(x) { var c = Math.floor((x - mL) / cw); return c >= 0 && c < nT ? c : -1; }
+    function showTip(e, html) {
+      var b = box.getBoundingClientRect(), left = e.clientX - b.left + 14;
+      tip.innerHTML = html; tip.hidden = false;
+      if (left > box.clientWidth - 230) left -= 244;
+      tip.style.left = Math.max(0, left) + 'px';
+      tip.style.top = (e.clientY - b.top + 14) + 'px';
+    }
+    function hideTip() { tip.hidden = true; }
+
+    grid.addEventListener('mousemove', function (e) {
+      var p = pos(e, grid), c = colOf(p.x), row = Math.floor(p.y / RH);
+      if (c < 0 || row < 0 || row >= nS) { hideTip(); return; }
+      var st = list[row], got = (hist.by[st.id] || []).some(function (rec) { return rec.t === times[c]; });
+      showTip(e, '<strong>' + esc(st.id) + '</strong> ' + esc(st.name) + '<br>' + esc(st.region || '') + '<br>' + fmtLocal(times[c]) +
+        '<br>' + (got ? 'Weather values received' : 'No weather values'));
+    });
+    grid.addEventListener('mouseleave', hideTip);
+    grid.addEventListener('click', function (e) {
+      var p = pos(e, grid), c = colOf(p.x), row = Math.floor(p.y / RH);
+      if (c < 0 || row < 0 || row >= nS) return;
+      curChart = list[row];            // show that station's chart (no scrolling) and jump to that run
+      showHistory(c);
+      drawChart();
+      updateAvailSel();
+    });
+    topSvg.addEventListener('mousemove', function (e) {
+      var c = colOf(pos(e, topSvg).x);
+      if (c < 0) { hideTip(); return; }
+      showTip(e, '<strong>' + fmtLocal(times[c]) + '</strong><br>' + counts[c] + ' of ' + nS + ' stations reporting');
+    });
+    topSvg.addEventListener('mouseleave', hideTip);
+    topSvg.addEventListener('click', function (e) {
+      var c = colOf(pos(e, topSvg).x);
+      if (c >= 0) showHistory(c);
+    });
+  }
+
+  // Outline the run shown on the map and the station shown in the chart.
+  function updateAvailSel() {
+    var G = availGeo;
+    if (!G) return;
+    var cur = tsel < 0 ? G.nT - 1 : tsel, x = (G.mL + cur * G.cw).toFixed(1);
+    var a = $('avSelColS'), b = $('avSelColG'), c = $('avSelRow');
+    if (a) a.setAttribute('x', x);
+    if (b) b.setAttribute('x', x);
+    if (c) {
+      var row = curChart ? G.rowIdx[curChart.id] : undefined;
+      if (row === undefined) c.style.display = 'none';
+      else { c.style.display = ''; c.setAttribute('y', row * G.RH); }
+    }
+  }
+
+  /* ---------- Trend chart ---------- */
+  function openChart(s) {
+    curChart = s;
+    drawChart();
+    updateAvailSel();
+    $('chartPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function drawChart() {
+    var s = curChart;
+    var box = $('chartBox');
+    if (!s) {
+      $('chartTitle').textContent = 'Trend';
+      $('chartGmap').hidden = true;
+      box.innerHTML = '<div class="empty">Click a station on the map, or its ID in the table, to see its 7-day trend.</div>';
+      return;
+    }
+    $('chartTitle').textContent = s.name + ' (' + s.id + ') · last 7 days';
+    $('chartGmap').hidden = s.lat == null;
+    if (s.lat != null) $('chartGmap').href = gmapsUrl(s);
+    var rows = hist && hist.by[s.id] ? hist.by[s.id] : [];
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty">' + (hist ? 'No history for this station yet.' : 'No history yet. The history file is created by the GitHub workflow.') + '</div>';
+      return;
+    }
+
+    var W = Math.max(440, box.clientWidth - 16 || 900);
+    var mL = 54, mR = 14, x0 = mL, x1 = W - mR;
+    var tmin = hist.times[0], tmax = hist.times[hist.times.length - 1];
+    if (tmax === tmin) { tmin -= 5400; tmax += 5400; }        // one time step only: centre it in a 3 h window
+    function X(t) { return x0 + (t - tmin) / (tmax - tmin) * (x1 - x0); }
+
+    function vals(k) { return rows.map(function (r) { return r[k]; }).filter(function (v) { return v != null; }); }
+    var temps = vals('temp'), rains = vals('rain'), winds = vals('speed').concat(vals('gust'));
+    var P1 = { top: 10, h: 230 }, P2 = { top: 266, h: 90 }, ARROW = 24;
+    var P3 = { top: P2.top + P2.h + 16 + ARROW, h: 140 };
+    var H = P3.top + P3.h + 34;
+
+    var ylo = Math.min(0, Math.floor(Math.min.apply(null, temps.length ? temps : [0]) / 10) * 10), yhi = 100;
+    function Y1(v) { return P1.top + (yhi - v) / (yhi - ylo) * P1.h; }
+    var rmax = Math.max(1, Math.ceil(Math.max.apply(null, rains.length ? rains : [0])));
+    function Y2(v) { return P2.top + P2.h - v / rmax * P2.h; }
+    var wmax = Math.max(10, Math.ceil(Math.max.apply(null, winds.length ? winds : [0]) / 10) * 10);
+    function Y3(v) { return P3.top + P3.h - v / wmax * P3.h; }
+
+    var dts = [];
+    for (var i = 1; i < rows.length; i++) dts.push(rows[i].t - rows[i - 1].t);
+    dts.sort(function (a, b) { return a - b; });
+    var med = dts.length ? dts[Math.floor(dts.length / 2)] : 3600;
+    var gap = Math.max(5400, med * 2.5, 13 * 3600);   // break lines only across gaps longer than 13 h
+
+    function path(k, Y) {
+      var d = '', prev = null;
+      rows.forEach(function (r) {
+        if (r[k] == null) { prev = null; return; }
+        d += (prev !== null && r.t - prev <= gap ? 'L' : 'M') + X(r.t).toFixed(1) + ' ' + Y(r[k]).toFixed(1);
+        prev = r.t;
+      });
+      return d;
+    }
+    function tick(x, y1, y2, cls) { return '<line class="' + cls + '" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + y1 + '" y2="' + y2 + '"/>'; }
+    function label(x, y, txt, anchor, extra) { return '<text class="ch-text" x="' + x.toFixed(1) + '" y="' + y + '" text-anchor="' + (anchor || 'start') + '"' + (extra || '') + '>' + txt + '</text>'; }
+
+    var g = '';
+    // panel frames and horizontal grid
+    [P1, P2, P3].forEach(function (P) { g += '<rect class="ch-frame" x="' + x0 + '" y="' + P.top + '" width="' + (x1 - x0) + '" height="' + P.h + '"/>'; });
+    for (var v = Math.ceil(ylo / 20) * 20; v <= yhi; v += 20) {
+      g += '<line class="ch-grid" x1="' + x0 + '" x2="' + x1 + '" y1="' + Y1(v).toFixed(1) + '" y2="' + Y1(v).toFixed(1) + '"/>' + label(x0 - 6, Y1(v) + 4, v, 'end');
+    }
+    [0, rmax / 2, rmax].forEach(function (v) { g += label(x0 - 6, Y2(v) + 4, +v.toFixed(1), 'end'); });
+    var wstep = wmax <= 20 ? 5 : 10;
+    for (var w = 0; w <= wmax; w += wstep) {
+      g += '<line class="ch-grid" x1="' + x0 + '" x2="' + x1 + '" y1="' + Y3(w).toFixed(1) + '" y2="' + Y3(w).toFixed(1) + '"/>' + label(x0 - 6, Y3(w) + 4, w, 'end');
+    }
+
+    // time grid and labels (MST)
+    var spanH = (tmax - tmin) / 3600, stepH = spanH <= 30 ? 3 : spanH <= 84 ? 6 : 12, stepS = stepH * 3600;
+    var toff = tzOffsetSec(tmax);
+    for (var t = Math.ceil((tmin + toff) / stepS) * stepS - toff; t <= tmax; t += stepS) {
+      var dd = localDate(t), hh = dd.getUTCHours(), major = hh === 0;
+      g += tick(X(t), P1.top, P3.top + P3.h, major ? 'ch-major' : 'ch-grid');
+      var lbl = major ? MONTHS[dd.getUTCMonth()] + ' ' + dd.getUTCDate() : (stepH <= 6 ? pad2(hh) + ':00' : '');
+      if (lbl) g += label(X(t), P3.top + P3.h + 16, lbl, 'middle');
+    }
+    g += label(x1, P3.top + P3.h + 30, 'Times in ' + tzAbbr(tmax), 'end');
+
+    // panel 1: temperature and RH share one scale (°C and %)
+    g += '<path class="ch-rh" d="' + path('rh', Y1) + '"/><path class="ch-temp" d="' + path('temp', Y1) + '"/>';
+    g += label(x0 + 8, P1.top + 15, 'Temperature °C', 'start', ' style="fill:#d33a2f;font-weight:600"') +
+         label(x0 + 135, P1.top + 15, 'RH %', 'start', ' style="fill:#2b7bd6;font-weight:600"');
+
+    // panel 2: rain bars
+    var bw = Math.min(14, Math.max(1.5, (x1 - x0) * med / (tmax - tmin) * 0.8));
+    rows.forEach(function (r) {
+      if (r.rain != null && r.rain > 0) g += '<rect class="ch-rain" x="' + (X(r.t) - bw / 2).toFixed(1) + '" y="' + Y2(r.rain).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (P2.top + P2.h - Y2(r.rain)).toFixed(1) + '"/>';
+    });
+    g += label(x0 + 8, P2.top + 15, 'Hourly rain mm', 'start', ' style="fill:#2b8fc4;font-weight:600"');
+    if (!rains.length) g += label((x0 + x1) / 2, P2.top + P2.h / 2 + 4, 'Rainfall not reported by this station', 'middle');
+
+    // panel 3 (bottom): gust and wind speed, with wind-direction arrows above
+    g += '<path class="ch-gust" d="' + path('gust', Y3) + '"/><path class="ch-wind" d="' + path('speed', Y3) + '"/>';
+    g += label(x0 + 8, P3.top + 15, 'Wind km/h', 'start', ' style="fill:#1f8fb0;font-weight:600"') +
+         label(x0 + 90, P3.top + 15, 'Gust km/h', 'start', ' style="fill:#e8873a;font-weight:600"');
+    g += label(x0 - 6, P3.top - ARROW / 2 + 4, 'dir', 'end');
+    var lastX = -100;
+    rows.forEach(function (r) {
+      if (r.dir == null) return;
+      var ax = X(r.t);
+      if (ax - lastX < 22) return;
+      lastX = ax;
+      g += '<path class="ch-arrow" transform="translate(' + ax.toFixed(1) + ',' + (P3.top - ARROW / 2) + ') rotate(' + (((r.dir + 180) % 360 + 360) % 360) + ')" d="M0 -8 L6 8 L0 4 L-6 8 Z"/>';
+    });
+
+    // point markers (also shows a single time step), and the time label when there is only one
+    if (rows.length <= 60) {
+      [['temp', Y1, '#d33a2f'], ['rh', Y1, '#2b7bd6'], ['gust', Y3, '#e8873a'], ['speed', Y3, '#1f8fb0']].forEach(function (d) {
+        rows.forEach(function (r) {
+          if (r[d[0]] != null) g += '<circle cx="' + X(r.t).toFixed(1) + '" cy="' + d[1](r[d[0]]).toFixed(1) + '" r="3" fill="' + d[2] + '"/>';
+        });
+      });
+    }
+    if (hist.times.length === 1) g += label(X(hist.times[0]), P3.top + P3.h + 30, fmtLocal(hist.times[0]), 'middle');
+
+    // selected time (time slider) and hover line
+    if (tsel >= 0) g += tick(X(hist.times[tsel]), P1.top, P3.top + P3.h, 'ch-sel');
+    g += '<line id="chHover" class="ch-hover" y1="' + P1.top + '" y2="' + (P3.top + P3.h) + '" style="display:none"/>';
+    g += '<rect id="chOverlay" x="' + x0 + '" y="' + P1.top + '" width="' + (x1 - x0) + '" height="' + (P3.top + P3.h - P1.top) + '" fill="transparent" style="cursor:crosshair"/>';
+
+    box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Trend chart for ' + esc(s.name) + '">' + g + '</svg><div class="ch-tip" id="chTip" hidden></div>';
+
+    var svg = box.firstChild, ov = svg.querySelector('#chOverlay'), hl = svg.querySelector('#chHover'), tip = $('chTip');
+    function nearest(e) {
+      var px = (e.clientX - svg.getBoundingClientRect().left) * (W / svg.getBoundingClientRect().width);
+      var t = tmin + (px - x0) / (x1 - x0) * (tmax - tmin), best = rows[0];
+      rows.forEach(function (r) { if (Math.abs(r.t - t) < Math.abs(best.t - t)) best = r; });
+      return best;
+    }
+    function num(v, u) { return v == null ? '—' : v + (u ? ' ' + u : ''); }
+    ov.addEventListener('mousemove', function (e) {
+      var r = nearest(e), xx = X(r.t), cr = wget(r, 'cross');
+      hl.setAttribute('x1', xx); hl.setAttribute('x2', xx); hl.style.display = '';
+      tip.innerHTML = '<strong>' + fmtLocal(r.t) + '</strong><br>Temp ' + num(r.temp, '°C') + ' · RH ' + num(r.rh, '%') +
+        '<br>Crossover ' + num(cr) + '<br>Rain ' + num(r.rain, 'mm') +
+        '<br>Wind ' + num(r.speed, 'km/h') + (r.dir != null ? ' from ' + r.dir + '°' : '') +
+        '<br>Gust ' + num(r.gust, 'km/h') + (r.gustDir != null ? ' from ' + r.gustDir + '°' : '');
+      tip.hidden = false;
+      var left = xx * (svg.getBoundingClientRect().width / W) + 12;
+      if (left > box.clientWidth - 230) left -= 236;
+      tip.style.left = Math.max(0, left) + 'px';
+    });
+    ov.addEventListener('mouseleave', function () { hl.style.display = 'none'; tip.hidden = true; });
+    ov.addEventListener('click', function (e) {
+      var i = hist.times.indexOf(nearest(e).t);
+      if (i >= 0) showHistory(i);
+    });
+  }
+
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { drawChart(); drawAvail(); }, 200);
+  });
+
+  function loadFromUrl() {
+    fetch(CSV_URL, { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function (t) { loadText(t, 'stationIP.csv on GitHub'); })
+      .catch(function (e) {
+        showError('Could not load stationIP.csv from GitHub (' + e.message + '). Use "Use a different CSV file" to load a copy from your computer.');
+      });
+  }
+
+  /* ---------- Events ---------- */
+  runBtn.addEventListener('click', runAll);
+  stopBtn.addEventListener('click', stopRun);
+  csvBtn.addEventListener('click', downloadResults);
+  $('search').addEventListener('input', renderTable);
+  $('statusFilter').addEventListener('change', renderTable);
+  $('port').addEventListener('change', renderTable);
+  $('headRow').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-key]');
+    if (!b) return;
+    var k = b.getAttribute('data-key');
+    if (sort.key === k) sort.dir = -sort.dir; else { sort.key = k; sort.dir = 1; }
+    renderHead(); renderTable();
+  });
+  $('file').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try { loadText(String(reader.result), f.name); } catch (err) { showError(err.message); }
+    };
+    reader.readAsText(f);
+  });
+
+  renderHead();
+  renderAll();
+  drawChart();
+  drawAvail();
+  loadFromUrl();
+})();
+</script>
+</body>
+</html>
