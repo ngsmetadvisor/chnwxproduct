@@ -54,6 +54,7 @@ def parse_weather(html):
         "gustDir": num(r"Wind Direction of Gust[^:\n]*:\s*(-?[\d.]+)", text),
         "temp": num(r"Temperature:\s*(-?[\d.]+)", text),
         "rh": num(r"Relative Humidity:\s*(-?[\d.]+)", text),
+        "rain": num(r"Hourly Rain(?:fall)?:\s*(-?[\d.]+)", text),
     }
     if all(d[k] is None for k in ("dir", "speed", "gust", "gustDir", "temp", "rh")):
         return None
