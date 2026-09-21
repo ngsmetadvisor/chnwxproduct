@@ -2,7 +2,7 @@ name: Station weather feed
 
 on:
   schedule:
-    - cron: "5 * * * *"
+    - cron: "15 0,12,15,18,21 * * *"
   workflow_dispatch:
 
 permissions:
