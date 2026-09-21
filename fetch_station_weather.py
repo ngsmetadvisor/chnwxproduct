@@ -22,6 +22,9 @@ TIMEOUT = 12          # seconds to wait for each station
 WORKERS = 20          # stations fetched at the same time
 DEFAULT_PORT = "8000"
 IP_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+HIST_FILE = sys.argv[3] if len(sys.argv) > 3 else "station_weather_history.json"
+KEEP_DAYS = 7          # history older than this is dropped
+HIST_FIELDS = ["temp", "rh", "rain", "speed", "dir", "gust", "gustDir"]
 
 
 def text_from_html(html):
@@ -129,16 +132,46 @@ def fetch(st):
     return rec
 
 
+def update_history(results, fetched):
+    """Append this run to the history file and drop rows older than KEEP_DAYS."""
+    try:
+        with open(HIST_FILE, encoding="utf-8") as f:
+            stations = json.load(f).get("stations", {})
+    except (OSError, ValueError, AttributeError):
+        stations = {}
+    t = int(fetched.timestamp())
+    for r in results:
+        d = r["data"]
+        if not d:
+            continue
+        rows = stations.setdefault(r["id"], [])
+        if rows and rows[-1][0] == t:
+            continue
+        rows.append([t] + [d.get(k) for k in HIST_FIELDS])
+    cutoff = t - KEEP_DAYS * 86400
+    for sid in list(stations):
+        stations[sid] = [row for row in stations[sid] if row[0] >= cutoff]
+        if not stations[sid]:
+            del stations[sid]
+    hist = {"fields": ["t"] + HIST_FIELDS,
+            "updated": fetched.isoformat(timespec="seconds"),
+            "stations": stations}
+    with open(HIST_FILE, "w", encoding="utf-8") as f:
+        json.dump(hist, f, separators=(",", ":"), ensure_ascii=False)
+
+
 def main():
     stations = load_stations()
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         results = list(pool.map(fetch, stations))
+    fetched = datetime.now(timezone.utc)
     feed = {
-        "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "fetched_at": fetched.isoformat(timespec="seconds"),
         "stations": {r["id"]: r for r in results},
     }
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(feed, f, indent=1, ensure_ascii=False)
+    update_history(results, fetched)
     answered = sum(1 for r in results if r["ok"])
     with_data = sum(1 for r in results if r["data"])
     print("%d stations: %d answered, %d with weather values, %d no answer"
