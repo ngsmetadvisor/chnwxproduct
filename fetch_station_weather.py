@@ -64,7 +64,12 @@ def parse_weather(html):
         d["obsMin"] = int(t.group(1)) * 60 + int(t.group(2))
         offset = 360 if d["tz"] == "MDT" else 420          # minutes behind UTC
         now = datetime.now(timezone.utc)
-        d["ageMin"] = (now.hour * 60 + now.minute - offset - d["obsMin"]) % 1440
+        # diff > 0: observation is in the past; diff < 0: it is in the future
+        diff = (now.hour * 60 + now.minute - offset - d["obsMin"] + 720) % 1440 - 720
+        if d["tz"] != "MDT" and -85 <= diff <= -30:
+            d["clockAhead"] = True      # station clock is probably on MDT but labelled MST
+            diff += 60
+        d["ageMin"] = max(0, diff) if diff > -30 else diff + 1440
     return d
 
 
