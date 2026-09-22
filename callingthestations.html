@@ -150,6 +150,10 @@
   .seg button:hover { border-color: var(--muted); }
   .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
   #map { height: 580px; background: var(--idle-bg); }
+  #mapPanel:fullscreen { display: flex; flex-direction: column; background: var(--surface); }
+  #mapPanel:fullscreen #map { flex: 1; height: auto; }
+  #mapPanel:-webkit-full-screen { display: flex; flex-direction: column; background: var(--surface); }
+  #mapPanel:-webkit-full-screen #map { flex: 1; height: auto; }
   .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 8px 14px; font-size: 13px; border-top: 1px solid var(--line); }
   .legend .sw, .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.35); }
   .ramp { display: inline-block; height: 10px; width: 220px; border-radius: 5px; border: 1px solid var(--line); }
@@ -292,6 +296,7 @@
         <button type="button" id="mapContourBtn" aria-pressed="true" title="Contours of the selected element: lines, filled, off">Contour: lines</button>
         <button type="button" id="namesBtn" aria-pressed="false" title="Show station ID and name on the map">Names: off</button>
         <button type="button" id="zonesBtn" aria-pressed="true" title="Show the fire weather forecast zones">Zones: on</button>
+        <button type="button" id="fullscreenBtn" aria-pressed="false" title="View the map full screen">⛶ Full screen</button>
       </div>
     </div>
     <div class="timebar" id="timebar">
@@ -1345,6 +1350,27 @@
     this.title = 'Show the fire weather forecast zones';
     showZones();
   });
+
+  /* ---------- Full screen map ---------- */
+  function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  $('fullscreenBtn').addEventListener('click', function () {
+    var panel = $('mapPanel');
+    if (!fsElement()) {
+      var req = panel.requestFullscreen || panel.webkitRequestFullscreen;
+      if (req) req.call(panel);
+    } else {
+      var exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) exit.call(document);
+    }
+  });
+  function onFsChange() {
+    var on = fsElement() === $('mapPanel');
+    $('fullscreenBtn').setAttribute('aria-pressed', on ? 'true' : 'false');
+    $('fullscreenBtn').textContent = on ? '⛶ Exit full screen' : '⛶ Full screen';
+    setTimeout(function () { if (map) map.invalidateSize(); }, 150);
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
 
   /* ---------- Export ---------- */
   function csvCell(v) {
