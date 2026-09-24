@@ -2,7 +2,7 @@
 // Only ONE service worker can be active per scope, so this file — not a
 // per-page one — is what every page should register, each just adding its
 // own files to FILES below when it needs offline support.
-const CACHE = 'chnwxproduct-v11';
+const CACHE = 'chnwxproduct-v12';
 const FILES = [
   // camera.html app shell
   './camera.html',
