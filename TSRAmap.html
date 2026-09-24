@@ -9,6 +9,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>* { -webkit-tap-highlight-color: transparent; }</style>
 <title>Lightning Map – Alberta - Live</title>
+<link rel="manifest" href="manifest-tsramap.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<meta name="apple-mobile-web-app-title" content="AB Lightning Map">
+<meta name="theme-color" content="#0d0d1a">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -6812,6 +6817,7 @@ document.getElementById('map').addEventListener('click', function(e){
   const stack = document.elementsFromPoint(e.clientX, e.clientY);
   console.log('[map div click]', e.clientX, e.clientY, 'stack:', stack.slice(0,6).map(el => el.className || el.tagName).join(' | '));
 }, true); // capture phase — fires before Leaflet
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 (function initFakeGPS(){
   const fakeLL={lat:53.5461,lng:-113.4938}; // Edmonton fallback
   _gpsLastLL={lat:53.5461,lon:-113.4938};
