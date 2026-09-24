@@ -423,7 +423,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div class="sep"></div>
 <button id="station-toggle" class="tb-btn active"><span class="tb-icon">📍</span><span class="tb-text"> Stns</span></button>
     <div class="sep"></div>
-    <button id="airport-toggle" class="tb-btn active"><span class="tb-icon">✈</span><span class="tb-text"> Apt</span></button>
+    <button id="airport-toggle" class="tb-btn active"><span class="tb-icon">✈︎</span><span class="tb-text"> Apt</span></button>
     <div class="sep"></div>
 <button id="compass-menu-btn" class="tb-btn active"><span class="tb-icon">🧭</span><span class="tb-text"> Compass</span></button>
     <div class="sep"></div>
@@ -4454,7 +4454,7 @@ if(isHailCapable){
     // Row itself is clickable (pointer-events re-enabled per-row) even though the panel
     // container stays pointer-events:none so it never blocks map clicks elsewhere.
     return '<div class="airport-storm-row" data-airport="'+name+'" style="margin-top:4px;padding-top:4px;border-top:0.5px solid rgba(255,140,0,0.2);cursor:pointer;pointer-events:auto;'+rowBg+'">'+
-      '<div style="font-size:12px;font-weight:700;color:'+(isHailCapable?'#a020c0':'#ff8c00')+';">✈ '+name+'</div>'+
+      '<div style="font-size:12px;font-weight:700;color:'+(isHailCapable?'#a020c0':'#ff8c00')+';">✈︎ '+name+'</div>'+
       distHtml+badgesHtml+
       '</div>';
   }).join('');
@@ -7185,14 +7185,14 @@ function buildAirportMarkers(){
   AIRPORTS.forEach(a=>{
 const icon = L.divIcon({
       className:'',
-      html:'<div class="airport-icon">✈</div><div class="airport-label">'+a.name+'</div>',
+      html:'<div class="airport-icon">✈︎</div><div class="airport-label">'+a.name+'</div>',
       iconSize:[80,34],
       iconAnchor:[40,16]
     });
 const m = L.marker([a.lat,a.lon],{icon,interactive:true,pane:'airports'}).addTo(map);
     const _airportPopupHtml=
       '<div style="font-family:monospace;font-size:11px;line-height:1.8;color:#ccc;min-width:150px;">'+
-      '<div style="font-size:13px;font-weight:700;color:#ff8c00;margin-bottom:4px;">✈ '+a.name+'</div>'+
+      '<div style="font-size:13px;font-weight:700;color:#ff8c00;margin-bottom:4px;">✈︎ '+a.name+'</div>'+
       '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>'+a.lat.toFixed(4)+'°</div>'+
       '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>'+a.lon.toFixed(4)+'°</div>'+
       '<div style="margin-top:6px;"><a href="https://www.google.com/maps?q='+a.lat.toFixed(5)+','+a.lon.toFixed(5)+'" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>'+
