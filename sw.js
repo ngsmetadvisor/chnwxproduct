@@ -8,7 +8,7 @@ const FILES = [
   './camera.html',
   './manifest.webmanifest',
 
-  // TSRAmap.html app shell
+  // TSRAmap.html app shell  
   './TSRAmap.html',
   './manifest-tsramap.webmanifest',
   './tsramap-icon-192.png',
