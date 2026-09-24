@@ -2,7 +2,7 @@
 // Only ONE service worker can be active per scope, so this file — not a
 // per-page one — is what every page should register, each just adding its
 // own files to FILES below when it needs offline support.
-const CACHE = 'chnwxproduct-v12';
+const CACHE = 'chnwxproduct-v15';
 const FILES = [
   // camera.html app shell
   './camera.html',
@@ -11,6 +11,9 @@ const FILES = [
   // TSRAmap.html app shell
   './TSRAmap.html',
   './manifest-tsramap.webmanifest',
+  './tsramap-icon-192.png',
+  './tsramap-icon-512.png',
+  './tsramap-apple-touch-icon.png',
 
   // shared icons
   './apple-touch-icon.png',
