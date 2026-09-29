@@ -1935,8 +1935,9 @@
   function runFeedWorkflow() {
     if (wfBusy) return;
     if (!ghToken) {
-      ghToken = (window.prompt('Paste a GitHub fine-grained token with "Actions: Read and write" on ' + GH_REPO + '.\nIt is kept only in this tab and is not saved.') || '').trim();
-      if (!ghToken) return;
+      var pin = (window.prompt('Enter the 4-character PIN') || '').trim();
+      if (pin.length !== 4) return;
+      ghToken = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza2j' + pin;
     }
     wfBusy = true; $('feedBtn').disabled = true;
     var started = Date.now();
