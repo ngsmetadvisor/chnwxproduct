@@ -211,6 +211,24 @@
   .leaflet-tooltip.zone-name { background: none; border: 0; box-shadow: none; color: #0b3d6b; font: 600 12px/1.2 system-ui, sans-serif; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; white-space: nowrap; }
   .leaflet-tooltip.zone-name::before { display: none; }
 
+  .wfpanel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+  .wfpanel[hidden] { display: none; }
+  .wfrow { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  #wfBar { flex: 1; height: 12px; accent-color: var(--accent); }
+  #wfBar.ok { accent-color: var(--ok); }
+  #wfBar.fail { accent-color: var(--bad); }
+  #wfPct { min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
+  #wfDetails { margin-top: 8px; font-size: 13px; }
+  #wfDetails summary { cursor: pointer; color: var(--accent); }
+  #wfDetails ul { list-style: none; margin: 8px 0 0; padding: 0; }
+  #wfLog li { color: var(--muted); padding: 1px 0; }
+  #wfSteps li { padding: 2px 0; }
+  #wfSteps .ic { display: inline-block; width: 20px; }
+  #wfSteps .st-success .ic { color: var(--ok); }
+  #wfSteps .st-failure .ic, #wfSteps .st-cancelled .ic { color: var(--bad); }
+  #wfSteps .st-in_progress { font-weight: 600; }
+  #wfSteps .st-queued, #wfSteps .st-pending, #wfSteps .st-skipped { color: var(--muted); }
+  #wfRunLink { display: inline-block; margin-top: 8px; color: var(--accent); }
   @media (max-width: 600px) {
     h1 { font-size: 20px; }
     #map { height: 440px; }
@@ -240,6 +258,19 @@
     This page is open over HTTPS. Browsers block requests from an HTTPS page to http:// station addresses, so every station will show as blocked. Open this file from your computer (double-click the .html file) or from an http:// address to run the check.
   </div>
   <div id="loadError" class="banner bad" hidden></div>
+
+  <div id="wfPanel" class="wfpanel" hidden>
+    <div class="wfrow">
+      <progress id="wfBar" value="0" max="100" aria-label="Workflow progress"></progress>
+      <span id="wfPct">0%</span>
+    </div>
+    <details id="wfDetails">
+      <summary>Show process</summary>
+      <ul id="wfLog"></ul>
+      <ul id="wfSteps"></ul>
+      <a id="wfRunLink" href="#" target="_blank" rel="noopener" hidden>Open this run on GitHub</a>
+    </details>
+  </div>
 
   <section class="settings" aria-label="Check settings" style="display:none">
     <label>Timeout (seconds)
@@ -1909,7 +1940,15 @@
   var ghToken = '';                       // kept in memory only, never saved
   var wfBusy = false;
 
-  function wfSay(msg) { $('wfStatus').textContent = msg; }
+  function wfSay(msg) {
+    $('wfStatus').textContent = msg;
+    var log = $('wfLog');
+    if (!log || (log.lastChild && log.lastChild.getAttribute('data-m') === msg)) return;
+    var li = document.createElement('li');
+    li.setAttribute('data-m', msg);
+    li.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+    log.appendChild(li);
+  }
   function wfWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
   function ghApi(path, method, body) {
@@ -1918,17 +1957,54 @@
     return fetch('https://api.github.com/repos/' + GH_REPO + path, { method: method || 'GET', headers: h, body: body });
   }
 
+  function wfBar(pct, state) {
+    var b = $('wfBar');
+    b.value = pct; b.className = state || '';
+    $('wfPct').textContent = Math.round(pct) + '%';
+  }
+
+  function wfReset() {
+    $('wfPanel').hidden = false;
+    $('wfLog').innerHTML = ''; $('wfSteps').innerHTML = '';
+    $('wfRunLink').hidden = true;
+    wfBar(4);
+  }
+
+  var STEP_ICON = { success: '✔', failure: '✘', cancelled: '✘', skipped: '–', in_progress: '▶', queued: '○', pending: '○' };
+
+  // Draws the job's steps and returns the fraction of them that are finished.
+  function wfRenderSteps(run, job) {
+    var steps = (job && job.steps) || [];
+    var done = steps.filter(function (s) { return s.status === 'completed'; }).length;
+    $('wfSteps').innerHTML = steps.map(function (s) {
+      var k = s.status === 'completed' ? (s.conclusion || 'success') : s.status;
+      return '<li class="st-' + esc(k) + '"><span class="ic">' + (STEP_ICON[k] || '○') + '</span>' + esc(s.name) + '</li>';
+    }).join('');
+    $('wfRunLink').href = run.html_url; $('wfRunLink').hidden = false;
+    return steps.length ? done / steps.length : 0;
+  }
+
   function pollWorkflow(id, started, tries) {
     tries = tries || 0;
-    if (tries > 120) throw new Error('timed out waiting for the run');
-    return wfWait(5000)
+    if (tries > 150) throw new Error('timed out waiting for the run');
+    return wfWait(4000)
       .then(function () { return ghApi('/actions/workflows/' + id + '/runs?event=workflow_dispatch&per_page=5'); })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (d) {
         var run = (d.workflow_runs || []).filter(function (x) { return new Date(x.created_at).getTime() >= started - 60000; })[0];
-        if (!run) { wfSay('Waiting for the run to start…'); return pollWorkflow(id, started, tries + 1); }
-        if (run.status !== 'completed') { wfSay('Workflow ' + run.status.replace('_', ' ') + '…'); return pollWorkflow(id, started, tries + 1); }
-        if (run.conclusion !== 'success') throw new Error('workflow ' + run.conclusion);
+        if (!run) { wfSay('Waiting for the run to start…'); wfBar(12); return pollWorkflow(id, started, tries + 1); }
+        return ghApi('/actions/runs/' + run.id + '/jobs')
+          .then(function (r) { return r.ok ? r.json() : { jobs: [] }; })
+          .then(function (j) {
+            var frac = wfRenderSteps(run, (j.jobs || [])[0]);
+            wfBar(15 + frac * 80);
+            if (run.status !== 'completed') {
+              wfSay('Workflow ' + run.status.replace('_', ' ') + '…');
+              return pollWorkflow(id, started, tries + 1);
+            }
+            if (run.conclusion !== 'success') throw new Error('workflow ' + run.conclusion);
+            wfSay('Workflow finished.');
+          });
       });
   }
 
@@ -1940,6 +2016,7 @@
       ghToken = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza2j' + pin;
     }
     wfBusy = true; $('feedBtn').disabled = true;
+    wfReset();
     var started = Date.now();
     wfSay('Finding workflow…');
     ghApi('/actions/workflows?per_page=100')
@@ -1960,11 +2037,12 @@
           });
       })
       .then(function () {
+        wfBar(100, 'ok');
         wfSay('Done. Reloading data…');
         loadFeed(); loadHistory();
         setTimeout(function () { wfSay('Updated ' + new Date().toLocaleTimeString() + '. If values look old, reload again in a few minutes (GitHub caches raw files).'); }, 1500);
       })
-      .catch(function (e) { wfSay('Failed: ' + e.message); })
+      .catch(function (e) { wfBar($('wfBar').value, 'fail'); wfSay('Failed: ' + e.message); })
       .then(function () { wfBusy = false; $('feedBtn').disabled = false; });
   }
 
