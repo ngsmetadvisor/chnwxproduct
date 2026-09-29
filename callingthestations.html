@@ -227,7 +227,9 @@
     </div>
     <div>
       <button id="csvBtn" class="btn" disabled>Download results (CSV)</button>
-      <span style="display:none">
+      <button id="feedBtn" class="btn primary" title="Run the Station weather feed workflow on GitHub, then reload the data">Run weather feed</button>
+      <span id="wfStatus" class="muted" style="font-size:13px" aria-live="polite"></span>
+            <span style="display:none">
         <button id="runBtn" class="btn primary" disabled>Check all stations</button>
         <button id="stopBtn" class="btn" hidden>Stop</button>
       </span>
@@ -1900,6 +1902,72 @@
         showError('Could not load stationIP.csv from GitHub (' + e.message + '). Use "Use a different CSV file" to load a copy from your computer.');
       });
   }
+
+  /* ---------- Run the "Station weather feed" workflow on GitHub ---------- */
+  var GH_REPO = 'ngsmetadvisor/chnwxproduct';
+  var WF_NAME = 'Station weather feed';
+  var ghToken = '';                       // kept in memory only, never saved
+  var wfBusy = false;
+
+  function wfSay(msg) { $('wfStatus').textContent = msg; }
+  function wfWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function ghApi(path, method, body) {
+    var h = { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + ghToken };
+    if (body) h['Content-Type'] = 'application/json';
+    return fetch('https://api.github.com/repos/' + GH_REPO + path, { method: method || 'GET', headers: h, body: body });
+  }
+
+  function pollWorkflow(id, started, tries) {
+    tries = tries || 0;
+    if (tries > 120) throw new Error('timed out waiting for the run');
+    return wfWait(5000)
+      .then(function () { return ghApi('/actions/workflows/' + id + '/runs?event=workflow_dispatch&per_page=5'); })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) {
+        var run = (d.workflow_runs || []).filter(function (x) { return new Date(x.created_at).getTime() >= started - 60000; })[0];
+        if (!run) { wfSay('Waiting for the run to start…'); return pollWorkflow(id, started, tries + 1); }
+        if (run.status !== 'completed') { wfSay('Workflow ' + run.status.replace('_', ' ') + '…'); return pollWorkflow(id, started, tries + 1); }
+        if (run.conclusion !== 'success') throw new Error('workflow ' + run.conclusion);
+      });
+  }
+
+  function runFeedWorkflow() {
+    if (wfBusy) return;
+    if (!ghToken) {
+      ghToken = (window.prompt('Paste a GitHub fine-grained token with "Actions: Read and write" on ' + GH_REPO + '.\nIt is kept only in this tab and is not saved.') || '').trim();
+      if (!ghToken) return;
+    }
+    wfBusy = true; $('feedBtn').disabled = true;
+    var started = Date.now();
+    wfSay('Finding workflow…');
+    ghApi('/actions/workflows?per_page=100')
+      .then(function (r) {
+        if (r.status === 401 || r.status === 403 || r.status === 404) { ghToken = ''; throw new Error('token rejected (HTTP ' + r.status + ')'); }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (d) {
+        var wf = (d.workflows || []).filter(function (w) { return w.name === WF_NAME; })[0];
+        if (!wf) throw new Error('workflow "' + WF_NAME + '" not found');
+        wfSay('Starting workflow…');
+        return ghApi('/actions/workflows/' + wf.id + '/dispatches', 'POST', JSON.stringify({ ref: 'main' }))
+          .then(function (r) {
+            if (r.status === 401 || r.status === 403) { ghToken = ''; throw new Error('token needs Actions: write (HTTP ' + r.status + ')'); }
+            if (r.status !== 204) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + ' ' + t.slice(0, 120)); });
+            return pollWorkflow(wf.id, started);
+          });
+      })
+      .then(function () {
+        wfSay('Done. Reloading data…');
+        loadFeed(); loadHistory();
+        setTimeout(function () { wfSay('Updated ' + new Date().toLocaleTimeString() + '. If values look old, reload again in a few minutes (GitHub caches raw files).'); }, 1500);
+      })
+      .catch(function (e) { wfSay('Failed: ' + e.message); })
+      .then(function () { wfBusy = false; $('feedBtn').disabled = false; });
+  }
+
+  $('feedBtn').addEventListener('click', runFeedWorkflow);
 
   /* ---------- Events ---------- */
   runBtn.addEventListener('click', runAll);
