@@ -141,7 +141,7 @@
   .pill.online { background: var(--ok-bg); color: var(--ok); }
   .pill.offline { background: var(--bad-bg); color: var(--bad); }
   .pill.checking { background: var(--warn-bg); color: var(--warn); }
-  .pill.pending, .pill.invalid, .pill.blocked { background: var(--idle-bg); color: var(--muted); }
+  .pill.pending, .pill.invalid, .pill.blocked, .pill.skipped { background: var(--idle-bg); color: var(--muted); }
   .flag { color: var(--warn); font-size: 13px; display: block; }
 
   .mapbar { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); overflow-x: auto; }
@@ -430,10 +430,10 @@
 
   var STATUS_LABEL = {
     online: 'Working', offline: 'Not working', checking: 'Checking…',
-    pending: 'Not checked', blocked: 'Blocked', invalid: 'No valid IP'
+    pending: 'Not checked', blocked: 'Blocked', invalid: 'No valid IP', skipped: 'Not fetched (Inmarsat)'
   };
-  var STATUS_ORDER = { offline: 0, online: 1, checking: 2, pending: 3, blocked: 4, invalid: 5 };
-  var UNTESTED = ['pending', 'checking', 'blocked', 'invalid'];
+  var STATUS_ORDER = { offline: 0, online: 1, checking: 2, pending: 3, blocked: 4, invalid: 5, skipped: 6 };
+  var UNTESTED = ['pending', 'checking', 'blocked', 'invalid', 'skipped'];
 
   var AVAIL = {
     ok:       { label: 'Data OK', color: '#1f9d55' },
@@ -526,8 +526,9 @@
       var m = /(\d{1,3}(?:\.\d{1,3}){3}):(\d+)/.exec(s.webUrl);
       s.urlIp = m ? m[1] : '';
       s.urlPort = m ? m[2] : '';
-      s.status = s.valid ? 'pending' : 'invalid';
-      s.detail = s.valid ? '' : 'No valid IP address';
+      s.inmarsat = /inmarsat/i.test(s.telemetry);          // satellite (BGAN) stations are not fetched
+      s.status = !s.valid ? 'invalid' : s.inmarsat ? 'skipped' : 'pending';
+      s.detail = !s.valid ? 'No valid IP address' : s.inmarsat ? 'Inmarsat station, not fetched' : '';
       s.ms = null; s.checkedAt = null;
       out.push(s);
     });
@@ -746,9 +747,9 @@
     stations.forEach(function (s) {
       s.ms = null; s.checkedAt = null;
       s.data = null; s.dataState = ''; s.hourlyUrl = '';
-      if (s.valid) { s.status = 'pending'; s.detail = ''; }
+      if (s.valid && !s.inmarsat) { s.status = 'pending'; s.detail = ''; }
     });
-    var queue = stations.filter(function (s) { return s.valid; });
+    var queue = stations.filter(function (s) { return s.valid && !s.inmarsat; });
     var next = 0, done = 0;
 
     runBtn.hidden = true; stopBtn.hidden = false; csvBtn.disabled = true;
@@ -1441,7 +1442,8 @@
     runBtn.hidden = false; stopBtn.hidden = true; csvBtn.disabled = true;
     $('progress').hidden = true;
     var withIp = stations.filter(function (s) { return s.valid; }).length;
-    $('sourceNote').textContent = stations.length + ' stations loaded from ' + label + ' · ' + withIp + ' with a valid IP address';
+    var sat = stations.filter(function (s) { return s.valid && s.inmarsat; }).length;
+    $('sourceNote').textContent = stations.length + ' stations loaded from ' + label + ' · ' + withIp + ' with a valid IP address' + (sat ? ' · ' + sat + ' Inmarsat not fetched' : '');
     $('loadError').hidden = true;
     runBtn.disabled = false;
     renderAll();
@@ -1476,7 +1478,7 @@
     stations.forEach(function (s) {
       var r = recs[s.id];
       s.feed = r || null;
-      if (!r || !s.valid || running) return;
+      if (!r || !s.valid || s.inmarsat || running) return;
       found++;
       s.checkedAt = feedAt; s.ms = r.ms; s.hourlyUrl = r.hourly || '';
       if (r.ok) {
@@ -1618,7 +1620,7 @@
           s.ms = null; s.hourlyUrl = '';
           if (rec) {
             s.status = 'online'; s.data = rec; s.dataState = 'ok'; s.detail = 'Snapshot ' + fmtLocal(t);
-          } else if (s.valid) {
+          } else if (s.valid && !s.inmarsat) {
             s.status = 'offline'; s.data = null; s.dataState = ''; s.detail = 'No record at this time';
           }
         });
@@ -1651,7 +1653,7 @@
       return;
     }
     var times = hist.times, nT = times.length;
-    var list = stations.filter(function (s) { return s.valid; }).sort(function (a, b) {
+    var list = stations.filter(function (s) { return s.valid && !s.inmarsat; }).sort(function (a, b) {
       return (a.region || '').localeCompare(b.region || '') || a.id.localeCompare(b.id);
     });
     var nS = list.length, mL = 64, mR = 8, RH = 11, SH = 70;
@@ -1676,12 +1678,15 @@
     top += '<rect class="ch-frame" x="' + mL + '" y="4" width="' + (W - mL - mR) + '" height="38"/>';
     top += '<text class="ch-text" x="' + (mL - 5) + '" y="14" text-anchor="end" style="font-size:10px">' + nS + '</text>';
     top += '<text class="ch-text" x="' + (mL - 5) + '" y="42" text-anchor="end" style="font-size:10px">0</text>';
-    var prevDay = null;
+    var prevDay = null, lastLbl = -1e9;
     for (i = 0; i < nT; i++) {
       var d = localDate(times[i]), day = d.getUTCFullYear() + '-' + d.getUTCMonth() + '-' + d.getUTCDate(), x = mL + i * cw;
       if (day !== prevDay) {
         top += '<line class="ch-major" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="4" y2="' + SH + '"/>';
-        top += '<text class="ch-text" x="' + (x + 2).toFixed(1) + '" y="' + (SH - 4) + '">' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + '</text>';
+        if (x - lastLbl >= 48) {        // skip date labels that would overlap (30 days of runs)
+          top += '<text class="ch-text" x="' + (x + 2).toFixed(1) + '" y="' + (SH - 4) + '">' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + '</text>';
+          lastLbl = x;
+        }
         g += '<line class="ch-major" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="0" y2="' + H + '"/>';
         prevDay = day;
       }
@@ -1773,10 +1778,10 @@
     if (!s) {
       $('chartTitle').textContent = 'Trend';
       $('chartGmap').hidden = true;
-      box.innerHTML = '<div class="empty">Click a station on the map, or its ID in the table, to see its 7-day trend.</div>';
+      box.innerHTML = '<div class="empty">Click a station on the map, or its ID in the table, to see its 30-day trend.</div>';
       return;
     }
-    $('chartTitle').textContent = s.name + ' (' + s.id + ') · last 7 days';
+    $('chartTitle').textContent = s.name + ' (' + s.id + ') · last 30 days';
     $('chartGmap').hidden = s.lat == null;
     if (s.lat != null) $('chartGmap').href = gmapsUrl(s);
     var rows = hist && hist.by[s.id] ? hist.by[s.id] : [];
@@ -1835,13 +1840,13 @@
     }
 
     // time grid and labels (MST)
-    var spanH = (tmax - tmin) / 3600, stepH = spanH <= 30 ? 3 : spanH <= 84 ? 6 : 12, stepS = stepH * 3600;
-    var toff = tzOffsetSec(tmax);
+    var spanH = (tmax - tmin) / 3600, stepH = spanH <= 30 ? 3 : spanH <= 84 ? 6 : spanH <= 240 ? 12 : 24, stepS = stepH * 3600;
+    var toff = tzOffsetSec(tmax), lastLbl = -1e9;
     for (var t = Math.ceil((tmin + toff) / stepS) * stepS - toff; t <= tmax; t += stepS) {
       var dd = localDate(t), hh = dd.getUTCHours(), major = hh === 0;
       g += tick(X(t), P1.top, P3.top + P3.h, major ? 'ch-major' : 'ch-grid');
       var lbl = major ? MONTHS[dd.getUTCMonth()] + ' ' + dd.getUTCDate() : (stepH <= 6 ? pad2(hh) + ':00' : '');
-      if (lbl) g += label(X(t), P3.top + P3.h + 16, lbl, 'middle');
+      if (lbl && X(t) - lastLbl >= 50) { g += label(X(t), P3.top + P3.h + 16, lbl, 'middle'); lastLbl = X(t); }   // no overlapping dates
     }
     g += label(x1, P3.top + P3.h + 30, 'Times in ' + tzAbbr(tmax), 'end');
 
