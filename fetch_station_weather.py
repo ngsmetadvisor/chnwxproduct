@@ -23,7 +23,7 @@ WORKERS = 20          # stations fetched at the same time
 DEFAULT_PORT = "8000"
 IP_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
 HIST_FILE = sys.argv[3] if len(sys.argv) > 3 else "station_weather_history.json"
-KEEP_DAYS = 7          # history older than this is dropped
+KEEP_DAYS = 30         # history older than this is dropped
 HIST_FIELDS = ["temp", "rh", "rain", "speed", "dir", "gust", "gustDir"]
 
 
@@ -94,13 +94,15 @@ def load_stations():
         return -1
 
     ix = {"id": col("Stn. ID"), "name": col("Station Name"), "ip": col("IP Address"),
-          "web": col("Web Access", True)}
+          "web": col("Web Access", True), "tel": col("Telemetry")}
     out = []
     for r in rows[1:]:
         def get(k):
             i = ix[k]
             return r[i].strip() if 0 <= i < len(r) else ""
         if not get("id") or not IP_RE.match(get("ip")):
+            continue
+        if "inmarsat" in get("tel").lower():     # satellite (BGAN) stations are not fetched
             continue
         out.append({"id": get("id"), "name": get("name"), "ip": get("ip"),
                     "port": web_port(get("web"))})
