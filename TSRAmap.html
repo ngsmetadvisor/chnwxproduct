@@ -703,6 +703,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <div id="status-station-finder">
 <select id="stationSelect"><option value="">Find Station</option></select>
         <select id="zoneZoomSelect"><option value="">Zoom to Zone</option><option value="AB">AB (all zones)</option><option value="__export_png">Export AB png</option></select>
+<a id="live-wx-btn" href="https://ngsmetadvisor.github.io/chnwxproduct/callingthestations.html" target="_blank" rel="noopener" title="Live weather - calling the stations (all the OP addresses)" style="flex-shrink:0;background:rgba(8,8,18,0.9);border:0.5px solid rgba(255,140,0,0.6);color:#ff8c00;font-size:12px;font-weight:700;border-radius:6px;padding:4px 8px;font-family:monospace;text-decoration:none;white-space:nowrap;">Live Wx</a>
+<button id="fires-btn" type="button" title="Active Alberta wildfires (Alberta Wildfire status map) - tap to show / hide" style="flex-shrink:0;background:rgba(8,8,18,0.9);border:0.5px solid rgba(232,35,26,0.6);color:#ff6b5e;font-size:12px;font-weight:700;border-radius:6px;padding:4px 8px;font-family:monospace;white-space:nowrap;cursor:pointer;">Fires</button>
 <button id="mode-toggle-btn" class="mode-btn active" title="Tap to switch to Driving mode"><span class="mode-icon">🌍</span><span class="mode-text"> Default</span></button>
       </div>
 <div class="legend">
@@ -7196,6 +7198,10 @@ const m = L.marker([a.lat,a.lon],{icon,interactive:true,pane:'airports'}).addTo(
       '<div><span style="color:#666;">Lat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>'+a.lat.toFixed(4)+'°</div>'+
       '<div><span style="color:#666;">Lon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>'+a.lon.toFixed(4)+'°</div>'+
       '<div style="margin-top:6px;"><a href="https://www.google.com/maps?q='+a.lat.toFixed(5)+','+a.lon.toFixed(5)+'&t=k" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>'+
+      // Airplot: jumps to this spot by its position (most of these bases have no ICAO code), named after the base
+      '<div style="margin-top:2px;"><a href="https://airplot.net/main.html?modeFolder=liveflight&mode=jump&lat='+a.lat.toFixed(5)+'&lon='+a.lon.toFixed(5)+'&label='+encodeURIComponent(a.name)+'" target="_blank" rel="noopener" style="color:#88ccff;font-size:10px;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">'+
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>'+
+        'Open in Airplot (live traffic here)</a></div>'+
       '</div>';
     // Route through handlePickModeClick first so tapping an airport icon/label while
     // "+" (add focus area) or mock-GPS pick mode is armed fires the pick action instead
@@ -7974,6 +7980,85 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
       _tapCount = 0;
       panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     }
+  });
+})();
+
+// ═══ Alberta wildfires (bottom bar → "Fires", off at every start) ═══
+// The active fires of the Alberta Wildfire status map (Government of Alberta, ArcGIS Online):
+// provincial, municipal and mutual-aid, with the status map's own legend - provincial flame red
+// Out of Control / yellow Being Held / green Under Control; mutual aid a purple flame in a status
+// circle; municipal a blue flame in a grey circle. Fire outlines where the services carry them.
+// Tap a fire for its details. Refreshed every 5 min while on. (Same rules as Airplot's
+// modules/wildfires.js - kept in this file so the map has no outside script to load.)
+(function(){
+  const BASE='https://services.arcgis.com/Eb8P5h4CJk8utIBz/arcgis/rest/services/';
+  const SOURCES=[{svc:'Active_Wildfires_(PROD)',layer:0,kind:'Provincial'},{svc:'Active_Municipal_Wildfire_Prod',layer:4,kind:'Municipal'},{svc:'Active_Mutual_Aid_Wildfires',layer:0,kind:'Mutual aid'}];
+  const RED='#e8231a',YELLOW='#f5d90a',GREEN='#3cc43c',PURPLE='#b47ae6',BLUE='#4a90d9',GREY='#9aa0a6';
+  const STATUS=[[/out\s*of\s*control|^\s*OC\s*$/i,RED,'Out of Control'],[/being\s*held|^\s*BH\s*$/i,YELLOW,'Being Held'],[/under\s*control|^\s*UC\s*$/i,GREEN,'Under Control'],[/turned\s*over|^\s*TO\s*$/i,GREY,'Turned Over'],[/extinguish|^\s*EX\s*$/i,GREY,'Extinguished'],[/assistance\s*ended|ended/i,GREY,'Assistance Ended']];
+  const NOT_ACTIVE=new Set(['Turned Over','Extinguished','Assistance Ended']);
+  function statusOf(p){ let raw=p.FIRE_STATUS||p.fire_status||''; if(!raw) for(const k of Object.keys(p)) if(/status/i.test(k)&&typeof p[k]==='string'&&p[k].trim()){raw=p[k];break;} raw=String(raw); for(const [re,c,l] of STATUS) if(re.test(raw)) return {colour:c,label:l,known:true}; return {colour:GREY,label:raw||'Active',known:false}; }
+  const lookOf=(kind,st)=>kind==='Mutual aid'?[PURPLE,st.known?st.colour:null]:kind==='Municipal'?[BLUE,GREY]:[st.known?st.colour:RED,null];
+  const lineOf=(kind,st)=>kind==='Mutual aid'?PURPLE:kind==='Municipal'?BLUE:(st.known?st.colour:RED);
+  function fireNumber(p){ for(const k of Object.keys(p)) if(/^(FIRE_?NUMBER|FIRE_?NUM|FIRE_?ID|FIRE_?NAME|LABEL|NAME)$/i.test(k)&&p[k]) return String(p[k]); return ''; }
+  function flameSvg(flame,ring){
+    const fl=(sc,ox,oy)=>'<g transform="translate('+ox+' '+oy+') scale('+sc+')"><path d="M17 2 C19 9 27 13 27 24 A10 10 0 0 1 7 24 C7 18 10 15 12 11 C13 15 15 17 17 17 C16 12 15 7 17 2 Z" fill="'+flame+'" stroke="#1a1a1a" stroke-width="2" stroke-linejoin="round"/><path d="M17 20 C18 23 21 25 21 28 A4 4 0 0 1 13 28 C13 25 15 24 17 20 Z" fill="#fff" fill-opacity="0.6"/></g>';
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 36 36">'+(ring?'<circle cx="18" cy="18" r="16.5" fill="'+ring+'" stroke="#1a1a1a" stroke-width="2"/>'+fl(0.78,4.7,2.2):fl(1,1,0))+'</svg>';
+  }
+  const SKIP=/^(OBJECTID|FID|GLOBALID|SHAPE.*|Shape.*|created_.*|last_edited_.*|.*_GUID)$/i;
+  const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function fmtVal(k,v){ if(v===null||v===undefined||v==='') return null; if(typeof v==='number'&&v>1e11&&v<1e13&&/date|time|_dt$|detect|start|out_|ext/i.test(k)) return new Date(v).toLocaleString([],{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); if(typeof v==='number') return (Math.round(v*100)/100).toLocaleString(); return String(v); }
+  function popupHtml(f){
+    const rows=Object.keys(f.props).filter(k=>!SKIP.test(k)&&!/status/i.test(k)).map(k=>[k,fmtVal(k,f.props[k])]).filter(r=>r[1]!==null).slice(0,12)
+      .map(([k,v])=>'<div><span style="color:#8a8aa0;">'+esc(k.replace(/_/g,' ').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()))+'</span> '+esc(v)+'</div>').join('');
+    return '<div style="font-family:monospace;font-size:11px;min-width:180px;"><div style="font-weight:700;font-size:13px;color:#fff;">Wildfire '+esc(f.num||'')+'</div>'
+      +'<div style="margin:2px 0 4px;"><b style="color:'+(f.st.known?f.st.colour:'#ccc')+';">'+esc(f.st.label)+'</b> · '+esc(f.kind)+'</div>'+rows
+      +'<div style="margin-top:6px;"><a href="https://www.google.com/maps?q='+f.lat.toFixed(5)+','+f.lon.toFixed(5)+'&t=k" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>'
+      +'<div style="color:#8a8aa0;font-size:9px;margin-top:4px;">Alberta Wildfire (Government of Alberta)</div></div>';
+  }
+  async function getJson(u){ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }
+  async function query(svc,layer){ const j=await getJson(BASE+svc+'/FeatureServer/'+layer+'/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson&resultRecordCount=4000'); if(j&&j.error) throw new Error(j.error.message||'query error'); return (j&&j.features)||[]; }
+  const polyCache={};
+  async function polyLayers(svc){ if(polyCache[svc]) return polyCache[svc]; let out=[]; try{ const j=await getJson(BASE+svc+'/FeatureServer?f=json'); out=(j.layers||[]).filter(l=>/polygon/i.test(l.geometryType||'')).map(l=>l.id); }catch(e){} return (polyCache[svc]=out); }
+  map.createPane('fires'); map.getPane('fires').style.zIndex=640;
+  const layer=L.layerGroup();
+  let on=false, busy=false, loadedAt=0, timer=null, lastCount=0;
+  const btn=document.getElementById('fires-btn');
+  function setBtn(t){ if(!btn) return; btn.textContent=t; btn.style.background=on?'rgba(232,35,26,0.25)':'rgba(8,8,18,0.9)'; btn.style.color=on?'#fff':'#ff6b5e'; }
+  async function load(){
+    if(!on||busy) return; busy=true; setBtn('Fires …');
+    try{
+      const items=[]; let errs=0, count=0;
+      for(const src of SOURCES){
+        let feats=[]; try{ feats=await query(src.svc,src.layer); }catch(e){ errs++; continue; }
+        feats.forEach(f=>{
+          const g=f.geometry,p=f.properties||{}; if(!g) return;
+          const st=statusOf(p); if(NOT_ACTIVE.has(st.label)) return;
+          let lon,lat;
+          if(g.type==='Point') [lon,lat]=g.coordinates; else if(g.type==='MultiPoint'&&g.coordinates[0]) [lon,lat]=g.coordinates[0];
+          else if(g.type==='Polygon'||g.type==='MultiPolygon'){ const ring=g.type==='Polygon'?g.coordinates[0]:(g.coordinates[0]||[])[0]; if(!ring||!ring.length) return; lon=ring.reduce((a,c)=>a+c[0],0)/ring.length; lat=ring.reduce((a,c)=>a+c[1],0)/ring.length; }
+          else return;
+          if(!isFinite(lat)||!isFinite(lon)) return;
+          const fire={lat,lon,props:p,kind:src.kind,st,num:fireNumber(p)}, look=lookOf(src.kind,st);
+          const m=L.marker([lat,lon],{pane:'fires',icon:L.divIcon({className:'',html:flameSvg(look[0],look[1]),iconSize:[26,26],iconAnchor:[13,13]})});
+          m.bindPopup(popupHtml(fire),{maxWidth:260}); if(fire.num) m.bindTooltip(fire.num,{direction:'bottom',offset:[0,10],className:''});
+          items.push(m); count++;
+        });
+        for(const lid of await polyLayers(src.svc)){
+          let polys=[]; if(lid===src.layer) polys=feats; else try{ polys=await query(src.svc,lid); }catch(e){ continue; }
+          polys.forEach(f=>{ const g=f.geometry,p=f.properties||{}; if(!g||!/Polygon/.test(g.type)) return; const st=statusOf(p); if(NOT_ACTIVE.has(st.label)) return;
+            const c=lineOf(src.kind,st); const gj=L.geoJSON(g,{pane:'fires',style:{color:c,weight:2,fillColor:c,fillOpacity:0.18}});
+            gj.bindPopup(popupHtml({lat:0,lon:0,props:p,kind:src.kind+' (outline)',st,num:fireNumber(p)}).replace(/<div style="margin-top:6px;">.*?<\/div>/,''),{maxWidth:260}); items.unshift(gj); });
+        }
+      }
+      if(errs===SOURCES.length){ setBtn('Fires ✕'); return; } // nothing reachable: keep what is shown
+      layer.clearLayers(); items.forEach(i=>layer.addLayer(i));
+      loadedAt=Date.now(); lastCount=count; setBtn('Fires ('+count+')');
+    } finally { busy=false; }
+  }
+  if(btn) btn.addEventListener('click',()=>{
+    on=!on;
+    if(on){ layer.addTo(map); if(Date.now()-loadedAt>5*60000) load(); else setBtn('Fires ('+lastCount+')'); timer=setInterval(load,5*60000); }
+    else { map.removeLayer(layer); clearInterval(timer); timer=null; setBtn('Fires'); }
   });
 })();
 </script>
