@@ -8020,6 +8020,9 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
     return '<div style="font-family:monospace;font-size:11px;min-width:180px;"><div style="font-weight:700;font-size:13px;color:#fff;">Wildfire '+esc(f.num||'')+'</div>'
       +'<div style="margin:2px 0 4px;"><b style="color:'+(f.st.known?f.st.colour:'#ccc')+';">'+esc(f.st.label)+'</b> · '+esc(f.kind)+'</div>'+rows
       +'<div style="margin-top:6px;"><a href="https://www.google.com/maps?q='+f.lat.toFixed(5)+','+f.lon.toFixed(5)+'&t=k" target="_blank" style="color:#88ccff;font-size:10px;text-decoration:none;">🗺 Open in Google Maps</a></div>'
+      // Airplot: jumps to the fire (by its position), named after it, with the wildfire layer switched on
+      +'<div style="margin-top:2px;"><a href="https://airplot.net/main.html?modeFolder=liveflight&mode=jump&lat='+f.lat.toFixed(5)+'&lon='+f.lon.toFixed(5)+'&label='+encodeURIComponent('Wildfire '+(f.num||''))+'&fires=1" target="_blank" rel="noopener" style="color:#88ccff;font-size:10px;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">'
+      +'<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>Open in Airplot (traffic + fires here)</a></div>'
       +'<div style="color:#8a8aa0;font-size:9px;margin-top:4px;">Alberta Wildfire (Government of Alberta)</div></div>';
   }
   async function getJson(u){ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }
@@ -8060,7 +8063,7 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
           let polys=[]; if(lid===src.layer) polys=feats; else try{ polys=await query(src.svc,lid); }catch(e){ continue; }
           polys.forEach(f=>{ const g=f.geometry,p=f.properties||{}; if(!g||!/Polygon/.test(g.type)) return; const st=statusOf(p); if(NOT_ACTIVE.has(st.label)) return;
             const c=lineOf(src.kind,st); const gj=L.geoJSON(g,{pane:'fires',style:{color:c,weight:2,fillColor:c,fillOpacity:0.18}});
-            gj.on('click',()=>{ try{ _markerClickHandledAt=Date.now(); }catch(e){} }); gj.bindPopup(popupHtml({lat:0,lon:0,props:p,kind:src.kind+' (outline)',st,num:fireNumber(p)}).replace(/<div style="margin-top:6px;">.*?<\/div>/,''),{maxWidth:260}); items.unshift(gj); });
+            gj.on('click',()=>{ try{ _markerClickHandledAt=Date.now(); }catch(e){} }); const ctr=gj.getBounds().getCenter(); gj.bindPopup(popupHtml({lat:ctr.lat,lon:ctr.lng,props:p,kind:src.kind+' (outline)',st,num:fireNumber(p)}),{maxWidth:260}); items.unshift(gj); });
         }
       }
       if(errs===SOURCES.length){ setBtn('Fires ✕'); return; } // nothing reachable: keep what is shown
