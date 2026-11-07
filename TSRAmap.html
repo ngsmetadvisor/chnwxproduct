@@ -425,6 +425,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
     <div class="sep"></div>
     <button id="airport-toggle" class="tb-btn active"><span class="tb-icon">✈︎</span><span class="tb-text"> Apt</span></button>
     <div class="sep"></div>
+<button id="fires-btn" class="tb-btn active" title="Active Alberta wildfires (Alberta Wildfire status map) - shown at start; tap to hide / show"><span class="tb-icon">🔥</span><span class="tb-text" id="fires-btn-text"> Fires</span></button>
+    <div class="sep"></div>
 <button id="compass-menu-btn" class="tb-btn active"><span class="tb-icon">🧭</span><span class="tb-text"> Compass</span></button>
     <div class="sep"></div>
 <button id="alerts-toggle" class="tb-btn"><span class="tb-icon">🚨</span><span class="tb-text"> Alerts</span></button>
@@ -704,7 +706,6 @@ html, body { height: 100%; width: 100%; overflow: hidden; background: #0d0d1a; f
 <select id="stationSelect"><option value="">Find Station</option></select>
         <select id="zoneZoomSelect"><option value="">Zoom to Zone</option><option value="AB">AB (all zones)</option><option value="__export_png">Export AB png</option></select>
 <a id="live-wx-btn" href="https://ngsmetadvisor.github.io/chnwxproduct/callingthestations.html" target="_blank" rel="noopener" title="Live weather - calling the stations (all the OP addresses)" style="flex-shrink:0;background:rgba(8,8,18,0.9);border:0.5px solid rgba(255,140,0,0.6);color:#ff8c00;font-size:12px;font-weight:700;border-radius:6px;padding:4px 8px;font-family:monospace;text-decoration:none;white-space:nowrap;">Live Wx</a>
-<button id="fires-btn" type="button" title="Active Alberta wildfires (Alberta Wildfire status map) - tap to show / hide" style="flex-shrink:0;background:rgba(8,8,18,0.9);border:0.5px solid rgba(232,35,26,0.6);color:#ff6b5e;font-size:12px;font-weight:700;border-radius:6px;padding:4px 8px;font-family:monospace;white-space:nowrap;cursor:pointer;">Fires</button>
 <button id="mode-toggle-btn" class="mode-btn active" title="Tap to switch to Driving mode"><span class="mode-icon">🌍</span><span class="mode-text"> Default</span></button>
       </div>
 <div class="legend">
@@ -7983,7 +7984,7 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
   });
 })();
 
-// ═══ Alberta wildfires (bottom bar → "Fires", off at every start) ═══
+// ═══ Alberta wildfires (top bar → 🔥, ON at every start - tap to hide) ═══
 // The active fires of the Alberta Wildfire status map (Government of Alberta, ArcGIS Online):
 // provincial, municipal and mutual-aid, with the status map's own legend - provincial flame red
 // Out of Control / yellow Being Held / green Under Control; mutual aid a purple flame in a status
@@ -8023,7 +8024,8 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
   const layer=L.layerGroup();
   let on=false, busy=false, loadedAt=0, timer=null, lastCount=0;
   const btn=document.getElementById('fires-btn');
-  function setBtn(t){ if(!btn) return; btn.textContent=t; btn.style.background=on?'rgba(232,35,26,0.25)':'rgba(8,8,18,0.9)'; btn.style.color=on?'#fff':'#ff6b5e'; }
+  // top-bar button (🔥): lit (active) while shown; its text (wide screens) and tooltip carry the count
+  function setBtn(t){ if(!btn) return; btn.classList.toggle('active',on); const tx=document.getElementById('fires-btn-text'); if(tx) tx.textContent=' '+t; btn.title='Active Alberta wildfires - '+(on?t+' (tap to hide)':'hidden (tap to show)'); }
   async function load(){
     if(!on||busy) return; busy=true; setBtn('Fires …');
     try{
@@ -8055,11 +8057,13 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
       loadedAt=Date.now(); lastCount=count; setBtn('Fires ('+count+')');
     } finally { busy=false; }
   }
-  if(btn) btn.addEventListener('click',()=>{
-    on=!on;
-    if(on){ layer.addTo(map); if(Date.now()-loadedAt>5*60000) load(); else setBtn('Fires ('+lastCount+')'); timer=setInterval(load,5*60000); }
+  function setOn(v){
+    on=v;
+    if(on){ layer.addTo(map); if(Date.now()-loadedAt>5*60000) load(); else setBtn('Fires ('+lastCount+')'); if(!timer) timer=setInterval(load,5*60000); }
     else { map.removeLayer(layer); clearInterval(timer); timer=null; setBtn('Fires'); }
-  });
+  }
+  if(btn) btn.addEventListener('click',()=>setOn(!on));
+  setOn(true); // on at every start (tap Fires to hide them)
 })();
 </script>
 </body>
