@@ -982,6 +982,12 @@ map.on('click', function(e){
   // on Leaflet ever having dispatched a click on the marker itself.
   if(e.originalEvent && document.elementsFromPoint){
     const hitEls=document.elementsFromPoint(e.originalEvent.clientX, e.originalEvent.clientY);
+    // a wildfire flame under the finger: its details (the marker's own click can be missed on touch)
+    const fireEl=hitEls.find(el=>el.closest && el.closest('[data-fi]'));
+    if(fireEl && window._fireMarkers){
+      const fm=window._fireMarkers[+fireEl.closest('[data-fi]').dataset.fi];
+      if(fm){ _markerClickHandledAt=Date.now(); fm.openPopup(); return; }
+    }
     const stnEl=hitEls.find(el=>el.classList && el.classList.contains('stn-label'));
     if(stnEl){
       const stnId=stnEl.textContent.trim();
@@ -8020,7 +8026,8 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
   async function query(svc,layer){ const j=await getJson(BASE+svc+'/FeatureServer/'+layer+'/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson&resultRecordCount=4000'); if(j&&j.error) throw new Error(j.error.message||'query error'); return (j&&j.features)||[]; }
   const polyCache={};
   async function polyLayers(svc){ if(polyCache[svc]) return polyCache[svc]; let out=[]; try{ const j=await getJson(BASE+svc+'/FeatureServer?f=json'); out=(j.layers||[]).filter(l=>/polygon/i.test(l.geometryType||'')).map(l=>l.id); }catch(e){} return (polyCache[svc]=out); }
-  map.createPane('fires'); map.getPane('fires').style.zIndex=640;
+  map.createPane('fires'); map.getPane('fires').style.zIndex=668; // above stations / airports and the lightning panes
+  window._fireMarkers=[];
   const layer=L.layerGroup();
   let on=false, busy=false, loadedAt=0, timer=null, lastCount=0;
   const btn=document.getElementById('fires-btn');
@@ -8029,7 +8036,7 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
   async function load(){
     if(!on||busy) return; busy=true; setBtn('Fires …');
     try{
-      const items=[]; let errs=0, count=0;
+      const items=[], newMarkers=[]; let errs=0, count=0;
       for(const src of SOURCES){
         let feats=[]; try{ feats=await query(src.svc,src.layer); }catch(e){ errs++; continue; }
         feats.forEach(f=>{
@@ -8041,19 +8048,23 @@ ctx2.fillText('Wind (' + unitLabel + ') · arrow = wind flow', 4, 10);
           else return;
           if(!isFinite(lat)||!isFinite(lon)) return;
           const fire={lat,lon,props:p,kind:src.kind,st,num:fireNumber(p)}, look=lookOf(src.kind,st);
-          const m=L.marker([lat,lon],{pane:'fires',icon:L.divIcon({className:'',html:flameSvg(look[0],look[1]),iconSize:[26,26],iconAnchor:[13,13]})});
-          m.bindPopup(popupHtml(fire),{maxWidth:260}); if(fire.num) m.bindTooltip(fire.num,{direction:'bottom',offset:[0,10],className:''});
+          const fi=newMarkers.length;
+          const m=L.marker([lat,lon],{pane:'fires',bubblingMouseEvents:false,icon:L.divIcon({className:'fire-ico',html:'<div data-fi="'+fi+'" style="width:26px;height:26px;cursor:pointer;">'+flameSvg(look[0],look[1])+'</div>',iconSize:[26,26],iconAnchor:[13,13]})});
+          m.bindPopup(popupHtml(fire),{maxWidth:260,pane:'popupPane'}); if(fire.num) m.bindTooltip(fire.num,{direction:'bottom',offset:[0,10],className:''});
+          // the map's own click (zone / lightning popups) must not replace this one
+          m.on('click',()=>{ try{ _markerClickHandledAt=Date.now(); }catch(e){} });
+          newMarkers.push(m);
           items.push(m); count++;
         });
         for(const lid of await polyLayers(src.svc)){
           let polys=[]; if(lid===src.layer) polys=feats; else try{ polys=await query(src.svc,lid); }catch(e){ continue; }
           polys.forEach(f=>{ const g=f.geometry,p=f.properties||{}; if(!g||!/Polygon/.test(g.type)) return; const st=statusOf(p); if(NOT_ACTIVE.has(st.label)) return;
             const c=lineOf(src.kind,st); const gj=L.geoJSON(g,{pane:'fires',style:{color:c,weight:2,fillColor:c,fillOpacity:0.18}});
-            gj.bindPopup(popupHtml({lat:0,lon:0,props:p,kind:src.kind+' (outline)',st,num:fireNumber(p)}).replace(/<div style="margin-top:6px;">.*?<\/div>/,''),{maxWidth:260}); items.unshift(gj); });
+            gj.on('click',()=>{ try{ _markerClickHandledAt=Date.now(); }catch(e){} }); gj.bindPopup(popupHtml({lat:0,lon:0,props:p,kind:src.kind+' (outline)',st,num:fireNumber(p)}).replace(/<div style="margin-top:6px;">.*?<\/div>/,''),{maxWidth:260}); items.unshift(gj); });
         }
       }
       if(errs===SOURCES.length){ setBtn('Fires ✕'); return; } // nothing reachable: keep what is shown
-      layer.clearLayers(); items.forEach(i=>layer.addLayer(i));
+      layer.clearLayers(); items.forEach(i=>layer.addLayer(i)); window._fireMarkers=newMarkers;
       loadedAt=Date.now(); lastCount=count; setBtn('Fires ('+count+')');
     } finally { busy=false; }
   }
